@@ -1,0 +1,42 @@
+{
+  "name": "mini-md",
+  "version": "0.1.0",
+  "description": "A beautiful Typora-style Markdown editor with tabs and a file-tree workspace",
+  "author": "mini_md",
+  "license": "MIT",
+  "main": "out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "start": "electron-vite preview",
+    "dist": "electron-vite build && electron-builder",
+    "dist:dir": "electron-vite build && electron-builder --dir"
+  },
+  "dependencies": {
+    "@milkdown/crepe": "^7.6.5",
+    "chokidar": "^4.0.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.0.7"
+  },
+  "build": {
+    "appId": "com.minimd.app",
+    "productName": "mini_md",
+    "files": ["out/**/*"],
+    "win": {
+      "target": ["nsis"],
+      "fileAssociations": [
+        { "ext": "md", "name": "Markdown Document", "role": "Editor" },
+        { "ext": "markdown", "name": "Markdown Document", "role": "Editor" }
+      ]
+    }
+  }
+}
