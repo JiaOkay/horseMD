@@ -1009,9 +1009,18 @@ input, textarea { font-family: inherit; }
 }
 .welcome-card {
   text-align: center;
-  max-width: 440px;
+  width: 540px;
+  max-width: 86vw;
   padding: 36px;
   animation: welcomeFade 0.5s var(--ease-out);
+}
+.welcome-logo {
+  width: 84px;
+  height: 84px;
+  border-radius: 20px;
+  margin: 0 auto 14px;
+  display: block;
+  box-shadow: var(--shadow-md);
 }
 @keyframes welcomeFade {
   from { opacity: 0; transform: translateY(12px); }
@@ -1071,12 +1080,83 @@ input, textarea { font-family: inherit; }
 .welcome-actions button:active {
   transform: translateY(0);
 }
+/* Recent files (welcome screen) */
+.welcome-recents {
+  margin-top: 30px;
+  text-align: left;
+}
+.welcome-recents-head {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 0 10px 8px;
+}
+.welcome-recents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s var(--ease-out);
+}
+.recent-item:hover {
+  background: var(--hover);
+}
+.recent-icon {
+  color: var(--faint);
+  flex: 0 0 auto;
+}
+.recent-item:hover .recent-icon {
+  color: var(--accent);
+}
+.recent-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.recent-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recent-path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recent-time {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
 .welcome-hints {
   display: flex;
   gap: 18px;
   justify-content: center;
   flex-wrap: wrap;
-  margin-top: 28px;
+  margin-top: 30px;
   color: var(--faint);
   font-size: 12px;
 }

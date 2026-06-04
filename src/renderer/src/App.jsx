@@ -9,10 +9,12 @@ import { Icon } from './components/icons.jsx'
 import { THEMES, DEFAULT_THEME, applyTheme } from './themes.js'
 import { I18nProvider, translate, DEFAULT_LANG } from './i18n.jsx'
 import { welcomeDoc } from './onboarding.js'
+import logoUrl from './assets/logo.png'
 
 const ONBOARDED_KEY = 'horsemd.onboarded.v1'
 
 const baseName = (p) => (p ? p.split(/[\\/]/).pop() : 'Untitled')
+const dirName = (p) => (p ? p.replace(/[\\/][^\\/]*$/, '') : '')
 let idCounter = 0
 const genId = () => `t${++idCounter}_${Date.now()}`
 
@@ -34,6 +36,7 @@ export default function App() {
   const [sidebarMode, setSidebarMode] = useState(session.sidebarMode || 'files') // 'files' or 'outline'
   const [theme, setTheme] = useState(session.theme || DEFAULT_THEME)
   const [lang, setLang] = useState(session.lang || DEFAULT_LANG)
+  const [recents, setRecents] = useState(session.recents || [])
   const [sourceMode, setSourceMode] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [refreshNonce, setRefreshNonce] = useState(0)
@@ -71,6 +74,15 @@ export default function App() {
     if (!paths || !paths.length) return
     let lastId = null
     const seen = new Set()
+    const remember = (fp) => {
+      const n = fp.replace(/\\/g, '/')
+      setRecents((prev) =>
+        [
+          { path: fp, name: baseName(fp), dir: dirName(fp), openedAt: Date.now() },
+          ...prev.filter((r) => (r.path || '').replace(/\\/g, '/') !== n)
+        ].slice(0, 8)
+      )
+    }
     for (const path of paths) {
       const norm = path.replace(/\\/g, '/')
       if (seen.has(norm)) continue // dedupe within this call
@@ -79,6 +91,7 @@ export default function App() {
       const existing = tabsRef.current.find((t) => (t.path || '').replace(/\\/g, '/') === norm)
       if (existing) {
         lastId = existing.id
+        remember(path)
         continue
       }
       try {
@@ -87,6 +100,7 @@ export default function App() {
         const concurrent = tabsRef.current.find((t) => (t.path || '').replace(/\\/g, '/') === norm)
         if (concurrent) {
           lastId = concurrent.id
+          remember(path)
           continue
         }
         const id = genId()
@@ -102,6 +116,7 @@ export default function App() {
         }
         tabsRef.current = [...tabsRef.current, newTab] // keep snapshot current for the next iteration
         setTabs((prev) => [...prev, newTab])
+        remember(path)
       } catch (e) {
         window.alert('Could not open file: ' + e.message)
       }
@@ -340,13 +355,14 @@ export default function App() {
       workspace,
       theme,
       lang,
+      recents,
       sidebarOpen,
       sidebarMode,
       openPaths: tabs.map((t) => t.path).filter(Boolean),
       activePath
     }
     localStorage.setItem(LS, JSON.stringify(data))
-  }, [workspace, theme, lang, sidebarOpen, sidebarMode, tabs, activePath])
+  }, [workspace, theme, lang, recents, sidebarOpen, sidebarMode, tabs, activePath])
 
   // ------------------------- first-run onboarding ------------------
   useEffect(() => {
@@ -485,7 +501,15 @@ export default function App() {
               </div>
             )
           ) : (
-            <Welcome t={t} onNew={newTab} onOpen={() => handlers.current.open()} onOpenFolder={openFolder} />
+            <Welcome
+              t={t}
+              lang={lang}
+              recents={recents}
+              onNew={newTab}
+              onOpen={() => handlers.current.open()}
+              onOpenFolder={openFolder}
+              onOpenRecent={(p) => openPaths([p])}
+            />
           )}
         </main>
       </div>
@@ -515,12 +539,33 @@ export default function App() {
   )
 }
 
-function Welcome({ t, onNew, onOpen, onOpenFolder }) {
+function relTime(ts, lang, t) {
+  if (!ts) return ''
+  const diff = Date.now() - ts
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return t('time.justNow')
+  if (min < 60) return t('time.minutesAgo', { n: min })
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return t('time.hoursAgo', { n: hr })
+  const days = Math.floor(hr / 24)
+  if (days === 1) return t('time.yesterday')
+  try {
+    return new Date(ts).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+      month: 'short',
+      day: 'numeric'
+    })
+  } catch {
+    return ''
+  }
+}
+
+function Welcome({ t, lang, recents, onNew, onOpen, onOpenFolder, onOpenRecent }) {
   return (
     <div className="welcome">
       <div className="welcome-card">
+        <img className="welcome-logo" src={logoUrl} alt="HorseMD" />
         <h1>HorseMD</h1>
-        <p>{t('welcome.tagline')}</p>
+        <p className="welcome-tagline">{t('welcome.tagline')}</p>
         <div className="welcome-actions">
           <button className="btn-primary" onClick={onNew}>
             <Icon name="file-plus" size={16} /> {t('welcome.newFile')}
@@ -532,11 +577,30 @@ function Welcome({ t, onNew, onOpen, onOpenFolder }) {
             <Icon name="folder" size={16} /> {t('welcome.openFolder')}
           </button>
         </div>
+
+        {recents && recents.length > 0 && (
+          <div className="welcome-recents">
+            <div className="welcome-recents-head">{t('welcome.recent')}</div>
+            <div className="welcome-recents-list">
+              {recents.map((r) => (
+                <button key={r.path} className="recent-item" onClick={() => onOpenRecent(r.path)} title={r.path}>
+                  <Icon name="file" size={16} className="recent-icon" />
+                  <span className="recent-main">
+                    <span className="recent-name">{r.name}</span>
+                    <span className="recent-path">{r.dir}</span>
+                  </span>
+                  <span className="recent-time">{relTime(r.openedAt, lang, t)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="welcome-hints">
-          <span><kbd>Ctrl</kbd><kbd>P</kbd> Palette</span>
-          <span><kbd>Ctrl</kbd><kbd>B</kbd> Sidebar</span>
-          <span><kbd>Ctrl</kbd><kbd>N</kbd> New</span>
-          <span><kbd>Ctrl</kbd><kbd>S</kbd> Save</span>
+          <span><kbd>Ctrl</kbd><kbd>P</kbd> {t('hint.palette')}</span>
+          <span><kbd>Ctrl</kbd><kbd>B</kbd> {t('hint.sidebar')}</span>
+          <span><kbd>Ctrl</kbd><kbd>N</kbd> {t('hint.new')}</span>
+          <span><kbd>Ctrl</kbd><kbd>S</kbd> {t('hint.save')}</span>
         </div>
       </div>
     </div>
