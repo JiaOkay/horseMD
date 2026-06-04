@@ -69,3 +69,12 @@ npm run dist       # package a Windows installer (electron-builder)
 ## Tech
 
 Electron + Vite + React shell, with **Milkdown Crepe** as the editor engine. The shell (tabs, file tree, palette, outline, theming) is custom.
+
+## Docs
+
+详细的架构、功能实现、踩坑记录与开发/打包说明见 [`docs/`](./docs/README.md)：
+
+- [docs/architecture.md](./docs/architecture.md) — 技术栈、进程模型、目录结构、数据流
+- [docs/features.md](./docs/features.md) — 每个功能的用法与实现
+- [docs/implementation-notes.md](./docs/implementation-notes.md) — 关键 bug 的根因与修法、设计决策
+- [docs/development.md](./docs/development.md) — 开发、构建、Windows/macOS 打包、CDP 自动化测试
