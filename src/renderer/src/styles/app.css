@@ -541,6 +541,12 @@ input, textarea { font-family: inherit; }
 /* =====================================================
    Outline Panel — Fixed scrolling
    ===================================================== */
+.outline {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
 .panel-head {
   font-size: 10px;
   font-weight: 700;
