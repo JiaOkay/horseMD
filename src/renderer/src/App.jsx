@@ -506,18 +506,30 @@ export default function App() {
                 onChange={(e) => updateContent(activeTab.id, e.target.value, false)}
               />
             ) : (
-              <div className="editor-scroll" ref={editorHostRef}>
-                <Editor
-                  key={`${activeTab.id}:${activeTab.reloadNonce}`}
-                  initialContent={activeTab.content}
-                  docPath={activeTab.path}
-                  onChange={(md, isInitial) => updateContent(activeTab.id, md, isInitial)}
-                  onReady={(api) => {
-                    editorApiRef.current = api
-                  }}
-                  onActiveBlock={setActiveBlock}
-                />
-              </div>
+              /* Keep all tab editors mounted, only show the active one.
+                 This avoids destroying/recreating Crepe on every tab switch,
+                 which was the main cause of lag with large files. */
+              tabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  className="editor-scroll"
+                  ref={tab.id === activeId ? editorHostRef : undefined}
+                  style={{ display: tab.id === activeId ? undefined : 'none' }}
+                >
+                  <Editor
+                    tabId={`${tab.id}:${tab.reloadNonce}`}
+                    initialContent={tab.content}
+                    docPath={tab.path}
+                    onChange={(md, isInitial) => updateContent(tab.id, md, isInitial)}
+                    onReady={(api) => {
+                      if (tab.id === activeId) editorApiRef.current = api
+                    }}
+                    onActiveBlock={(id) => {
+                      if (tab.id === activeId) setActiveBlock(id)
+                    }}
+                  />
+                </div>
+              ))
             )
           ) : (
             <Welcome

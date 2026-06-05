@@ -1138,6 +1138,8 @@ button:focus-visible,
 .welcome-recents {
   margin-top: 30px;
   text-align: left;
+  max-width: 100%;
+  overflow: hidden;
 }
 .welcome-recents-head {
   font-size: 12px;
@@ -1151,6 +1153,8 @@ button:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
 }
 .recent-item {
   display: flex;
