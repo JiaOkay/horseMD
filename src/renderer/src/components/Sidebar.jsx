@@ -31,18 +31,19 @@ export default function Sidebar({ workspace, activePath, onOpenFile, refreshNonc
     loadDir(workspace.rootPath)
   }, [workspace, loadDir])
 
-  // Focus the inline input when creating state changes, and select filename
+  // Focus the inline input and select the name (without extension) when creating
   useEffect(() => {
     if (creating) {
       setTimeout(() => {
         const input = createInputRef.current
-        if (input) {
-          input.focus()
-          if (creating.selectRange) {
-            input.setSelectionRange(creating.selectRange[0], creating.selectRange[1])
-          } else {
-            input.select()
-          }
+        if (!input) return
+        input.focus()
+        // Select just the filename part before the extension
+        const dotIndex = creating.value.lastIndexOf('.')
+        if (dotIndex > 0) {
+          input.setSelectionRange(0, dotIndex)
+        } else {
+          input.select()
         }
       }, 30)
     }
@@ -85,7 +86,7 @@ export default function Sidebar({ workspace, activePath, onOpenFile, refreshNonc
   // Start inline creation for a file
   const startNewFile = (dirNode) => {
     const dir = dirNode ? dirNode.path : workspace.rootPath
-    setCreating({ dir, type: 'file', value: 'untitled.md', selectRange: [0, 8] })
+    setCreating({ dir, type: 'file', value: 'untitled.md' })
     // Make sure the directory is expanded
     if (dirNode) {
       setExpanded((s) => new Set(s).add(dir))
