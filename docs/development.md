@@ -17,9 +17,11 @@ npm run dev
 ```bash
 npm run build       # 构建到 out/（main + preload + renderer）
 npm start           # 运行构建产物（electron-vite preview）
-npm run dist        # 构建 + electron-builder 打 Windows NSIS 安装包 → dist/
-npm run dist:dir    # 构建 + 打免安装目录版（dist/win-unpacked/）
+npm run dist        # 构建 + electron-builder 打**当前系统**的安装包 → dist/
+npm run dist:dir    # 构建 + 打免安装目录版（dist/<platform>-unpacked/）
 ```
+
+> `npm run dist` 按运行它的系统出包：Windows 上出 NSIS 安装包，macOS 上出 `.dmg` + `.zip`（dmg 必须在 macOS 上打）。
 
 打包时若 electron-builder 的二进制下载慢，加镜像环境变量：
 ```
@@ -36,25 +38,22 @@ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-
   "productName": "HorseMD",
   "files": ["out/**/*"],
   "icon": "build/icon.ico",
+  "mac": { "target": ["dmg", "zip"], "icon": "build/icon.icns", "category": "public.app-category.productivity", "fileAssociations": [/* .md/.markdown */] },
   "win": { "target": ["nsis"], "icon": "build/icon.ico", "fileAssociations": [/* .md/.markdown */] },
-  "nsis": { "installerIcon": "build/icon.ico", "uninstallerIcon": "build/icon.ico" }
+  "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "allowElevation": true, "installerIcon": "build/icon.ico", "uninstallerIcon": "build/icon.ico" }
 }
 ```
 
-- 安装包**未签名**：首次运行 Windows SmartScreen 会提示"未知发布者"，点"更多信息 → 仍要运行"。需要正式签名得配证书。
+- 安装包**未签名**：Windows 首次运行 SmartScreen 提示"未知发布者"，点"更多信息 → 仍要运行"；macOS 首次打开被 Gatekeeper 拦，右键 → 打开，或 `xattr -dr com.apple.quarantine /Applications/HorseMD.app`。需要免提示得配对应平台的签名证书（macOS 还需公证）。
 
-### macOS 打包（待补）
+### macOS 打包（已支持）
 
-当前 `build` 只配了 Windows。打 mac 版需要：
+Windows 与 macOS 共用一份配置，在 macOS 上 `npm run dist` 即出 `.dmg` + `.zip`（默认 arm64；要 Intel 用 `"arch": ["x64", "arm64"]`）。
 
-1. 在 `build` 里加 `mac` 配置（在 macOS 上构建，dmg 必须在 mac 上打）：
-   ```jsonc
-   "mac": { "target": ["dmg"], "icon": "build/icon.icns", "category": "public.app-category.productivity" }
-   ```
-2. 生成 `build/icon.icns`（可由现有 `icon.png` 转）：mac 上 `iconutil`，或跨平台用 `png2icns` / `electron-icon-builder`。
-3. `npm run dist`（在 macOS 上）产出 `.dmg`。
+- 图标 `build/icon.icns` 由 `icon.png` 生成（mac 上 `iconutil`，或跨平台 `png2icns` / `electron-icon-builder`）。
+- 跨平台已处理：快捷键同时认 `Ctrl`/`Cmd`（`metaKey`），`open-file`（Finder 打开）事件，标题栏 `hiddenInset` + 固定 `trafficLightPosition`，渲染层用 `.app.is-mac` / `.app.is-win` 区分平台样式。**改顶栏/平台相关代码时务必两个系统都别弄坏。**
 
-> 代码本身已尽量跨平台：快捷键判断同时认 `Ctrl` 和 `Cmd`（`metaKey`），`open-file`（Finder 打开）事件已处理，标题栏在 darwin 用 `hiddenInset`。
+> dev 模式在 macOS 上用 `osascript tell application "Electron"` 驱动时，可能误启动 `node_modules` 里的通用 Electron 壳（同名冲突，显示默认页）。验证请用打好的 **HorseMD.app**（名字与 bundle id 唯一）。
 
 ## 自动化测试：CDP 端到端验证
 

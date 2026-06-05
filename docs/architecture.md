@@ -7,7 +7,7 @@
 - **React 18** —— 渲染层 UI
 - **Milkdown Crepe 7**（基于 ProseMirror）—— 所见即所得 Markdown 编辑器引擎
 - **chokidar** —— 文件/文件夹监听
-- **electron-builder** —— 打包（Windows NSIS 安装包）
+- **electron-builder** —— 打包（Windows NSIS 安装包 + macOS dmg/zip）
 
 ## 进程模型
 
@@ -63,8 +63,11 @@ scripts/
   etv.mjs                  端到端测试工具（CDP 驱动，见 development.md）
   inspect.mjs              简易 CDP 状态检查器
 build/
-  icon.ico                 应用图标（多分辨率、圆角）
+  icon.ico                 Windows 图标（多分辨率、圆角）
+  icon.icns                macOS 图标（由 icon.png 生成）
 ```
+
+> 跨平台：渲染层根节点按 `window.api.platform` 挂 `.app.is-win` / `.app.is-mac` 类，平台相关样式（标题栏让位红绿灯等）只写在这两个选择器下；主进程用 `process.platform` 分支。改顶栏/平台代码时两个系统都要顾到。
 
 ## App.jsx：外壳的核心职责
 
@@ -91,6 +94,8 @@ build/
 ```
 
 > ⚠️ 这条链路曾经断过：监听器注册晚了导致 `markdownUpdated` 从不触发，详见 [implementation-notes.md](./implementation-notes.md)。
+
+> **编辑器路由**：`App.jsx` 按扩展名决定每个标签用哪种编辑器 —— `.md/.markdown/.mdx`（及无路径的新建文档）走 Crepe 富文本并常驻挂载；`.txt` 等纯文本走 `textarea`，只在激活时渲染。纯文本过 Markdown 引擎会丢换行、且大文件卡死，故单独走快路径（`MD_DOC_RE` / `isPlainTextDoc`）。
 
 ## 获取 ProseMirror view 的正确姿势
 

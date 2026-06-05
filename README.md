@@ -63,8 +63,12 @@ npm install        # if Electron's binary download is blocked, set a mirror firs
 npm run dev        # hot-reload dev mode
 npm run build      # bundle main + preload + renderer into out/
 npm start          # run the built app
-npm run dist       # package a Windows installer (electron-builder)
+npm run dist       # package for the host OS (Windows NSIS / macOS dmg+zip)
 ```
+
+Builds are unsigned — see [docs/development.md](./docs/development.md) for the
+SmartScreen / Gatekeeper first-launch steps. Working in this repo with an AI
+agent? Start from [CLAUDE.md](./CLAUDE.md).
 
 ## Tech
 

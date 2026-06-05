@@ -106,7 +106,8 @@ await crepe.create()
 ## 决策：应用图标
 
 - 源图 `icon.png`，用脚本生成多分辨率 `build/icon.ico`（16–256），并裁出 **22% 圆角**（圆角外透明），避免硬直角
-- `package.json` 的 `build.win.icon` / `nsis` / 文件关联都指向它
+- macOS 图标 `build/icon.icns` 同样由 `icon.png` 生成（`iconutil`，16–1024 全尺寸）；`build.mac.icon` 指向它
+- `package.json` 的 `build.win.icon` / `nsis` / 文件关联都指向 ico
 - 首页 logo 用图标副本 `src/renderer/src/assets/logo.png`（CSS 加圆角）
 
 > 注意：`System.Drawing.Icon` 解码不了 PNG 内嵌的 ICO 帧（会渲染成噪点），这是验证工具的局限，不代表 ICO 坏了 —— Windows / electron-builder 能正常读。
@@ -116,3 +117,28 @@ await crepe.create()
 ## 决策：窗口拖拽区域
 
 无边框标题栏下，拖拽区由 `-webkit-app-region` 决定。最初 `.tabs` 被设成 `no-drag`，而标签容器占了顶栏绝大部分宽度 → 几乎整条顶栏不能拖。改成：标签**容器背景**可拖（`.tabs/.tabs-scroll`），只有标签页/按钮 `no-drag`；活动栏空白也可拖。
+
+---
+
+## bug 8：.txt 大文件卡死 / 加载不出来
+
+**现象**：同样长度的内容，`.md` 秒开流畅，`.txt` 很卡甚至加载不出来。
+
+**根因**：两者走同一条渲染路径，都被丢进 Milkdown。`.md` 段落间有空行 → 解析成很多小段落块，ProseMirror 轻松渲染；而 `.txt` 通常是"行行相连、没有空行" → 在 Markdown 里被当成**一整个超大段落**，内含几千个换行节点。ProseMirror 渲染单个超大文本块极慢，文件一大就卡死。附带问题：纯文本的换行被折叠、`*`/`#` 被误当语法。
+
+**修复**（`App.jsx`）：按扩展名路由编辑器 —— `.md/.markdown/.mdx`（及无路径的新建文档）走 Crepe；`.txt` 等带路径的非 Markdown 文件走 `textarea`（瞬开、保留换行、不解析语法）。判定用 `MD_DOC_RE` / `isPlainTextDoc`。
+
+> 顺带修了一个放大器：原来富文本路径给**每个**标签都挂 Crepe（哪怕隐藏），重型 txt 即使在后台也拖慢全局。现在纯文本标签只在激活时渲染。
+
+---
+
+## 决策：macOS 标题栏布局（红绿灯不交叉）
+
+macOS 用 `titleBarStyle: 'hiddenInset'`，红绿灯（关/最小/最大）浮在左上角。最初它们横跨"活动栏(深色)"和"顶栏"两块背景之间，中间有色缝 → 看起来"交叉"在界面里；按钮还会压住第一个标签。
+
+**做法**（仅 `.app.is-mac`，不影响 Windows）：
+- 主进程固定 `trafficLightPosition: { x: 14, y: 14 }`，让渲染层能精确让位
+- 顶栏横跨整个宽度成为一条**独立标题栏**（`grid-column: 1 / -1` + `padding-left` 给红绿灯留位）
+- 活动栏下移到标题栏**下方**（`grid-row: 2 / -1`）→ 红绿灯落在同一条背景上、自成一行，不再交叉
+
+> 平台样式一律写在 `.app.is-win` / `.app.is-mac` 选择器下；改顶栏时两个系统都要验证。

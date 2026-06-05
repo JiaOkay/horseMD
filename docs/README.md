@@ -25,5 +25,7 @@ npm install        # 若 Electron 二进制下载被墙，先设镜像：
 npm run dev        # 热重载开发模式
 npm run build      # 打包 main + preload + renderer 到 out/
 npm start          # 运行已构建的应用
-npm run dist       # 打 Windows 安装包（electron-builder）
+npm run dist       # 打当前系统安装包（Windows NSIS / macOS dmg+zip）
 ```
+
+> 仓库根目录的 [CLAUDE.md](../CLAUDE.md) 是给 AI / 新同学的速查（命令、约定、跨平台规则），细节看本目录各篇。
