@@ -934,7 +934,8 @@ button:focus-visible,
   color: var(--muted);
   background: var(--bg-elevated);
   border-top: 1px solid var(--border-soft);
-  overflow: hidden;
+  /* No overflow:hidden here — the row height is fixed by the grid, and clipping
+     would hide the theme/language popovers that open upward out of the bar. */
   white-space: nowrap;
   min-width: 0;
 }
@@ -943,10 +944,12 @@ button:focus-visible,
   display: flex;
   align-items: center;
   gap: 14px;
-  overflow: hidden;
   min-width: 0;
   flex-shrink: 0;
 }
+/* The path can be long → clip it (with ellipsis) inside the left cluster only.
+   The right cluster must stay visible so its popovers aren't clipped. */
+.status-left { overflow: hidden; }
 .status-path {
   max-width: 45vw;
   overflow: hidden;

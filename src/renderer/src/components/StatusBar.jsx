@@ -168,6 +168,13 @@ export default function StatusBar({
         </button>
         <ThemePicker theme={theme} setTheme={setTheme} />
         <LangSwitch lang={lang} setLang={setLang} />
+        <button
+          className="status-btn"
+          onClick={() => window.api.openExternal('https://github.com/BND-1/horseMD')}
+          title="GitHub — github.com/BND-1/horseMD"
+        >
+          <Icon name="github" size={14} />
+        </button>
       </div>
     </div>
   )
