@@ -337,7 +337,15 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
 
   return (
     <>
-      <div className="editor-host" ref={hostRef} />
+      {/* Placeholder text is baked into the Crepe editor at create() and won't
+          follow a language switch. Expose the current translation as a CSS var
+          (re-rendered on lang change) and let CSS prefer it over the editor's
+          static data-placeholder. */}
+      <div
+        className="editor-host"
+        ref={hostRef}
+        style={{ '--hm-placeholder': JSON.stringify(t('editor.placeholder')) }}
+      />
 
       {ctxMenu && (
         <>

@@ -860,6 +860,13 @@ button:focus-visible,
   animation: fadeIn 0.1s var(--ease-out);
 }
 
+/* Prefer the React-controlled, language-aware placeholder over Crepe's static
+   data-placeholder (extra class = higher specificity, so it wins regardless of
+   stylesheet order). Falls back to the attribute if the var is unset. */
+.editor-host .milkdown .crepe-placeholder::before {
+  content: var(--hm-placeholder, attr(data-placeholder));
+}
+
 .source-editor {
   flex: 1;
   width: 100%;
