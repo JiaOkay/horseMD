@@ -51,6 +51,10 @@ function createWindow() {
     show: false,
     backgroundColor: '#1a1b20',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    // macOS: place the traffic lights at a fixed spot so the renderer can
+    // reserve a matching gap (see `.app.is-mac` rules in app.css). y centers the
+    // ~12px buttons within the 40px top bar.
+    trafficLightPosition: process.platform === 'darwin' ? { x: 14, y: 14 } : undefined,
     titleBarOverlay:
       process.platform === 'win32'
         ? { color: '#00000000', symbolColor: '#9aa0aa', height: 38 }

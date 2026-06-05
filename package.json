@@ -32,6 +32,15 @@
     "productName": "HorseMD",
     "files": ["out/**/*"],
     "icon": "build/icon.ico",
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "fileAssociations": [
+        { "ext": "md", "name": "Markdown Document", "role": "Editor" },
+        { "ext": "markdown", "name": "Markdown Document", "role": "Editor" }
+      ]
+    },
     "win": {
       "target": ["nsis"],
       "icon": "build/icon.ico",

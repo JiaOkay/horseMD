@@ -420,7 +420,8 @@ export default function App() {
     window.find(find.query, false, backwards, true, false, true, false)
   }
 
-  const winClass = window.api.platform === 'win32' ? ' is-win' : ''
+  const winClass =
+    window.api.platform === 'win32' ? ' is-win' : window.api.platform === 'darwin' ? ' is-mac' : ''
 
   return (
     <I18nProvider lang={lang} setLang={setLang}>

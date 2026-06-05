@@ -281,6 +281,13 @@ input, textarea { font-family: inherit; }
   overflow: hidden;
 }
 .app.is-win .topbar { padding-right: 140px; }
+/* macOS: give the traffic lights their own full-width title bar so they no
+   longer straddle the activity-bar / top-bar seam. The top bar spans BOTH
+   columns and the activity bar drops to start *below* it — so the lights rest on
+   one continuous background instead of crossing two regions. padding-left
+   reserves a clear band for the lights (matches trafficLightPosition in main). */
+.app.is-mac .topbar { grid-column: 1 / -1; padding-left: 80px; }
+.app.is-mac .activity-bar { grid-row: 2 / -1; }
 /* The whole top bar drags the window; only the actual interactive controls
    opt out. Crucially the tab STRIP background stays draggable — only the tab
    pills and buttons are no-drag — so there's a generous grab area up top. */
