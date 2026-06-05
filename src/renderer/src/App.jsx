@@ -451,6 +451,9 @@ export default function App() {
           onNew={newTab}
         />
         <div className="topbar-spacer" />
+        <button className="icon-btn drag-no" title={`${t('welcome.newFile')} (Ctrl+N)`} onClick={newTab}>
+          <Icon name="plus" size={18} />
+        </button>
         <button className="icon-btn drag-no" title="Command palette (Ctrl+P)" onClick={() => setPaletteOpen(true)}>
           <Icon name="command" size={16} />
         </button>

@@ -181,7 +181,7 @@ export const STRINGS = {
     'block.h6': '标题 6',
     'block.heading': '标题',
 
-    'editor.placeholder': '输入 / 调出命令，或直接开始写…'
+    'editor.placeholder': '输入 / 唤起命令，或开始写…'
   }
 }
 
