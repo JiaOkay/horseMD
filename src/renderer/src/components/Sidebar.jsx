@@ -211,6 +211,12 @@ export default function Sidebar({ workspace, activePath, onOpenFile, refreshNonc
               className="tree-rename"
               autoFocus
               value={rename.value}
+              onFocus={(e) => {
+                // Preselect the name (without extension), like the new-file input.
+                const dot = rename.value.lastIndexOf('.')
+                if (dot > 0) e.target.setSelectionRange(0, dot)
+                else e.target.select()
+              }}
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => setRename({ ...rename, value: e.target.value })}
               onKeyDown={(e) => {

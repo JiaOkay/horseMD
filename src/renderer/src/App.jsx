@@ -15,6 +15,11 @@ const ONBOARDED_KEY = 'horsemd.onboarded.v1'
 
 const baseName = (p) => (p ? p.split(/[\\/]/).pop() : 'Untitled')
 const dirName = (p) => (p ? p.replace(/[\\/][^\\/]*$/, '') : '')
+// Files that open in the rich Markdown editor. Anything else with a path (e.g.
+// .txt) is treated as plain text and opened in the fast textarea — feeding plain
+// text through Milkdown collapses its line breaks and bogs down on large files.
+const MD_DOC_RE = /\.(md|markdown|mdx)$/i
+const isPlainTextDoc = (tab) => !!(tab && tab.path && !MD_DOC_RE.test(tab.path))
 let idCounter = 0
 const genId = () => `t${++idCounter}_${Date.now()}`
 
@@ -498,23 +503,29 @@ export default function App() {
           )}
 
           {activeTab ? (
-            sourceMode ? (
-              <textarea
-                className="source-editor"
-                value={activeTab.content}
-                spellCheck={false}
-                onChange={(e) => updateContent(activeTab.id, e.target.value, false)}
-              />
-            ) : (
-              /* Keep all tab editors mounted, only show the active one.
-                 This avoids destroying/recreating Crepe on every tab switch,
-                 which was the main cause of lag with large files. */
-              tabs.map((tab) => (
+            /* Each tab picks its editor. Plain-text docs (.txt) and global source
+               mode use the textarea (active tab only — it's cheap). Markdown docs
+               use Crepe and stay mounted so tab switches don't re-create them. */
+            tabs.map((tab) => {
+              const isActive = tab.id === activeId
+              if (sourceMode || isPlainTextDoc(tab)) {
+                if (!isActive) return null
+                return (
+                  <textarea
+                    key={tab.id}
+                    className="source-editor"
+                    value={tab.content}
+                    spellCheck={false}
+                    onChange={(e) => updateContent(tab.id, e.target.value, false)}
+                  />
+                )
+              }
+              return (
                 <div
                   key={tab.id}
                   className="editor-scroll"
-                  ref={tab.id === activeId ? editorHostRef : undefined}
-                  style={{ display: tab.id === activeId ? undefined : 'none' }}
+                  ref={isActive ? editorHostRef : undefined}
+                  style={{ display: isActive ? undefined : 'none' }}
                 >
                   <Editor
                     tabId={`${tab.id}:${tab.reloadNonce}`}
@@ -522,15 +533,15 @@ export default function App() {
                     docPath={tab.path}
                     onChange={(md, isInitial) => updateContent(tab.id, md, isInitial)}
                     onReady={(api) => {
-                      if (tab.id === activeId) editorApiRef.current = api
+                      if (isActive) editorApiRef.current = api
                     }}
                     onActiveBlock={(id) => {
-                      if (tab.id === activeId) setActiveBlock(id)
+                      if (isActive) setActiveBlock(id)
                     }}
                   />
                 </div>
-              ))
-            )
+              )
+            })
           ) : (
             <Welcome
               t={t}
