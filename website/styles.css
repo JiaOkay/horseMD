@@ -36,10 +36,10 @@ body {
 .bg-aurora {
   position: absolute; inset: -22%;
   background:
-    radial-gradient(34% 30% at 16% 20%, oklch(0.93 0.055 70 / .85), transparent 62%),
-    radial-gradient(26% 24% at 84% 10%, oklch(0.94 0.035 145 / .55), transparent 62%),
-    radial-gradient(32% 30% at 72% 80%, oklch(0.93 0.05 30 / .6), transparent 62%),
-    radial-gradient(24% 22% at 8% 86%, oklch(0.94 0.04 95 / .5), transparent 62%);
+    radial-gradient(36% 32% at 18% 18%, oklch(0.92 0.06 70 / .8), transparent 64%),
+    radial-gradient(28% 26% at 85% 8%,  oklch(0.93 0.04 145 / .55), transparent 64%),
+    radial-gradient(34% 32% at 74% 78%, oklch(0.92 0.055 30 / .6), transparent 64%),
+    radial-gradient(26% 24% at 6% 84%,  oklch(0.93 0.045 95 / .5), transparent 64%);
   animation: aurora-drift 32s ease-in-out infinite alternate;
   will-change: transform;
 }
@@ -130,10 +130,10 @@ a { color: inherit; text-decoration: none; }
    Hero
    ─────────────────────────────────────────────────────────── */
 .hero {
-  padding: clamp(64px, 12vh, 130px) clamp(20px, 6vw, 80px) 0;
+  padding: clamp(72px, 13vh, 140px) clamp(20px, 6vw, 80px) 0;
   max-width: 1200px; margin: 0 auto;
 }
-.kicker { color: var(--accent-strong); margin: 0 0 24px; }
+.kicker { color: var(--accent-strong); margin: 0 0 26px; letter-spacing: 0.16em; }
 .hero-title {
   font-size: clamp(46px, 9vw, 104px);
   letter-spacing: -0.018em;
@@ -159,15 +159,36 @@ a { color: inherit; text-decoration: none; }
   will-change: transform;
 }
 .btn-solid {
-  background: var(--accent); color: oklch(0.99 0.005 80);
-  box-shadow: 0 14px 30px -16px color-mix(in oklch, var(--accent) 70%, transparent);
+  background: linear-gradient(180deg,
+    color-mix(in oklch, var(--accent) 88%, white) 0%,
+    var(--accent) 45%,
+    color-mix(in oklch, var(--accent) 92%, black) 100%);
+  color: oklch(0.99 0.005 80);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklch, white 35%, transparent),
+    0 1px 2px color-mix(in oklch, var(--fg) 20%, transparent),
+    0 14px 30px -14px color-mix(in oklch, var(--accent) 65%, transparent);
 }
 .btn-solid:hover {
-  background: var(--accent-strong);
-  box-shadow: 0 20px 38px -16px color-mix(in oklch, var(--accent) 80%, transparent);
+  background: linear-gradient(180deg,
+    color-mix(in oklch, var(--accent-strong) 88%, white) 0%,
+    var(--accent-strong) 45%,
+    color-mix(in oklch, var(--accent-strong) 92%, black) 100%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklch, white 30%, transparent),
+    0 1px 2px color-mix(in oklch, var(--fg) 24%, transparent),
+    0 20px 40px -14px color-mix(in oklch, var(--accent) 75%, transparent);
 }
-.btn-ghost { border: .5px solid var(--hairline-strong); }
-.btn-ghost:hover { border-color: var(--fg); }
+.btn-ghost {
+  border: .5px solid var(--hairline-strong);
+  background: color-mix(in oklch, var(--bg) 55%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.btn-ghost:hover {
+  border-color: var(--fg);
+  background: color-mix(in oklch, var(--surface) 85%, transparent);
+}
 
 .arrow-pull { display: inline-block; transition: transform .35s cubic-bezier(.2,.85,.2,1); }
 a:hover .arrow-pull, button:hover .arrow-pull { transform: translateX(3px); }
@@ -177,17 +198,27 @@ a:hover .arrow-pull, button:hover .arrow-pull { transform: translateX(3px); }
 .window-frame {
   margin: clamp(52px, 8vh, 90px) 0 0;
   border: .5px solid var(--hairline);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--surface);
-  box-shadow: 0 60px 130px -60px color-mix(in oklch, var(--fg) 40%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklch, white 60%, transparent),
+    0 1px 2px color-mix(in oklch, var(--fg) 10%, transparent),
+    0 24px 50px -28px color-mix(in oklch, var(--fg) 28%, transparent),
+    0 60px 130px -55px color-mix(in oklch, var(--fg) 38%, transparent),
+    0 40px 110px -50px color-mix(in oklch, var(--accent) 22%, transparent);
   transition: transform .5s cubic-bezier(.2,.8,.2,1), box-shadow .5s ease, border-color .3s;
   transform-style: preserve-3d;
   will-change: transform;
 }
 .window-frame:hover {
   border-color: var(--hairline-strong);
-  box-shadow: 0 72px 150px -60px color-mix(in oklch, var(--fg) 48%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklch, white 60%, transparent),
+    0 1px 2px color-mix(in oklch, var(--fg) 12%, transparent),
+    0 28px 56px -28px color-mix(in oklch, var(--fg) 32%, transparent),
+    0 72px 150px -55px color-mix(in oklch, var(--fg) 45%, transparent),
+    0 48px 120px -50px color-mix(in oklch, var(--accent) 30%, transparent);
 }
 .window-chrome {
   display: flex; align-items: center; gap: 7px;
