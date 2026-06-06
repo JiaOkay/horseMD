@@ -4,8 +4,8 @@
    ─────────────────────────────────────────────────────────── */
 :root {
   --bg:    #f7f5f0;            /* 生成り（未漂白棉白） */
-  --fg:    #3a3833;            /* 炭墨 */
-  --muted: #8a857c;
+  --fg:    #2d2b27;            /* 炭墨 */
+  --muted: #6b675e;
   --rule:  #dcd8cf;            /* 细线 */
   --rule-strong: #b8b3a8;
   --red:   #7f0019;            /* 無印酒红，整页唯一的颜色 */
@@ -25,8 +25,8 @@ body {
   font-family: 'Helvetica Neue', Helvetica, Arial,
     'PingFang SC', 'Hiragino Sans GB', 'Source Han Sans SC', 'Noto Sans SC',
     'Microsoft YaHei', sans-serif;
-  font-weight: 300;
-  font-size: 15px;
+  font-weight: 400;
+  font-size: 16px;
   line-height: 2;
   letter-spacing: 0.04em;
 }
@@ -39,7 +39,7 @@ a { color: inherit; text-decoration: none; }
 
 /* 小号宽字距标签（替代原 mono） */
 .label {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--muted);
@@ -75,20 +75,20 @@ a { color: inherit; text-decoration: none; }
 .nav-brand { display: flex; align-items: center; gap: 12px; }
 .nav-brand img { display: block; }
 .brand-name {
-  font-size: 15px; font-weight: 400;
+  font-size: 16px; font-weight: 400;
   letter-spacing: 0.18em;
 }
 .brand-ver { font-size: 11px; letter-spacing: 0.1em; color: var(--muted); }
 .nav-links { display: flex; align-items: center; gap: 28px; }
 .nav-links a {
-  font-size: 12px; letter-spacing: 0.18em;
+  font-size: 13px; letter-spacing: 0.18em;
   color: var(--muted);
   transition: color .3s;
 }
 .nav-links a:hover { color: var(--fg); }
 .lang-toggle {
   font-family: inherit;
-  font-size: 11px; letter-spacing: 0.18em;
+  font-size: 12px; letter-spacing: 0.18em;
   background: transparent; color: var(--fg);
   border: 1px solid var(--rule-strong);
   border-radius: 0;
@@ -111,15 +111,15 @@ a { color: inherit; text-decoration: none; }
 }
 .kicker { margin: 0 0 36px; }
 .hero-title {
-  font-size: clamp(30px, 5vw, 46px);
+  font-size: clamp(34px, 5.5vw, 54px);
   line-height: 1.6;
   letter-spacing: 0.12em;
 }
 .hero-title .accent-italic { color: inherit; font-style: normal; }
 .hero-sub {
-  max-width: 600px;
+  max-width: 640px;
   margin: 28px auto 0;
-  font-size: 14px;
+  font-size: 15.5px;
   color: var(--muted);
 }
 .hero-sub strong { font-weight: 500; }
@@ -145,7 +145,7 @@ a:hover .arrow-pull { transform: translateY(2px); }
 
 .hero-note {
   margin: 22px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   color: var(--muted);
 }
@@ -159,10 +159,11 @@ a:hover .arrow-pull { transform: translateY(2px); }
 .photo img {
   display: block; width: 100%; height: auto;
   border: 1px solid var(--rule);
+  border-radius: 12px;
 }
 .photo figcaption {
   margin-top: 14px;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.18em;
   color: var(--muted);
   text-align: center;
@@ -173,7 +174,7 @@ a:hover .arrow-pull { transform: translateY(2px); }
   display: flex; flex-wrap: wrap; justify-content: center;
   gap: 6px 18px;
   margin: clamp(40px, 6vh, 64px) auto 0;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.16em;
   color: var(--muted);
 }
@@ -191,7 +192,7 @@ a:hover .arrow-pull { transform: translateY(2px); }
 .section-head { margin-bottom: clamp(36px, 5vh, 52px); }
 .section-head .index { display: none; }
 .section-head h2 {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 400;
   letter-spacing: 0.2em;
 }
@@ -219,22 +220,22 @@ a:hover .arrow-pull { transform: translateY(2px); }
 }
 .card:hover { background: #f1eee7; }
 .card-index {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   color: var(--muted);
 }
 .card h3 {
-  font-size: 15px; font-weight: 500;
+  font-size: 17px; font-weight: 500;
   letter-spacing: 0.1em;
 }
 .card p {
   margin: 0;
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--muted);
 }
 .card kbd {
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   color: var(--muted);
   border: 1px solid var(--rule);
@@ -252,7 +253,7 @@ a:hover .arrow-pull { transform: translateY(2px); }
    主题 — 平铺图 + 方形色票
    ─────────────────────────────────────────────────────────── */
 .theme-stage { }
-.theme-shot { display: grid; border: 1px solid var(--rule); }
+.theme-shot { display: grid; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
 .theme-shot img {
   grid-area: 1 / 1;
   width: 100%; height: auto; display: block;
@@ -278,7 +279,7 @@ a:hover .arrow-pull { transform: translateY(2px); }
   border: none;
   border-right: 1px solid var(--rule);
   border-radius: 0;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   color: var(--muted);
   cursor: pointer;
@@ -305,7 +306,7 @@ a:hover .arrow-pull { transform: translateY(2px); }
   border-top: 1px solid var(--rule);
   display: flex; align-items: center; justify-content: space-between;
   gap: 18px; flex-wrap: wrap;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.16em;
   color: var(--muted);
 }

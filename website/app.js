@@ -7,7 +7,7 @@ const I18N = {
   zh: {
     'nav.features': '特性', 'nav.themes': '主题',
     'hero.kicker': '免费 · 开源 · 不要账号',
-    'hero.l1': '一个窗口，', 'hero.l2': '装下所有文件。',
+    'hero.l1': '一个窗口，', 'hero.l2': '装下所有 .md 文件',
     'hero.sub': '一个免费的 Typora 平替，但不止于此。Typora 有的它都有：打字即渲染、表格、LaTeX；Typora 没有的它也有：<strong>标签页</strong>和<strong>文件树</strong>，所有文件开在同一个窗口。',
     'cta.win': '下载 Windows 版', 'cta.mac': '下载 macOS 版',
     'hero.note': '构建未签名 — Windows：更多信息 → 仍要运行 · macOS：右键 → 打开',
@@ -21,13 +21,13 @@ const I18N = {
     'themes.title': '六套主题',
     'themes.light': '明亮', 'themes.dark': '暗夜', 'themes.mist': '雾',
     'themes.sage': '鼠尾草', 'themes.rose': '玫瑰', 'themes.dusk': '暮色',
-    '_title': 'HorseMD — 一个窗口，装下所有 Markdown',
+    '_title': 'HorseMD — 一个窗口，装下所有 .md 文件',
     '_desc': 'HorseMD：免费开源的 Typora 平替。标签页 + 文件树 + 所见即所得，Windows 与 macOS。',
   },
   en: {
     'nav.features': 'FEATURES', 'nav.themes': 'THEMES',
     'hero.kicker': 'FREE · OPEN SOURCE · NO ACCOUNT',
-    'hero.l1': 'One window.', 'hero.l2': 'Every file.',
+    'hero.l1': 'One window.', 'hero.l2': 'Every .md file.',
     'hero.sub': 'A free Typora alternative, and then some. Everything Typora has: type-and-it-renders, tables, LaTeX. Plus what it never had: <strong>tabs</strong> and a <strong>file tree</strong>, every file in one window.',
     'cta.win': 'Download for Windows', 'cta.mac': 'Download for macOS',
     'hero.note': 'Unsigned builds — Windows: More info → Run anyway · macOS: right-click → Open',
@@ -41,7 +41,7 @@ const I18N = {
     'themes.title': 'Six themes',
     'themes.light': 'Light', 'themes.dark': 'Dark', 'themes.mist': 'Mist',
     'themes.sage': 'Sage', 'themes.rose': 'Rose', 'themes.dusk': 'Dusk',
-    '_title': 'HorseMD — One window. Every file.',
+    '_title': 'HorseMD — One window. Every .md file.',
     '_desc': 'HorseMD: a free Typora alternative with tabs and a file-tree workspace. Open source, for Windows and macOS.',
   },
 }
