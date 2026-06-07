@@ -17,6 +17,9 @@ html, body, #root { height: 100%; margin: 0; }
   /* Typography */
   --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-read: 'Libre Baskerville', 'Georgia', 'Times New Roman', serif;
+  /* Writing font — matches the HorseMD website (website/styles.css). */
+  --font-write: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB',
+    'Source Han Sans SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'Space Grotesk', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
 
   /* Spacing & Radii */
@@ -1308,8 +1311,8 @@ body.dark .milkdown {
 }
 
 .milkdown {
-  --crepe-font-title: var(--font-read);
-  --crepe-font-default: var(--font-read);
+  --crepe-font-title: var(--font-write);
+  --crepe-font-default: var(--font-write);
   --crepe-font-code: var(--font-mono);
 }
 .milkdown .ProseMirror {
