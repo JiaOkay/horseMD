@@ -372,8 +372,28 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
         // Scan globally because Crepe may render its toolbar outside `host`; the
         // button routes its click to the focused editor (see the click handler),
         // so it doesn't matter which instance injected it.
+        // Crepe's toolbar buttons carry no label/identifier in the DOM, so we
+        // add tooltips by their fixed order: bold, italic, strikethrough, inline
+        // code, link. (Our injected heading button is excluded and titled above.)
+        const addToolbarTitles = (toolbar) => {
+          const tips = [
+            tRef.current('tb.bold'),
+            tRef.current('tb.italic'),
+            tRef.current('tb.strike'),
+            tRef.current('tb.code'),
+            tRef.current('tb.link')
+          ]
+          toolbar
+            .querySelectorAll('.toolbar-item:not(.hm-heading-item)')
+            .forEach((btn, i) => {
+              if (tips[i] && btn.title !== tips[i]) btn.title = tips[i]
+            })
+        }
         const scanToolbars = () => {
-          document.querySelectorAll('.milkdown-toolbar').forEach(injectHeadingButton)
+          document.querySelectorAll('.milkdown-toolbar').forEach((tb) => {
+            injectHeadingButton(tb)
+            addToolbarTitles(tb)
+          })
         }
         scanToolbars()
         const toolbarObserver = new MutationObserver(scanToolbars)

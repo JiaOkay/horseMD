@@ -19,6 +19,10 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
   // Guards against committing a creation twice (e.g. Enter immediately followed
   // by the input's blur, or a click on the confirm button + blur).
   const committingRef = useRef(false)
+  // Drag-and-drop: path being dragged, and the folder currently hovered as a
+  // drop target (for highlighting).
+  const dragPathRef = useRef(null)
+  const [dragOver, setDragOver] = useState(null)
 
   const loadDir = useCallback(async (dir) => {
     const nodes = await window.api.readDir(dir)
@@ -137,6 +141,64 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
     }
   }
 
+  // Recursively load every subfolder and expand them all.
+  const expandAll = async () => {
+    if (!workspace) return
+    const dirs = new Set([workspace.rootPath])
+    const walk = async (dir) => {
+      let nodes = childrenMap[dir]
+      if (nodes === undefined) nodes = await loadDir(dir)
+      for (const n of nodes || []) {
+        if (n.type === 'dir') {
+          dirs.add(n.path)
+          await walk(n.path)
+        }
+      }
+    }
+    await walk(workspace.rootPath)
+    setExpanded(dirs)
+  }
+
+  // Move a dragged file/folder into a destination directory.
+  const moveInto = async (srcPath, destDir) => {
+    if (!srcPath || !destDir) return
+    const src = srcPath.replace(/\\/g, '/')
+    const dest = destDir.replace(/\\/g, '/')
+    // No-op if it's already in that folder; never move a folder into itself or
+    // one of its own descendants.
+    if (parentDir(src) === dest) return
+    if (dest === src || dest.startsWith(src + '/')) return
+    try {
+      await window.api.rename(srcPath, join(destDir, baseName(srcPath)))
+    } catch (e) {
+      window.alert((t('err.move') || 'Could not move: ') + e.message)
+      return
+    }
+    await refreshParentOf(srcPath)
+    if (childrenMap[destDir] !== undefined) await loadDir(destDir)
+    setExpanded((s) => new Set(s).add(destDir))
+  }
+
+  // Drop handlers wired onto folder rows (and the root area).
+  const dropProps = (destDir) => ({
+    onDragOver: (e) => {
+      if (!dragPathRef.current) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
+      if (dragOver !== destDir) setDragOver(destDir)
+    },
+    onDragLeave: () => setDragOver((d) => (d === destDir ? null : d)),
+    onDrop: (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const src = dragPathRef.current
+      dragPathRef.current = null
+      setDragOver(null)
+      moveInto(src, destDir)
+    }
+  })
+
   const commitRename = async () => {
     if (!rename) return
     const { path, value } = rename
@@ -225,11 +287,23 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
     const isOpen = expanded.has(node.path)
     const isActive = node.path === activePath
     const renaming = rename && rename.path === node.path
+    const isDropTarget = isDir && dragOver === node.path
     return (
       <div key={node.path}>
         <div
-          className={`tree-row${isActive ? ' active' : ''}`}
+          className={`tree-row${isActive ? ' active' : ''}${isDropTarget ? ' drag-over' : ''}`}
           style={{ paddingLeft: 8 + depth * 14 }}
+          draggable={!renaming}
+          onDragStart={(e) => {
+            dragPathRef.current = node.path
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', node.path)
+          }}
+          onDragEnd={() => {
+            dragPathRef.current = null
+            setDragOver(null)
+          }}
+          {...(isDir ? dropProps(node.path) : {})}
           onClick={() => (isDir ? toggle(node) : onOpenFile(node.path))}
           onContextMenu={(e) => {
             e.preventDefault()
@@ -298,12 +372,26 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
           <button title={t('side.newFolder')} onClick={() => startNewFolder(null)}>
             <Icon name="folder-plus" size={15} />
           </button>
-          <button title={t('side.collapseAll')} onClick={() => setExpanded(new Set([workspace.rootPath]))}>
-            <Icon name="collapse" size={15} />
-          </button>
+          {(() => {
+            // Toggle: when everything's collapsed (only root open), expand all;
+            // otherwise collapse back to just the root. Icon reflects the action.
+            const collapsed = expanded.size <= 1
+            return (
+              <button
+                title={collapsed ? t('side.expandAll') : t('side.collapseAll')}
+                onClick={collapsed ? expandAll : () => setExpanded(new Set([workspace.rootPath]))}
+              >
+                <Icon name={collapsed ? 'expand' : 'collapse'} size={15} />
+              </button>
+            )
+          })()}
         </div>
       </div>
-      <div className="tree" onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, node: null }) }}>
+      <div
+        className={`tree${dragOver === workspace.rootPath ? ' drag-over-root' : ''}`}
+        {...dropProps(workspace.rootPath)}
+        onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, node: null }) }}
+      >
         {/* Inline creation at root level */}
         {creating && creating.dir === workspace.rootPath && renderCreatingInput(0)}
         {rootNodes.length === 0 && !creating ? (

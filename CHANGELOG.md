@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- File tree: **drag and drop** files/folders into another folder to move them.
+- File tree: the collapse-all button now **toggles** between collapse-all and
+  expand-all (recursively expands every subfolder), with a matching icon.
+- Selection toolbar buttons now show **tooltips** (Bold, Italic, Strikethrough,
+  Inline code, Link).
+- Always-visible **collapse / expand sidebar** toggle in the activity bar (the
+  icon flips to an "expand" affordance when collapsed).
+
+### Changed
+- File-tree typography: larger, non-uppercase folder-name header and slightly
+  larger row text for better legibility (especially CJK names).
+
+### Fixed
+- **Find (Ctrl+F) rewritten** to search only the editor content via the CSS
+  Custom Highlight API: it no longer matches the text typed in the find box, and
+  next/previous are instant (no IPC round-trip). Shows a live `x/total` count.
+- **Uninstall no longer deletes user files.** The uninstaller now removes only
+  the files HorseMD installed, so a document saved inside the install folder
+  (e.g. a Markdown note next to the app) is preserved instead of being wiped by
+  a blanket recursive delete. The install location is also fixed to a dedicated
+  per-user folder so the app can't be installed into a folder of your own files.
+
 ## [0.1.4] - 2026-06-08
 
 ### Added

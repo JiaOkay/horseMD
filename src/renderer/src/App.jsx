@@ -14,6 +14,76 @@ import logoUrl from './assets/logo.png'
 const ONBOARDED_KEY = 'horsemd.onboarded.v1'
 const UPDATE_DISMISS_KEY = 'horsemd.update.dismissed'
 
+// --------------------------- find-in-document helpers ----------------------
+// Search is scoped to the editor content only (the rich .ProseMirror element or
+// the source <textarea>), never the find bar or other UI — so the text typed in
+// the find box is never itself matched. Highlighting uses the CSS Custom
+// Highlight API, which paints ranges without touching the DOM.
+const FIND_HL = 'hm-find'
+const FIND_HL_CUR = 'hm-find-current'
+const findHighlightSupported =
+  typeof window !== 'undefined' && !!window.CSS?.highlights && typeof window.Highlight === 'function'
+
+function clearFindHighlights() {
+  if (!findHighlightSupported) return
+  CSS.highlights.delete(FIND_HL)
+  CSS.highlights.delete(FIND_HL_CUR)
+}
+function findRangesInEl(root, query) {
+  const ranges = []
+  if (!root || !query) return ranges
+  const q = query.toLowerCase()
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let node
+  while ((node = walker.nextNode())) {
+    const val = node.nodeValue
+    if (!val) continue
+    const lower = val.toLowerCase()
+    let idx = lower.indexOf(q)
+    while (idx !== -1) {
+      const r = document.createRange()
+      r.setStart(node, idx)
+      r.setEnd(node, idx + query.length)
+      ranges.push(r)
+      idx = lower.indexOf(q, idx + query.length)
+    }
+  }
+  return ranges
+}
+function paintFindHighlights(ranges, activeIdx) {
+  if (!findHighlightSupported) return
+  CSS.highlights.delete(FIND_HL)
+  CSS.highlights.delete(FIND_HL_CUR)
+  if (!ranges.length) return
+  CSS.highlights.set(FIND_HL, new Highlight(...ranges))
+  if (ranges[activeIdx]) {
+    const cur = new Highlight(ranges[activeIdx])
+    cur.priority = 1
+    CSS.highlights.set(FIND_HL_CUR, cur)
+  }
+}
+function scrollRangeIntoView(range, scroller) {
+  if (!range || !scroller) return
+  const rect = range.getBoundingClientRect()
+  const sr = scroller.getBoundingClientRect()
+  if (!rect.height && !rect.width) return
+  if (rect.top < sr.top + 12 || rect.bottom > sr.bottom - 12) {
+    scroller.scrollTop += (rect.top + rect.bottom) / 2 - (sr.top + sr.bottom) / 2
+  }
+}
+function matchIndices(text, query) {
+  const out = []
+  if (!text || !query) return out
+  const lower = text.toLowerCase()
+  const q = query.toLowerCase()
+  let idx = lower.indexOf(q)
+  while (idx !== -1) {
+    out.push(idx)
+    idx = lower.indexOf(q, idx + query.length)
+  }
+  return out
+}
+
 // Compare dotted versions: is `a` newer than `b`? (e.g. '0.1.5' > '0.1.4')
 function isNewerVersion(a, b) {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0)
@@ -61,7 +131,10 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [files, setFiles] = useState([])
-  const [find, setFind] = useState({ open: false, query: '' })
+  const [find, setFind] = useState({ open: false, query: '', matches: 0, active: 0 })
+  // Current match set: Range objects (rich editor) or character offsets (source
+  // textarea). Held in a ref so next/prev don't trigger re-renders.
+  const findRangesRef = useRef([])
   // "New version available" toast — populated by the startup update check below.
   const [update, setUpdate] = useState(null)
 
@@ -572,11 +645,71 @@ export default function App() {
     [t]
   )
 
-  const runFind = (backwards = false) => {
-    if (!find.query) return
-    // eslint-disable-next-line no-undef
-    window.find(find.query, false, backwards, true, false, true, false)
-  }
+  // Discriminate the active view: the source <textarea> sets sourceRef only when
+  // it's mounted (source mode or a .txt doc); otherwise we're in the rich editor.
+  const richRoot = () => editorHostRef.current?.querySelector('.ProseMirror') || null
+  const findQueryRef = useRef('')
+  const activeIdxRef = useRef(-1)
+
+  // Run a fresh search for `query`, scoped to the editor content.
+  const runFind = useCallback((query) => {
+    const q = query ?? ''
+    findQueryRef.current = q
+    clearFindHighlights()
+    findRangesRef.current = []
+    activeIdxRef.current = -1
+    if (sourceRef.current) {
+      // Source textarea: live-count only (selecting would steal the find input's
+      // focus); Enter / next / prev jump to a match.
+      const hits = matchIndices(sourceRef.current.value, q)
+      findRangesRef.current = hits
+      setFind((f) => ({ ...f, matches: hits.length, active: 0 }))
+      return
+    }
+    const root = richRoot()
+    const ranges = q ? findRangesInEl(root, q) : []
+    findRangesRef.current = ranges
+    if (ranges.length) {
+      activeIdxRef.current = 0
+      paintFindHighlights(ranges, 0)
+      scrollRangeIntoView(ranges[0], root.closest('.editor-scroll'))
+    }
+    setFind((f) => ({ ...f, matches: ranges.length, active: ranges.length ? 1 : 0 }))
+  }, [])
+
+  // Move to the next / previous match (wrapping around).
+  const stepFind = useCallback((backwards = false) => {
+    const items = findRangesRef.current
+    if (!items.length) return
+    let i = activeIdxRef.current + (backwards ? -1 : 1)
+    if (i < 0) i = items.length - 1
+    if (i >= items.length) i = 0
+    activeIdxRef.current = i
+    if (sourceRef.current) {
+      const el = sourceRef.current
+      el.focus()
+      el.setSelectionRange(items[i], items[i] + findQueryRef.current.length)
+    } else {
+      paintFindHighlights(items, i)
+      scrollRangeIntoView(items[i], richRoot()?.closest('.editor-scroll'))
+    }
+    setFind((f) => ({ ...f, active: i + 1 }))
+  }, [])
+
+  const closeFind = useCallback(() => {
+    clearFindHighlights()
+    findRangesRef.current = []
+    activeIdxRef.current = -1
+    findQueryRef.current = ''
+    setFind({ open: false, query: '', matches: 0, active: 0 })
+  }, [])
+
+  // Re-run the search when switching tabs while the find bar is open, so ranges
+  // point at the newly-visible document.
+  useEffect(() => {
+    if (find.open) runFind(findQueryRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
 
   const platformClass = { win32: ' is-win', darwin: ' is-mac' }[window.api.platform] || ''
 
@@ -597,6 +730,14 @@ export default function App() {
           onClick={() => handlers.current.toggleOutline()}
         >
           <Icon name="outline" size={20} />
+        </button>
+        <div className="activity-spacer" />
+        <button
+          className="activity-item"
+          title={sidebarOpen ? t('side.collapsePane') : t('side.expandPane')}
+          onClick={() => setSidebarOpen((v) => !v)}
+        >
+          <Icon name={sidebarOpen ? 'panel-left-close' : 'panel-left-open'} size={20} />
         </button>
       </div>
 
@@ -643,15 +784,26 @@ export default function App() {
                 ref={findInputRef}
                 value={find.query}
                 placeholder={t('find.placeholder')}
-                onChange={(e) => setFind((f) => ({ ...f, query: e.target.value }))}
+                onChange={(e) => {
+                  const q = e.target.value
+                  setFind((f) => ({ ...f, query: q }))
+                  runFind(q) // live: highlight as you type
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') runFind(e.shiftKey)
-                  if (e.key === 'Escape') setFind({ open: false, query: '' })
+                  if (e.key === 'Enter') { e.preventDefault(); stepFind(e.shiftKey) }
+                  if (e.key === 'Escape') closeFind()
                 }}
               />
-              <button onClick={() => runFind(false)}>{t('find.next')}</button>
-              <button onClick={() => runFind(true)}>{t('find.prev')}</button>
-              <button onClick={() => setFind({ open: false, query: '' })}>
+              <span className="findbar-count">
+                {find.query ? `${find.active}/${find.matches}` : ''}
+              </span>
+              <button title={t('find.prev')} onClick={() => stepFind(true)}>
+                <Icon name="chevron-up" size={14} />
+              </button>
+              <button title={t('find.next')} onClick={() => stepFind(false)}>
+                <Icon name="chevron-down" size={14} />
+              </button>
+              <button title={t('find.close')} onClick={closeFind}>
                 <Icon name="close" size={14} />
               </button>
             </div>
