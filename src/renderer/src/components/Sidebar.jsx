@@ -6,7 +6,9 @@ const join = (dir, name) => `${dir.replace(/[\\/]+$/, '')}/${name}`
 const baseName = (p) => p.split(/[\\/]/).pop()
 const parentDir = (p) => p.replace(/[\\/][^\\/]*$/, '')
 
-export default function Sidebar({ workspace, activePath, onOpenFile, refreshNonce }) {
+const isMarkdownName = (name) => /\.(md|markdown|mdx)$/i.test(name)
+
+export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf, refreshNonce }) {
   const { t } = useI18n()
   const [childrenMap, setChildrenMap] = useState({}) // path -> nodes[]
   const [expanded, setExpanded] = useState(() => new Set())
@@ -115,6 +117,15 @@ export default function Sidebar({ workspace, activePath, onOpenFile, refreshNonc
     if (!window.confirm(t('confirm.trash', { name: node.name }))) return
     await window.api.deleteItem(node.path)
     await refreshParentOf(node.path)
+  }
+
+  const doDuplicate = async (node) => {
+    try {
+      await window.api.duplicate(node.path)
+      await refreshParentOf(node.path)
+    } catch (e) {
+      window.alert((t('err.duplicate') || 'Could not duplicate: ') + e.message)
+    }
   }
 
   const commitRename = async () => {
@@ -255,13 +266,18 @@ export default function Sidebar({ workspace, activePath, onOpenFile, refreshNonc
       {menu && (
         <div className="context-menu" style={{
           left: Math.min(menu.x, window.innerWidth - 210),
-          top: Math.min(menu.y, window.innerHeight - 260)
+          top: Math.min(menu.y, window.innerHeight - 340)
         }} onClick={(e) => e.stopPropagation()}>
           <button onClick={() => { startNewFile(menu.node?.type === 'dir' ? menu.node : null); setMenu(null) }}>{t('side.ctxNewFile')}</button>
           <button onClick={() => { startNewFolder(menu.node?.type === 'dir' ? menu.node : null); setMenu(null) }}>{t('side.ctxNewFolder')}</button>
           {menu.node && <div className="menu-sep" />}
           {menu.node && <button onClick={() => { setRename({ path: menu.node.path, value: menu.node.name }); setMenu(null) }}>{t('side.rename')}</button>}
+          {menu.node?.type === 'file' && <button onClick={() => { doDuplicate(menu.node); setMenu(null) }}>{t('side.duplicate')}</button>}
+          {menu.node?.type === 'file' && isMarkdownName(menu.node.name) && (
+            <button onClick={() => { onExportPdf?.(menu.node.path); setMenu(null) }}>{t('side.exportPdf')}</button>
+          )}
           {menu.node && <button onClick={() => { window.api.showInFolder(menu.node.path); setMenu(null) }}>{t('side.reveal')}</button>}
+          {menu.node && <div className="menu-sep" />}
           {menu.node && <button className="danger" onClick={() => { doDelete(menu.node); setMenu(null) }}>{t('side.delete')}</button>}
         </div>
       )}

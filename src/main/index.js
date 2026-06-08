@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
-import { dirname, join, basename } from 'node:path'
+import { dirname, join, basename, extname } from 'node:path'
 import fs from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import chokidar from 'chokidar'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -79,16 +79,31 @@ if (!gotLock) {
   app.quit()
 } else {
   app.on('second-instance', (_e, argv) => {
-    const files = extractMarkdownArgs(argv)
+    const { files, folders } = extractArgs(argv)
     focusMainWindow()
+    if (folders.length) sendToRenderer('open-folder', folders[0])
     if (files.length) sendToRenderer('open-paths', files)
   })
 }
 
-function extractMarkdownArgs(argv) {
-  return argv
-    .slice(1)
-    .filter((a) => !a.startsWith('-') && MD_RE.test(a) && existsSync(a))
+// Split launch args into markdown files and folders. A folder argument (from
+// the Explorer "Open with HorseMD" folder menu) opens as a workspace; markdown
+// files open as tabs. Non-existent paths and flags are ignored.
+function extractArgs(argv) {
+  const files = []
+  const folders = []
+  for (const a of argv.slice(1)) {
+    if (a.startsWith('-') || !existsSync(a)) continue
+    let st
+    try {
+      st = statSync(a)
+    } catch {
+      continue
+    }
+    if (st.isDirectory()) folders.push(a)
+    else if (MD_RE.test(a)) files.push(a)
+  }
+  return { files, folders }
 }
 
 function focusMainWindow() {
@@ -117,10 +132,10 @@ function createWindow() {
     // reserve a matching gap (see `.app.is-mac` rules in app.css). y centers the
     // ~12px buttons within the 40px top bar.
     trafficLightPosition: process.platform === 'darwin' ? { x: 14, y: 14 } : undefined,
-    titleBarOverlay:
-      process.platform === 'win32'
-        ? { color: '#00000000', symbolColor: '#9aa0aa', height: 38 }
-        : false,
+    // Windows/Linux: no native caption-button overlay — the renderer draws its
+    // own minimize / maximize / close controls (so they can have custom hover
+    // states). macOS keeps its native traffic lights via hiddenInset above.
+    titleBarOverlay: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       // Security: keep the renderer isolated from Node. These are Electron's
@@ -136,7 +151,8 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     focusMainWindow()
-    const files = extractMarkdownArgs(process.argv)
+    const { files, folders } = extractArgs(process.argv)
+    if (folders.length) sendToRenderer('open-folder', folders[0])
     if (files.length) sendToRenderer('open-paths', files)
   })
 
@@ -154,6 +170,12 @@ function createWindow() {
     event.preventDefault()
     if (url.startsWith('http')) shell.openExternal(url)
   })
+
+  // Keep the renderer's maximize/restore button icon in sync with the real
+  // window state (e.g. double-click drag-to-maximize, OS shortcuts).
+  const emitMaxState = () => sendToRenderer('window:maximized', mainWindow?.isMaximized() ?? false)
+  mainWindow.on('maximize', emitMaxState)
+  mainWindow.on('unmaximize', emitMaxState)
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -407,6 +429,54 @@ ipcMain.handle('watch:unfile', async (_e, path) => {
 
 ipcMain.handle('shell:openExternal', async (_e, url) => shell.openExternal(url))
 ipcMain.handle('shell:showInFolder', async (_e, path) => shell.showItemInFolder(path))
+
+// Copy a file next to itself as "<name> copy<ext>", picking a free name.
+ipcMain.handle('fs:duplicate', async (_e, path) => {
+  const dir = dirname(path)
+  const ext = extname(path)
+  const stem = basename(path, ext)
+  let target = join(dir, `${stem} copy${ext}`)
+  let i = 2
+  while (existsSync(target)) target = join(dir, `${stem} copy ${i++}${ext}`)
+  await fs.copyFile(path, target)
+  return target
+})
+
+// ----------------------------- window controls -----------------------------
+// Custom min/max/close buttons (the native overlay is disabled so the renderer
+// can style their hover states). macOS keeps its native traffic lights.
+ipcMain.handle('window:minimize', () => mainWindow?.minimize())
+ipcMain.handle('window:toggleMaximize', () => {
+  if (!mainWindow) return false
+  if (mainWindow.isMaximized()) mainWindow.unmaximize()
+  else mainWindow.maximize()
+  return mainWindow.isMaximized()
+})
+ipcMain.handle('window:close', () => mainWindow?.close())
+ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
+
+// ----------------------------- update check --------------------------------
+// Notify-only update check: ask GitHub for the latest *published* release
+// (drafts/prereleases are excluded by this endpoint) and report its version so
+// the renderer can show a "new version available" prompt. No download here.
+ipcMain.handle('update:check', async () => {
+  try {
+    const res = await fetch('https://api.github.com/repos/BND-1/horseMD/releases/latest', {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'HorseMD-Updater' }
+    })
+    if (!res.ok) return { ok: false }
+    const data = await res.json()
+    const latest = String(data.tag_name || '').replace(/^v/i, '')
+    return {
+      ok: true,
+      latest,
+      current: app.getVersion(),
+      url: data.html_url || 'https://github.com/BND-1/horseMD/releases'
+    }
+  } catch {
+    return { ok: false }
+  }
+})
 
 // Menu actions are forwarded to renderer as commands.
 function menuCmd(cmd) {

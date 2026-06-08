@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Editor from './components/Editor.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import Tabs from './components/Tabs.jsx'
@@ -12,6 +12,18 @@ import { welcomeDoc } from './onboarding.js'
 import logoUrl from './assets/logo.png'
 
 const ONBOARDED_KEY = 'horsemd.onboarded.v1'
+const UPDATE_DISMISS_KEY = 'horsemd.update.dismissed'
+
+// Compare dotted versions: is `a` newer than `b`? (e.g. '0.1.5' > '0.1.4')
+function isNewerVersion(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0)
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0)
+    if (d !== 0) return d > 0
+  }
+  return false
+}
 
 const baseName = (p) => (p ? p.split(/[\\/]/).pop() : 'Untitled')
 const dirName = (p) => (p ? p.replace(/[\\/][^\\/]*$/, '') : '')
@@ -43,12 +55,19 @@ export default function App() {
   const [lang, setLang] = useState(session.lang || DEFAULT_LANG)
   const [recents, setRecents] = useState(session.recents || [])
   const [sourceMode, setSourceMode] = useState(false)
+  // Live mirror of sourceMode for ref-based reads inside stable callbacks.
+  const sourceModeRef = useRef(sourceMode)
+  sourceModeRef.current = sourceMode
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [files, setFiles] = useState([])
   const [find, setFind] = useState({ open: false, query: '' })
+  // "New version available" toast — populated by the startup update check below.
+  const [update, setUpdate] = useState(null)
 
-  const editorHostRef = useRef(null)
+  const editorHostRef = useRef(null) // active rich editor's scroll container
+  const sourceRef = useRef(null) // active source-mode <textarea>
+  const scrollRatioRef = useRef(null) // pending scroll position to restore across a mode switch
   const findInputRef = useRef(null)
   // Registry of each tab's editor API (by tab id). All markdown tabs stay
   // mounted, so a single ref would get stuck on whichever editor mounted last;
@@ -91,6 +110,45 @@ export default function App() {
       return THEMES[(i + 1) % THEMES.length].id
     })
   }, [])
+
+  // Toggle source/rich mode while keeping the reading position. The two modes
+  // use different DOM (a <textarea> vs. the Crepe editor) with different content
+  // heights, so we preserve a *scroll ratio* (0…1) rather than a pixel offset:
+  // capture it from the outgoing view here, restore it onto the incoming view in
+  // the layout effect below once it has rendered.
+  const toggleSource = useCallback(() => {
+    const el = sourceModeRef.current ? sourceRef.current : editorHostRef.current
+    if (el) {
+      const denom = el.scrollHeight - el.clientHeight
+      scrollRatioRef.current = denom > 0 ? el.scrollTop / denom : 0
+    } else {
+      scrollRatioRef.current = null
+    }
+    setSourceMode((v) => !v)
+  }, [])
+
+  useLayoutEffect(() => {
+    const ratio = scrollRatioRef.current
+    if (ratio == null) return
+    scrollRatioRef.current = null
+    const apply = () => {
+      const el = sourceMode ? sourceRef.current : editorHostRef.current
+      if (!el) return
+      const denom = el.scrollHeight - el.clientHeight
+      if (denom > 0) el.scrollTop = ratio * denom
+    }
+    // Apply immediately, then again as async layout settles — the rich editor
+    // (Crepe) fills its content over a few frames after it remounts, growing
+    // scrollHeight, so a single pass would land short.
+    const raf = requestAnimationFrame(apply)
+    const t1 = setTimeout(apply, 90)
+    const t2 = setTimeout(apply, 220)
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+  }, [sourceMode])
 
   // --------------------------- open files --------------------------
   const openPaths = useCallback(async (paths, silent = false) => {
@@ -185,9 +243,9 @@ export default function App() {
   const closeTab = useCallback(
     (id) => {
       setTabs((prev) => {
-        const t = prev.find((x) => x.id === id)
-        if (t && t.content !== t.savedContent) {
-          if (!window.confirm(`"${t.title}" has unsaved changes. Close anyway?`)) return prev
+        const tab = prev.find((x) => x.id === id)
+        if (tab && tab.content !== tab.savedContent) {
+          if (!window.confirm(tRef.current('confirm.closeUnsaved', { name: tab.title }))) return prev
         }
         const idx = prev.findIndex((x) => x.id === id)
         const next = prev.filter((x) => x.id !== id)
@@ -226,6 +284,30 @@ export default function App() {
       await writeTab(tab, target)
     },
     [tabs, writeTab]
+  )
+
+  // Export a file (by path) to PDF: open/focus it, wait for its editor to mount,
+  // then reuse the same HTML→PDF pipeline as the menu command. Driven from the
+  // sidebar's right-click menu, where the file may not be open yet.
+  const exportPathToPdf = useCallback(
+    async (path) => {
+      await openPaths([path])
+      const norm = (path || '').replace(/\\/g, '/')
+      const tab = tabsRef.current.find((t) => (t.path || '').replace(/\\/g, '/') === norm)
+      if (!tab) return
+      let html = null
+      for (let i = 0; i < 40 && !html; i++) {
+        html = editorApis.current[tab.id]?.getDocHTML?.()
+        if (!html) await new Promise((r) => setTimeout(r, 75))
+      }
+      if (!html) {
+        window.alert(tRef.current('error.exportPdfUnavailable'))
+        return
+      }
+      const base = (tab.title || 'Untitled').replace(/\.(md|markdown|mdx|txt)$/i, '')
+      await window.api.exportPDF(html, base + '.pdf')
+    },
+    [openPaths]
   )
 
   // --------------------------- workspace ---------------------------
@@ -340,7 +422,7 @@ export default function App() {
       setSidebarMode('files')
       setSidebarOpen(true)
     },
-    toggleSource: () => setSourceMode((v) => !v),
+    toggleSource,
     toggleTheme: cycleTheme,
     find: () => {
       setFind((f) => ({ ...f, open: true }))
@@ -351,11 +433,19 @@ export default function App() {
   useEffect(() => {
     const offMenu = window.api.onMenu((cmd) => handlers.current[cmd]?.())
     const offOpen = window.api.onOpenPaths((paths) => openPaths(paths))
+    // A folder path arriving from Explorer's "Open with HorseMD" folder menu.
+    const offFolder = window.api.onOpenFolderPath?.((dir) => {
+      if (!dir) return
+      setWorkspace({ rootPath: dir, rootName: baseName(dir) })
+      setSidebarMode('files')
+      setSidebarOpen(true)
+    })
     const onOpenFolderEvt = () => openFolder()
     window.addEventListener('mm:openFolder', onOpenFolderEvt)
     return () => {
       offMenu()
       offOpen()
+      offFolder?.()
       window.removeEventListener('mm:openFolder', onOpenFolderEvt)
     }
   }, [openPaths, openFolder])
@@ -424,6 +514,28 @@ export default function App() {
     }
     localStorage.setItem(LS, JSON.stringify(data))
   }, [workspace, theme, lang, recents, sidebarOpen, sidebarMode, tabs, activePath])
+
+  // ------------------------- update check (notify-only) ------------
+  useEffect(() => {
+    let alive = true
+    window.api.checkUpdate?.().then((r) => {
+      if (!alive || !r?.ok || !r.latest) return
+      const dismissed = localStorage.getItem(UPDATE_DISMISS_KEY)
+      if (isNewerVersion(r.latest, r.current) && r.latest !== dismissed) {
+        setUpdate({ latest: r.latest, current: r.current, url: r.url })
+      }
+    }).catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const dismissUpdate = useCallback(() => {
+    setUpdate((u) => {
+      if (u) localStorage.setItem(UPDATE_DISMISS_KEY, u.latest)
+      return null
+    })
+  }, [])
 
   // ------------------------- first-run onboarding ------------------
   useEffect(() => {
@@ -503,6 +615,7 @@ export default function App() {
         <button className="icon-btn drag-no" title="Command palette (Ctrl+P)" onClick={() => setPaletteOpen(true)}>
           <Icon name="command" size={16} />
         </button>
+        {window.api.platform === 'win32' && <WindowControls t={t} />}
       </div>
 
       <div className="body">
@@ -513,6 +626,7 @@ export default function App() {
                 workspace={workspace}
                 activePath={activePath}
                 onOpenFile={(p) => openPaths([p])}
+                onExportPdf={exportPathToPdf}
                 refreshNonce={refreshNonce}
               />
             ) : (
@@ -549,11 +663,17 @@ export default function App() {
                use Crepe and stay mounted so tab switches don't re-create them. */
             tabs.map((tab) => {
               const isActive = tab.id === activeId
-              if (sourceMode || isPlainTextDoc(tab)) {
+              // The plain <textarea> is used for .txt docs, and for the *active*
+              // Markdown doc while source mode is on. Crucially, only the active
+              // tab swaps to source — background Markdown editors stay mounted
+              // (hidden) below, so toggling source mode no longer destroys and
+              // recreates every other tab's editor (that was the switch lag).
+              if (isPlainTextDoc(tab) || (sourceMode && isActive)) {
                 if (!isActive) return null
                 return (
                   <textarea
                     key={tab.id}
+                    ref={isActive ? sourceRef : undefined}
                     className="source-editor"
                     value={tab.content}
                     spellCheck={false}
@@ -561,6 +681,9 @@ export default function App() {
                   />
                 )
               }
+              // Hidden when this isn't the visible view: a background tab, or the
+              // active tab currently being shown as source above.
+              const hidden = !isActive || sourceMode
               return (
                 <div
                   // Include reloadNonce so an external-edit reload remounts the
@@ -568,8 +691,8 @@ export default function App() {
                   // runs on mount). tab switches keep the same key → stay mounted.
                   key={`${tab.id}:${tab.reloadNonce}`}
                   className="editor-scroll"
-                  ref={isActive ? editorHostRef : undefined}
-                  style={{ display: isActive ? undefined : 'none' }}
+                  ref={isActive && !sourceMode ? editorHostRef : undefined}
+                  style={{ display: hidden ? 'none' : undefined }}
                 >
                   <Editor
                     tabId={`${tab.id}:${tab.reloadNonce}`}
@@ -608,7 +731,7 @@ export default function App() {
         lang={lang}
         setLang={setLang}
         sourceMode={sourceMode}
-        onToggleSource={() => setSourceMode((v) => !v)}
+        onToggleSource={toggleSource}
         activeBlock={activeBlock}
         onPickBlock={(id) => editorApis.current[activeId]?.setBlock(id)}
       />
@@ -620,8 +743,79 @@ export default function App() {
         files={files}
         onOpenFile={(p) => openPaths([p])}
       />
+
+      {update && (
+        <UpdateToast
+          t={t}
+          latest={update.latest}
+          current={update.current}
+          onDownload={() => {
+            window.api.openExternal(update.url)
+            dismissUpdate()
+          }}
+          onDismiss={dismissUpdate}
+        />
+      )}
     </div>
     </I18nProvider>
+  )
+}
+
+// Custom Windows/Linux caption buttons (the native overlay is disabled in the
+// main process). macOS uses its native traffic lights, so this isn't rendered
+// there. The maximize icon reflects the live window state.
+function WindowControls({ t }) {
+  const [max, setMax] = useState(false)
+  useEffect(() => {
+    let alive = true
+    window.api.windowIsMaximized?.().then((v) => alive && setMax(!!v))
+    const off = window.api.onWindowMaximized?.((v) => setMax(!!v))
+    return () => {
+      alive = false
+      off?.()
+    }
+  }, [])
+  return (
+    <div className="win-controls drag-no">
+      <button className="win-ctrl" title={t('tip.minimize')} onClick={() => window.api.windowMinimize()}>
+        <Icon name="win-min" size={14} strokeWidth={1.6} />
+      </button>
+      <button
+        className="win-ctrl"
+        title={t(max ? 'tip.restore' : 'tip.maximize')}
+        onClick={async () => setMax(!!(await window.api.windowToggleMaximize()))}
+      >
+        <Icon name={max ? 'win-restore' : 'win-max'} size={13} strokeWidth={1.6} />
+      </button>
+      <button className="win-ctrl close" title={t('tip.close')} onClick={() => window.api.windowClose()}>
+        <Icon name="close" size={14} />
+      </button>
+    </div>
+  )
+}
+
+// Notify-only "new version available" toast — slides in at the bottom-right.
+function UpdateToast({ t, latest, current, onDownload, onDismiss }) {
+  return (
+    <div className="update-toast" role="alert">
+      <button className="update-toast-close" onClick={onDismiss} title={t('update.later')}>
+        <Icon name="close" size={13} />
+      </button>
+      <div className="update-toast-head">
+        <span className="update-toast-icon">
+          <Icon name="sparkle" size={18} />
+        </span>
+        <div className="update-toast-text">
+          <div className="update-toast-title">{t('update.title')}</div>
+          <div className="update-toast-sub">
+            v{current} <span className="update-toast-arrow">→</span> <b>v{latest}</b>
+          </div>
+        </div>
+      </div>
+      <button className="update-toast-primary" onClick={onDownload}>
+        {t('update.download')}
+      </button>
+    </div>
   )
 }
 

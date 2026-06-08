@@ -1,7 +1,7 @@
 {
   "name": "horse",
-  "version": "0.1.3",
-  "description": "A beautiful Typora-style Markdown editor with tabs and a file-tree workspace",
+  "version": "0.1.4",
+  "description": "HorseMD Markdown Editor",
   "author": "mini_md",
   "license": "MIT",
   "repository": {
@@ -69,7 +69,8 @@
       "allowToChangeInstallationDirectory": true,
       "allowElevation": true,
       "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico"
+      "uninstallerIcon": "build/icon.ico",
+      "include": "build/installer.nsh"
     }
   }
 }

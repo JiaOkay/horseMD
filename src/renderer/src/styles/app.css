@@ -311,7 +311,9 @@ button:focus-visible,
   min-width: 0;
   overflow: hidden;
 }
-.app.is-win .topbar { padding-right: 140px; }
+/* Windows: the renderer draws its own caption buttons (see .win-controls),
+   so the top bar no longer reserves space for a native overlay. */
+.app.is-win .topbar { padding-right: 0; }
 /* macOS: give the traffic lights their own full-width title bar so they no
    longer straddle the activity-bar / top-bar seam. The top bar spans BOTH
    columns and the activity bar drops to start *below* it — so the lights rest on
@@ -334,6 +336,133 @@ button:focus-visible,
   -webkit-app-region: drag;
 }
 .topbar-spacer { flex: 1; min-width: 4px; -webkit-app-region: drag; }
+
+/* ---- "New version available" toast (bottom-right) ---- */
+.update-toast {
+  position: fixed;
+  right: 18px;
+  bottom: calc(var(--status-h, 28px) + 16px);
+  z-index: 200;
+  width: 264px;
+  padding: 14px 16px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.2), 0 3px 10px rgba(0, 0, 0, 0.1);
+  animation: update-toast-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+.update-toast-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.update-toast-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+.update-toast-text {
+  min-width: 0;
+}
+.update-toast-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+.update-toast-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted, #8a8a8a);
+}
+.update-toast-sub b {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+.update-toast-arrow {
+  opacity: 0.5;
+  margin: 0 1px;
+}
+.update-toast-primary {
+  margin-top: 13px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.08s ease;
+}
+.update-toast-primary:hover {
+  background: var(--accent-strong);
+}
+.update-toast-primary:active {
+  transform: translateY(1px);
+}
+.update-toast-close {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted, #999);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.update-toast-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+@keyframes update-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---- Custom Windows caption buttons (minimize / maximize / close) ---- */
+.win-controls {
+  display: flex;
+  align-items: stretch;
+  height: var(--topbar-h);
+  margin-left: 4px;
+  -webkit-app-region: no-drag;
+}
+.win-ctrl {
+  width: 46px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  opacity: 0.75;
+  cursor: pointer;
+  /* "Basic" hover feedback: a quick highlight fade as the pointer enters. */
+  transition: background-color 0.12s ease, opacity 0.12s ease, color 0.12s ease;
+}
+.win-ctrl:hover { background: var(--hover); opacity: 1; }
+.win-ctrl:active { background: var(--active); }
+.win-ctrl.close:hover { background: #e81123; color: #fff; opacity: 1; }
+.win-ctrl.close:active { background: #c50f1f; color: #fff; }
 
 .icon-btn {
   display: grid;
@@ -709,6 +838,38 @@ button:focus-visible,
 }
 .milkdown { background: transparent !important; }
 .milkdown .ProseMirror { padding: 0 !important; }
+
+/* Floating block-level indicator: a small pill in the left gutter that tracks
+   the caret's line and names the current block (H1…H6 / Text). Non-interactive
+   — purely an at-a-glance hint, so it never steals clicks from the editor. */
+.hm-level-badge {
+  position: fixed;
+  transform: translateY(-50%);
+  z-index: 60;
+  pointer-events: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  opacity: 0.92;
+  animation: hm-level-in 0.12s ease;
+}
+.hm-level-badge.hm-level-text {
+  color: var(--muted, #6c6f63);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  border-color: var(--border-soft);
+}
+@keyframes hm-level-in {
+  from { opacity: 0; transform: translateY(-50%) translateX(-3px); }
+  to { opacity: 0.92; transform: translateY(-50%) translateX(0); }
+}
 
 /* =====================================================
    Block-type controls (selection bar / context menu / status switcher)

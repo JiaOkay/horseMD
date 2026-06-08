@@ -21,6 +21,10 @@ export const STRINGS = {
     'tip.toggleTheme': 'Theme',
     'tip.language': 'Language',
     'tip.changeBlock': 'Change block type',
+    'tip.minimize': 'Minimize',
+    'tip.maximize': 'Maximize',
+    'tip.restore': 'Restore Down',
+    'tip.close': 'Close',
 
     // welcome (empty state)
     'welcome.tagline': 'A calmer place to write Markdown — many files, one window.',
@@ -51,12 +55,16 @@ export const STRINGS = {
     'side.ctxNewFile': 'New File',
     'side.ctxNewFolder': 'New Folder',
     'side.rename': 'Rename',
+    'side.duplicate': 'Duplicate',
+    'side.exportPdf': 'Export as PDF…',
     'side.reveal': 'Reveal in Explorer',
     'side.delete': 'Delete',
+    'err.duplicate': 'Could not duplicate: ',
     'prompt.newFile': 'New file name',
     'prompt.newFolder': 'New folder name',
     'prompt.newFolderDefault': 'New Folder',
     'confirm.trash': 'Move "{name}" to trash?',
+    'confirm.closeUnsaved': '"{name}" has unsaved changes. Close anyway?',
     'error.fileMissing': '"{name}" no longer exists — it may have been moved or deleted. Removed it from Recent.',
     'error.openFailed': 'Could not open "{name}".',
     'err.createFile': 'Could not create file: ',
@@ -101,7 +109,12 @@ export const STRINGS = {
     'block.heading': 'Heading',
 
     // editor
-    'editor.placeholder': 'Type / for commands, or just start writing…'
+    'editor.placeholder': 'Type / for commands, or just start writing…',
+
+    // update
+    'update.title': 'Update available',
+    'update.download': 'Download',
+    'update.later': 'Later'
   },
 
   zh: {
@@ -118,6 +131,10 @@ export const STRINGS = {
     'tip.toggleTheme': '主题',
     'tip.language': '语言',
     'tip.changeBlock': '更改块类型',
+    'tip.minimize': '最小化',
+    'tip.maximize': '最大化',
+    'tip.restore': '向下还原',
+    'tip.close': '关闭',
 
     'welcome.tagline': '一个更安静的 Markdown 写作空间 —— 多文件，一个窗口。',
     'welcome.newFile': '新建文件',
@@ -145,12 +162,16 @@ export const STRINGS = {
     'side.ctxNewFile': '新建文件',
     'side.ctxNewFolder': '新建文件夹',
     'side.rename': '重命名',
+    'side.duplicate': '创建副本',
+    'side.exportPdf': '导出为 PDF…',
     'side.reveal': '在资源管理器中显示',
     'side.delete': '删除',
+    'err.duplicate': '无法创建副本：',
     'prompt.newFile': '新文件名',
     'prompt.newFolder': '新文件夹名',
     'prompt.newFolderDefault': '新建文件夹',
     'confirm.trash': '将“{name}”移到回收站？',
+    'confirm.closeUnsaved': '“{name}”有未保存的更改，仍要关闭吗？',
     'error.fileMissing': '“{name}”已不存在——可能被移动或删除了。已从“最近打开”中移除。',
     'error.openFailed': '无法打开“{name}”。',
     'err.createFile': '无法创建文件：',
@@ -189,7 +210,11 @@ export const STRINGS = {
     'block.h6': '标题 6',
     'block.heading': '标题',
 
-    'editor.placeholder': '输入 / 唤起命令，或开始写…'
+    'editor.placeholder': '输入 / 唤起命令，或开始写…',
+
+    'update.title': '发现新版本',
+    'update.download': '前往下载',
+    'update.later': '稍后'
   }
 }
 

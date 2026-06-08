@@ -21,6 +21,7 @@ const api = {
   deleteItem: (path) => ipcRenderer.invoke('fs:delete', path),
   createFile: (path, content) => ipcRenderer.invoke('fs:createFile', path, content),
   createDir: (path) => ipcRenderer.invoke('fs:createDir', path),
+  duplicate: (path) => ipcRenderer.invoke('fs:duplicate', path),
   readDir: (dir) => ipcRenderer.invoke('fs:readDir', dir),
   listFiles: (root) => ipcRenderer.invoke('fs:listFiles', root),
   openFolderTree: (dir) => ipcRenderer.invoke('fs:openFolderTree', dir),
@@ -35,11 +36,22 @@ const api = {
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   showInFolder: (path) => ipcRenderer.invoke('shell:showInFolder', path),
 
+  // window controls (custom title-bar buttons on Windows/Linux)
+  windowMinimize: () => ipcRenderer.invoke('window:minimize'),
+  windowToggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize'),
+  windowClose: () => ipcRenderer.invoke('window:close'),
+  windowIsMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+
+  // update check (notify-only)
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+
   // events from main
   onOpenPaths: on('open-paths'),
+  onOpenFolderPath: on('open-folder'),
   onMenu: on('menu'),
   onWatchChanged: on('watch:changed'),
   onFileChanged: on('file:changed'),
+  onWindowMaximized: on('window:maximized'),
 
   platform: process.platform
 }

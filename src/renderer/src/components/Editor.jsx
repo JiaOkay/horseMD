@@ -36,6 +36,8 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
   const apiRef = useRef(null)
   const lastBlockRef = useRef(null)
   const [ctxMenu, setCtxMenu] = useState(null) // { x, y } viewport coords, or null
+  // Floating "block level" indicator that tracks the caret (H1…H6 / Text).
+  const [level, setLevel] = useState(null) // { label, kind, top, left } or null
 
   useEffect(() => {
     const host = hostRef.current
@@ -82,6 +84,7 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
       convertBlock(view, def.name, def.level ? { level: def.level } : {})
       view.focus()
       reportActiveBlock()
+      refreshLevel()
       setCtxMenu(null)
     }
 
@@ -94,6 +97,41 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
         lastBlockRef.current = id
         onActiveBlock?.(id)
       }
+    }
+
+    // Position the floating level badge next to the caret's line. Hidden when
+    // the editor isn't focused or the caret has scrolled out of view.
+    const refreshLevel = () => {
+      const view = viewRef.current
+      if (!view || !view.hasFocus()) {
+        setLevel(null)
+        return
+      }
+      let coords
+      try {
+        coords = view.coordsAtPos(view.state.selection.from)
+      } catch {
+        return
+      }
+      const scrollEl = host.closest('.editor-scroll')
+      const r = scrollEl
+        ? scrollEl.getBoundingClientRect()
+        : { top: 0, bottom: window.innerHeight, left: 0 }
+      if (coords.bottom < r.top + 2 || coords.top > r.bottom - 2) {
+        setLevel(null)
+        return
+      }
+      const id = currentBlockId(view.state)
+      const def = blockById(id)
+      // Only the request's subject — headings (H1…H6) and plain paragraphs.
+      // Other block types (code, quote…) get no badge to keep it clean.
+      if (!def) {
+        setLevel(null)
+        return
+      }
+      const kind = id === 'paragraph' ? 'text' : 'heading'
+      const label = tRef.current('block.' + id)
+      setLevel({ label, kind, top: (coords.top + coords.bottom) / 2, left: r.left })
     }
 
     // IMPORTANT: register listeners BEFORE create(). Crepe wires them during
@@ -155,6 +193,7 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
           const v = viewRef.current
           if (!v) return
           if (v.hasFocus()) reportActiveBlock()
+          refreshLevel()
         }
 
         if (view) {
@@ -162,6 +201,19 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
           view.dom.addEventListener('contextmenu', onContextMenu)
           cleanups.push(() => view.dom.removeEventListener('keydown', onKeydown))
           cleanups.push(() => view.dom.removeEventListener('contextmenu', onContextMenu))
+          // Show/hide and reposition the level badge with focus and scrolling.
+          const onBlur = () => setLevel(null)
+          const onFocus = () => refreshLevel()
+          view.dom.addEventListener('blur', onBlur)
+          view.dom.addEventListener('focus', onFocus)
+          cleanups.push(() => view.dom.removeEventListener('blur', onBlur))
+          cleanups.push(() => view.dom.removeEventListener('focus', onFocus))
+          const scrollEl = host.closest('.editor-scroll')
+          if (scrollEl) {
+            const onScroll = () => refreshLevel()
+            scrollEl.addEventListener('scroll', onScroll, { passive: true })
+            cleanups.push(() => scrollEl.removeEventListener('scroll', onScroll))
+          }
         }
         document.addEventListener('selectionchange', onSelChange)
         cleanups.push(() => document.removeEventListener('selectionchange', onSelChange))
@@ -413,6 +465,16 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
         ref={hostRef}
         style={{ '--hm-placeholder': JSON.stringify(t('editor.placeholder')) }}
       />
+
+      {level && (
+        <div
+          className={`hm-level-badge hm-level-${level.kind}`}
+          style={{ top: level.top, left: level.left + 8 }}
+          aria-hidden="true"
+        >
+          {level.label}
+        </div>
+      )}
 
       {ctxMenu && (
         <>
