@@ -336,12 +336,16 @@ button:focus-visible,
 .topbar .tab,
 .topbar .tab-new,
 .topbar input { -webkit-app-region: no-drag; }
+/* Always-draggable handle between the tabs and the right-side buttons. The
+   min-width is a hard floor so that even when many tabs fill (and scroll) the
+   strip, there's still a comfortable area to grab and move the window. */
 .topbar-spacer {
-  flex: 0 0 auto;
-  min-width: 4px;
+  flex: 1 1 auto;
+  min-width: 72px;
+  align-self: stretch;
+  height: 100%;
   -webkit-app-region: drag;
 }
-.topbar-spacer { flex: 1; min-width: 4px; -webkit-app-region: drag; }
 
 /* ---- "New version available" toast (bottom-right) ---- */
 .update-toast {
@@ -534,7 +538,9 @@ button:focus-visible,
   display: flex;
   align-items: center;
   min-width: 0;
-  flex: 1 1 auto;
+  /* Don't grow — let the draggable spacer take all the slack, so there's always
+     a clear window-drag area to the right of the tabs. */
+  flex: 0 1 auto;
   height: 100%;
   gap: 2px;
   overflow: hidden;

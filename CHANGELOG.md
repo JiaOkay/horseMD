@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-06-08
+
 ### Added
 - File tree: **drag and drop** files/folders into another folder to move them.
 - File tree: the collapse-all button now **toggles** between collapse-all and
@@ -28,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   (e.g. a Markdown note next to the app) is preserved instead of being wiped by
   a blanket recursive delete. The install location is also fixed to a dedicated
   per-user folder so the app can't be installed into a folder of your own files.
+- The title bar always keeps a draggable area to move the window, even when many
+  open tabs fill the whole tab strip.
 
 ## [0.1.4] - 2026-06-08
 
@@ -112,7 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Dark/light themes, session restore, single-instance file association.
 - Windows NSIS installer and macOS dmg/zip packaging.
 
-[Unreleased]: https://github.com/BND-1/horseMD/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/BND-1/horseMD/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/BND-1/horseMD/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/BND-1/horseMD/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/BND-1/horseMD/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/BND-1/horseMD/compare/v0.1.1...v0.1.2
