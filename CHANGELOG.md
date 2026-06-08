@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-06-08
+
+### Added
+- Floating **block-level badge** that tracks the caret, naming the current block
+  (H1…H6 / 正文) beside the text.
+- Sidebar right-click: **Duplicate** a file, and **Export as PDF**.
+- Custom Windows caption buttons (minimize / maximize / close) with hover states
+  (close turns red), replacing the native overlay.
+- Explorer **"Open with HorseMD"** entry on folders — opens a directory as a
+  workspace; the app now accepts a folder path on launch.
+- **Notify-only update check**: on launch, looks up the latest GitHub release and
+  shows a dismissible "new version available" toast.
+- Inline **confirm (✓) / cancel (✗)** buttons on the create & rename fields, and
+  an "empty folder" hint when an expanded directory has nothing to list.
+
+### Changed
+- Source/rich toggle now **keeps the scroll position** and no longer rebuilds the
+  background editors, so switching is much faster.
+- Shorter executable description ("HorseMD Markdown Editor") so the Explorer
+  "Open with" name isn't a long sentence.
+
+### Fixed
+- New file/folder creation now commits on blur (clicking away no longer loses the
+  typed name).
+- The unsaved-close confirm dialog and a couple of error messages are now
+  localized (zh/en).
+
 ## [0.1.3] - 2026-06-07
 
 ### Fixed
@@ -62,7 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Dark/light themes, session restore, single-instance file association.
 - Windows NSIS installer and macOS dmg/zip packaging.
 
-[Unreleased]: https://github.com/BND-1/horseMD/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/BND-1/horseMD/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/BND-1/horseMD/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/BND-1/horseMD/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/BND-1/horseMD/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/BND-1/horseMD/compare/v0.1.0...v0.1.1

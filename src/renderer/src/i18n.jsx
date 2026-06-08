@@ -68,6 +68,10 @@ export const STRINGS = {
     'error.fileMissing': '"{name}" no longer exists — it may have been moved or deleted. Removed it from Recent.',
     'error.openFailed': 'Could not open "{name}".',
     'err.createFile': 'Could not create file: ',
+    'err.createFolder': 'Could not create folder: ',
+    'side.emptyFolder': 'Empty — no Markdown files',
+    'edit.confirm': 'Confirm (Enter)',
+    'edit.cancel': 'Cancel (Esc)',
 
     // outline
     'outline.title': 'Outline',
@@ -175,6 +179,10 @@ export const STRINGS = {
     'error.fileMissing': '“{name}”已不存在——可能被移动或删除了。已从“最近打开”中移除。',
     'error.openFailed': '无法打开“{name}”。',
     'err.createFile': '无法创建文件：',
+    'err.createFolder': '无法创建文件夹：',
+    'side.emptyFolder': '空文件夹 — 没有 Markdown 文件',
+    'edit.confirm': '确认（回车）',
+    'edit.cancel': '取消（Esc）',
 
     'outline.title': '大纲',
     'outline.empty': '暂无标题',

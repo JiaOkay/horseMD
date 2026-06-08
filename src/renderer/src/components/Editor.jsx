@@ -107,9 +107,10 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
         setLevel(null)
         return
       }
+      const sel = view.state.selection
       let coords
       try {
-        coords = view.coordsAtPos(view.state.selection.from)
+        coords = view.coordsAtPos(sel.from)
       } catch {
         return
       }
@@ -123,15 +124,32 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
       }
       const id = currentBlockId(view.state)
       const def = blockById(id)
-      // Only the request's subject — headings (H1…H6) and plain paragraphs.
-      // Other block types (code, quote…) get no badge to keep it clean.
+      // Only headings (H1…H6) and plain paragraphs get a badge.
       if (!def) {
         setLevel(null)
         return
       }
+      // Anchor to the current block's left edge so the tag sits just beside the
+      // text, not floating off at the pane edge.
+      let blockLeft = coords.left
+      try {
+        let el = view.domAtPos(sel.from).node
+        if (el && el.nodeType === 3) el = el.parentElement
+        const pm = view.dom
+        while (el && el !== pm && el.parentElement && el.parentElement !== pm) {
+          el = el.parentElement
+        }
+        if (el && el !== pm) blockLeft = el.getBoundingClientRect().left
+      } catch {
+        /* fall back to the caret x */
+      }
       const kind = id === 'paragraph' ? 'text' : 'heading'
-      const label = tRef.current('block.' + id)
-      setLevel({ label, kind, top: (coords.top + coords.bottom) / 2, left: r.left })
+      const label = id === 'paragraph' ? tRef.current('block.paragraph') : def.short
+      // Sit in the gutter just left of the text; if the window is too narrow for
+      // that, tuck the tag against the pane's left edge instead.
+      const align = blockLeft - 10 - r.left >= 46 ? 'right' : 'left'
+      const x = align === 'right' ? blockLeft - 10 : r.left + 6
+      setLevel({ label, kind, align, top: (coords.top + coords.bottom) / 2, x })
     }
 
     // IMPORTANT: register listeners BEFORE create(). Crepe wires them during
@@ -468,8 +486,8 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
 
       {level && (
         <div
-          className={`hm-level-badge hm-level-${level.kind}`}
-          style={{ top: level.top, left: level.left + 8 }}
+          className={`hm-level-badge hm-level-${level.kind} align-${level.align}`}
+          style={{ top: level.top, left: level.x }}
           aria-hidden="true"
         >
           {level.label}

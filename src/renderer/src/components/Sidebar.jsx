@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from './icons.jsx'
 import { useI18n } from '../i18n.jsx'
 
@@ -16,6 +16,9 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
   const [rename, setRename] = useState(null) // { path, value }
   // Inline creation: { dir, type: 'file'|'folder', value }
   const [creating, setCreating] = useState(null)
+  // Guards against committing a creation twice (e.g. Enter immediately followed
+  // by the input's blur, or a click on the confirm button + blur).
+  const committingRef = useRef(false)
 
   const loadDir = useCallback(async (dir) => {
     const nodes = await window.api.readDir(dir)
@@ -89,11 +92,15 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
 
   // Commit the inline creation
   const commitCreate = async () => {
-    if (!creating) return
+    if (!creating || committingRef.current) return
+    committingRef.current = true
     const { dir, type, value } = creating
     const name = value.trim()
     setCreating(null)
-    if (!name) return
+    if (!name) {
+      committingRef.current = false
+      return
+    }
 
     try {
       if (type === 'file') {
@@ -109,7 +116,9 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
         setExpanded((s) => new Set(s).add(dir))
       }
     } catch (e) {
-      window.alert((type === 'file' ? t('err.createFile') : 'Could not create folder: ') + e.message)
+      window.alert((type === 'file' ? t('err.createFile') : t('err.createFolder')) + e.message)
+    } finally {
+      committingRef.current = false
     }
   }
 
@@ -153,6 +162,32 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
 
   const rootNodes = childrenMap[workspace.rootPath] || []
 
+  // Inline confirm (✓) / cancel (✗) buttons shown while creating or renaming.
+  // onMouseDown preventDefault keeps the input focused so clicking a button
+  // doesn't first fire the input's blur-to-commit.
+  const editActions = (onConfirm, onCancel) => (
+    <span className="tree-edit-actions" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        className="tree-edit-btn confirm"
+        title={t('edit.confirm')}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => { e.stopPropagation(); onConfirm() }}
+      >
+        <Icon name="check" size={13} />
+      </button>
+      <button
+        type="button"
+        className="tree-edit-btn cancel"
+        title={t('edit.cancel')}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => { e.stopPropagation(); onCancel() }}
+      >
+        <Icon name="close" size={12} />
+      </button>
+    </span>
+  )
+
   // Render the inline creation input
   const renderCreatingInput = (depth) => (
     <div className="tree-row creating-row" style={{ paddingLeft: 8 + depth * 14 }}>
@@ -172,12 +207,16 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
         }}
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => setCreating({ ...creating, value: e.target.value })}
+        // Commit when focus leaves the input (clicking elsewhere), matching the
+        // rename field — so a typed name is never silently lost.
+        onBlur={commitCreate}
         onKeyDown={(e) => {
           e.stopPropagation()
           if (e.key === 'Enter') { e.preventDefault(); commitCreate() }
           if (e.key === 'Escape') setCreating(null)
         }}
       />
+      {editActions(commitCreate, () => setCreating(null))}
     </div>
   )
 
@@ -206,24 +245,27 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
           )}
           <Icon name={isDir ? (isOpen ? 'folder-open' : 'folder') : 'file'} size={15} className="tree-icon" />
           {renaming ? (
-            <input
-              className="tree-rename"
-              autoFocus
-              value={rename.value}
-              onFocus={(e) => {
-                // Preselect the name (without extension), like the new-file input.
-                const dot = rename.value.lastIndexOf('.')
-                if (dot > 0) e.target.setSelectionRange(0, dot)
-                else e.target.select()
-              }}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => setRename({ ...rename, value: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename()
-                if (e.key === 'Escape') setRename(null)
-              }}
-              onBlur={commitRename}
-            />
+            <>
+              <input
+                className="tree-rename"
+                autoFocus
+                value={rename.value}
+                onFocus={(e) => {
+                  // Preselect the name (without extension), like the new-file input.
+                  const dot = rename.value.lastIndexOf('.')
+                  if (dot > 0) e.target.setSelectionRange(0, dot)
+                  else e.target.select()
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setRename({ ...rename, value: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename()
+                  if (e.key === 'Escape') setRename(null)
+                }}
+                onBlur={commitRename}
+              />
+              {editActions(commitRename, () => setRename(null))}
+            </>
           ) : (
             <span className="tree-label">{node.name}</span>
           )}
@@ -231,6 +273,14 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
         {/* Inline creation input inside this directory */}
         {isDir && isOpen && creating && creating.dir === node.path && renderCreatingInput(depth + 1)}
         {isDir && isOpen && (childrenMap[node.path] || []).map((c) => renderNode(c, depth + 1))}
+        {/* Expanded but nothing to show (the tree only lists Markdown/text and
+            subfolders) — say so instead of looking like the click did nothing. */}
+        {isDir && isOpen && childrenMap[node.path]?.length === 0 &&
+          !(creating && creating.dir === node.path) && (
+            <div className="tree-empty tree-empty-nested" style={{ paddingLeft: 8 + (depth + 1) * 14 }}>
+              {t('side.emptyFolder')}
+            </div>
+          )}
       </div>
     )
   }

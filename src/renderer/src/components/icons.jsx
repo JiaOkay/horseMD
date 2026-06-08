@@ -9,6 +9,7 @@ const paths = {
   collapse: 'M4 9h6V3 M20 15h-6v6 M14 10l7-7 M3 21l7-7',
   plus: 'M12 5v14 M5 12h14',
   close: 'M18 6 6 18 M6 6l12 12',
+  check: 'M20 6 9 17l-5-5',
   'win-min': 'M6 12h12',
   'win-max': 'M6 6h12v12H6z',
   'win-restore': 'M8 8h8v8H8z M10 8V6h8v8h-2',

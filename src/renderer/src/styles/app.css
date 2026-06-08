@@ -714,6 +714,7 @@ button:focus-visible,
 }
 .tree-rename {
   flex: 1;
+  min-width: 0;
   background: var(--bg-elevated);
   color: var(--text);
   border: 1.5px solid var(--accent);
@@ -722,6 +723,36 @@ button:focus-visible,
   font-size: 13px;
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-glow);
+}
+/* Inline confirm / cancel buttons for the create & rename fields. */
+.tree-edit-actions {
+  display: inline-flex;
+  gap: 2px;
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+.tree-edit-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.tree-edit-btn:hover { background: var(--hover); }
+.tree-edit-btn.confirm:hover { color: var(--success, #4a9); background: color-mix(in srgb, var(--success, #4a9) 16%, transparent); }
+.tree-edit-btn.cancel:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+/* "Empty folder" hint shown when an expanded directory has no listable items. */
+.tree-empty-nested {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  font-size: 12px;
+  color: var(--faint);
+  font-style: italic;
 }
 
 .sidebar-empty {
@@ -839,36 +870,39 @@ button:focus-visible,
 .milkdown { background: transparent !important; }
 .milkdown .ProseMirror { padding: 0 !important; }
 
-/* Floating block-level indicator: a small pill in the left gutter that tracks
-   the caret's line and names the current block (H1…H6 / Text). Non-interactive
-   — purely an at-a-glance hint, so it never steals clicks from the editor. */
+/* Block-level hint: a small, quiet tag beside the caret's line naming the
+   current block (H1…H6 / 正文). Non-interactive — purely an at-a-glance cue.
+   Deliberately minimal: no border or shadow, muted by default. */
 .hm-level-badge {
   position: fixed;
   transform: translateY(-50%);
   z-index: 60;
   pointer-events: none;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
   font-weight: 600;
-  line-height: 1.6;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   white-space: nowrap;
+  color: var(--muted, #8a8a8a);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  opacity: 0.85;
+  transition: top 0.1s ease;
+  animation: hm-level-fade 0.14s ease;
+}
+.hm-level-badge.align-right {
+  transform: translate(-100%, -50%);
+}
+.hm-level-badge.hm-level-heading {
   color: var(--accent-strong);
   background: var(--accent-soft);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  opacity: 0.92;
-  animation: hm-level-in 0.12s ease;
 }
-.hm-level-badge.hm-level-text {
-  color: var(--muted, #6c6f63);
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-  border-color: var(--border-soft);
-}
-@keyframes hm-level-in {
-  from { opacity: 0; transform: translateY(-50%) translateX(-3px); }
-  to { opacity: 0.92; transform: translateY(-50%) translateX(0); }
+@keyframes hm-level-fade {
+  from { opacity: 0; }
+  to { opacity: 0.85; }
 }
 
 /* =====================================================
