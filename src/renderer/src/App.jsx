@@ -14,6 +14,9 @@ import logoUrl from './assets/logo.png'
 const ONBOARDED_KEY = 'horsemd.onboarded.v1'
 const UPDATE_DISMISS_KEY = 'horsemd.update.dismissed'
 
+// App version, injected at build time from package.json (see electron.vite.config).
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''
+
 // --------------------------- find-in-document helpers ----------------------
 // Search is scoped to the editor content only (the rich .ProseMirror element or
 // the source <textarea>), never the find bar or other UI — so the text typed in
@@ -129,6 +132,10 @@ export default function App() {
   const sourceModeRef = useRef(sourceMode)
   sourceModeRef.current = sourceMode
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // "Home" shows the welcome/landing page while keeping open tabs mounted (so
+  // returning to a document doesn't re-create its editor). Cleared whenever a
+  // tab is activated or a file is opened.
+  const [home, setHome] = useState(false)
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [files, setFiles] = useState([])
   const [find, setFind] = useState({ open: false, query: '', matches: 0, active: 0 })
@@ -308,7 +315,10 @@ export default function App() {
         }
       }
     }
-    if (lastId) setActiveId(lastId)
+    if (lastId) {
+      setActiveId(lastId)
+      setHome(false)
+    }
   }, [])
 
   const newTab = useCallback(() => {
@@ -318,6 +328,7 @@ export default function App() {
       { id, path: null, title: t('tab.untitled'), content: '', savedContent: '', mtimeMs: null, reloadNonce: 0 }
     ])
     setActiveId(id)
+    setHome(false)
   }, [t])
 
   const updateContent = useCallback((id, md, isInitial) => {
@@ -483,15 +494,33 @@ export default function App() {
 
   // --------------------------- outline jump ------------------------
   const jumpToHeading = useCallback((index) => {
-    const host = editorHostRef.current
-    if (!host) return
-    const hs = host.querySelectorAll('.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6')
-    hs[index]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // Make sure the document (not the Home page) is showing — otherwise the
+    // active editor is hidden and editorHostRef isn't attached, so the jump
+    // would silently do nothing. setHome(false) is a no-op when already not home.
+    setHome(false)
+    const doJump = () => {
+      const host = editorHostRef.current
+      if (!host) return false
+      const hs = host.querySelectorAll(
+        '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6'
+      )
+      const el = hs[index]
+      if (!el) return false
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return true
+    }
+    // Works synchronously in the normal case; if we just left Home, the editor
+    // needs a frame to re-render and re-attach the ref before we can scroll it.
+    if (doJump()) return
+    requestAnimationFrame(() => {
+      if (!doJump()) requestAnimationFrame(doJump)
+    })
   }, [])
 
   // ------------------------- menu / shortcuts ----------------------
   const handlers = useRef({})
   handlers.current = {
+    home: () => setHome(true),
     new: newTab,
     open: async () => openPaths(await window.api.openFiles()),
     openFolder,
@@ -520,6 +549,8 @@ export default function App() {
     toggleSource,
     toggleTheme: cycleTheme,
     find: () => {
+      // Leave the Home page so find acts on the visible document, not a hidden one.
+      setHome(false)
       setFind((f) => ({ ...f, open: true }))
       setTimeout(() => findInputRef.current?.focus(), 0)
     }
@@ -537,10 +568,18 @@ export default function App() {
     })
     const onOpenFolderEvt = () => openFolder()
     window.addEventListener('mm:openFolder', onOpenFolderEvt)
+    // Main asks before the window closes so we can warn about unsaved changes.
+    const offClose = window.api.onAppCloseRequest?.(() => {
+      const dirty = tabsRef.current.some((t) => t.content !== t.savedContent)
+      if (!dirty || window.confirm(tRef.current('confirm.quitUnsaved'))) {
+        window.api.confirmAppClose()
+      }
+    })
     return () => {
       offMenu()
       offOpen()
       offFolder?.()
+      offClose?.()
       window.removeEventListener('mm:openFolder', onOpenFolderEvt)
     }
   }, [openPaths, openFolder])
@@ -555,6 +594,7 @@ export default function App() {
           const i = prev.findIndex((t) => t.id === activeId)
           const ni = (i + (e.shiftKey ? -1 : 1) + prev.length) % prev.length
           setActiveId(prev[ni].id)
+          setHome(false)
           return prev
         })
       }
@@ -740,6 +780,13 @@ export default function App() {
     <div className={`app${platformClass}`}>
       <div className="activity-bar">
         <button
+          className={`activity-item activity-home${home ? ' active' : ''}`}
+          title={t('nav.home')}
+          onClick={() => handlers.current.home()}
+        >
+          <img className="activity-logo" src={logoUrl} alt="HorseMD" />
+        </button>
+        <button
           className={`activity-item${sidebarMode === 'files' ? ' active' : ''}`}
           title={t('cmd.files')}
           onClick={() => handlers.current.toggleFiles()}
@@ -766,8 +813,11 @@ export default function App() {
       <div className="topbar">
         <Tabs
           tabs={tabs}
-          activeId={activeId}
-          onActivate={setActiveId}
+          activeId={home ? null : activeId}
+          onActivate={(id) => {
+            setActiveId(id)
+            setHome(false)
+          }}
           onClose={closeTab}
           onNew={newTab}
         />
@@ -831,63 +881,61 @@ export default function App() {
             </div>
           )}
 
-          {activeTab ? (
-            /* Each tab picks its editor. Plain-text docs (.txt) and global source
-               mode use the textarea (active tab only — it's cheap). Markdown docs
-               use Crepe and stay mounted so tab switches don't re-create them. */
-            tabs.map((tab) => {
-              const isActive = tab.id === activeId
-              // The plain <textarea> is used for .txt docs, and for the *active*
-              // Markdown doc while source mode is on. Crucially, only the active
-              // tab swaps to source — background Markdown editors stay mounted
-              // (hidden) below, so toggling source mode no longer destroys and
-              // recreates every other tab's editor (that was the switch lag).
-              if (isPlainTextDoc(tab) || (sourceMode && isActive)) {
-                if (!isActive) return null
-                return (
-                  <textarea
-                    key={tab.id}
-                    ref={isActive ? sourceRef : undefined}
-                    className="source-editor"
-                    value={tab.content}
-                    spellCheck={false}
-                    onChange={(e) => updateContent(tab.id, e.target.value, false)}
-                  />
-                )
-              }
-              // Hidden when this isn't the visible view: a background tab, or the
-              // active tab currently being shown as source above.
-              const hidden = !isActive || sourceMode
-              // Lazy mount: don't create a Crepe editor for a tab the user
-              // hasn't opened yet (keeps session-restore of many tabs fast).
-              // The active tab always mounts; visited tabs stay mounted.
-              if (!isActive && !mountedIds.has(tab.id)) return null
+          {/* Editors stay mounted even while the Home page is shown (they're just
+              hidden), so returning to a document doesn't re-create its editor.
+              Each tab picks its editor: plain-text docs (.txt) and global source
+              mode use the textarea (active tab only — cheap); Markdown docs use
+              Crepe and stay mounted after first activation. */}
+          {tabs.map((tab) => {
+            const isActive = tab.id === activeId
+            if (isPlainTextDoc(tab) || (sourceMode && isActive)) {
+              if (!isActive) return null
               return (
-                <div
-                  // Include reloadNonce so an external-edit reload remounts the
-                  // Crepe editor with the new content (the create effect only
-                  // runs on mount). tab switches keep the same key → stay mounted.
-                  key={`${tab.id}:${tab.reloadNonce}`}
-                  className="editor-scroll"
-                  ref={isActive && !sourceMode ? editorHostRef : undefined}
-                  style={{ display: hidden ? 'none' : undefined }}
-                >
-                  <Editor
-                    tabId={`${tab.id}:${tab.reloadNonce}`}
-                    initialContent={tab.content}
-                    docPath={tab.path}
-                    onChange={(md, isInitial) => updateContent(tab.id, md, isInitial)}
-                    onReady={(api) => {
-                      editorApis.current[tab.id] = api
-                    }}
-                    onActiveBlock={(id) => {
-                      if (tab.id === activeIdRef.current) setActiveBlock(id)
-                    }}
-                  />
-                </div>
+                <textarea
+                  key={tab.id}
+                  ref={isActive ? sourceRef : undefined}
+                  className="source-editor"
+                  value={tab.content}
+                  spellCheck={false}
+                  style={{ display: home ? 'none' : undefined }}
+                  onChange={(e) => updateContent(tab.id, e.target.value, false)}
+                />
               )
-            })
-          ) : (
+            }
+            // Hidden when this isn't the visible view: a background tab, the
+            // active tab shown as source, or while the Home page is up.
+            const hidden = !isActive || sourceMode || home
+            // Lazy mount: don't create a Crepe editor for a tab the user hasn't
+            // opened yet (keeps session-restore of many tabs fast). The active
+            // tab always mounts; visited tabs stay mounted.
+            if (!isActive && !mountedIds.has(tab.id)) return null
+            return (
+              <div
+                // Include reloadNonce so an external-edit reload remounts the
+                // Crepe editor with the new content (the create effect only
+                // runs on mount). tab switches keep the same key → stay mounted.
+                key={`${tab.id}:${tab.reloadNonce}`}
+                className="editor-scroll"
+                ref={isActive && !sourceMode && !home ? editorHostRef : undefined}
+                style={{ display: hidden ? 'none' : undefined }}
+              >
+                <Editor
+                  tabId={`${tab.id}:${tab.reloadNonce}`}
+                  initialContent={tab.content}
+                  docPath={tab.path}
+                  onChange={(md, isInitial) => updateContent(tab.id, md, isInitial)}
+                  onReady={(api) => {
+                    editorApis.current[tab.id] = api
+                  }}
+                  onActiveBlock={(id) => {
+                    if (tab.id === activeIdRef.current) setActiveBlock(id)
+                  }}
+                />
+              </div>
+            )
+          })}
+
+          {(home || !activeTab) && (
             <Welcome
               t={t}
               lang={lang}
@@ -902,7 +950,7 @@ export default function App() {
       </div>
 
       <StatusBar
-        tab={activeTab}
+        tab={home ? null : activeTab}
         theme={theme}
         setTheme={setTheme}
         cycleTheme={cycleTheme}
@@ -1022,7 +1070,10 @@ function Welcome({ t, lang, recents, onNew, onOpen, onOpenFolder, onOpenRecent }
     <div className="welcome">
       <div className="welcome-card">
         <img className="welcome-logo" src={logoUrl} alt="HorseMD" />
-        <h1>HorseMD</h1>
+        <h1>
+          HorseMD
+          {APP_VERSION && <span className="welcome-version">v{APP_VERSION}</span>}
+        </h1>
         <p className="welcome-tagline">{t('welcome.tagline')}</p>
         <div className="welcome-actions">
           <button className="btn-primary" onClick={onNew}>

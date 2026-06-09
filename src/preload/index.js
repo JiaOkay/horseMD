@@ -45,6 +45,10 @@ const api = {
   // update check (notify-only)
   checkUpdate: () => ipcRenderer.invoke('update:check'),
 
+  // app close: main asks before closing so the renderer can warn about unsaved
+  // changes, then calls confirmAppClose() to let the window actually close.
+  confirmAppClose: () => ipcRenderer.send('app:confirm-close'),
+
   // events from main
   onOpenPaths: on('open-paths'),
   onOpenFolderPath: on('open-folder'),
@@ -52,6 +56,7 @@ const api = {
   onWatchChanged: on('watch:changed'),
   onFileChanged: on('file:changed'),
   onWindowMaximized: on('window:maximized'),
+  onAppCloseRequest: on('app-close-request'),
 
   platform: process.platform
 }

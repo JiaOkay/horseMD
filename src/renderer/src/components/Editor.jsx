@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Crepe, CrepeFeature } from '@milkdown/crepe'
-import { editorViewCtx, editorViewOptionsCtx } from '@milkdown/kit/core'
+import { editorViewCtx, nodeViewCtx } from '@milkdown/kit/core'
+import { imageBlockConfig } from '@milkdown/kit/component/image-block'
+import { inlineImageConfig } from '@milkdown/kit/component/image-inline'
 import { TextSelection } from '@milkdown/prose/state'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
@@ -15,6 +17,29 @@ import { useI18n } from '../i18n.jsx'
 // instead of capturing a single instance, which previously made the button act
 // on the wrong (hidden) tab when more than one tab was open.
 const liveEditors = new Set()
+
+// Localize the image-block / inline-image UI text (caption placeholder, upload
+// buttons…) from the current translator. Applied at create and re-applied on a
+// language switch so "Write image caption" follows the zh/en toggle.
+function applyImageText(ctx, tt) {
+  try {
+    ctx.update(imageBlockConfig.key, (v) => ({
+      ...v,
+      captionPlaceholderText: tt('image.caption'),
+      uploadPlaceholderText: tt('image.pasteLink'),
+      uploadButton: tt('image.uploadFile'),
+      confirmButton: tt('image.confirm')
+    }))
+    ctx.update(inlineImageConfig.key, (v) => ({
+      ...v,
+      uploadPlaceholderText: tt('image.pasteLink'),
+      uploadButton: tt('image.upload'),
+      confirmButton: tt('image.confirm')
+    }))
+  } catch {
+    /* config not ready yet — the create-time call covers the initial value */
+  }
+}
 
 /**
  * WYSIWYG editor (Milkdown Crepe) with Typora-style block-level controls.
@@ -34,10 +59,18 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
   const hostRef = useRef(null)
   const viewRef = useRef(null)
   const apiRef = useRef(null)
+  const crepeRef = useRef(null)
   const lastBlockRef = useRef(null)
   const [ctxMenu, setCtxMenu] = useState(null) // { x, y } viewport coords, or null
   // Floating "block level" indicator that tracks the caret (H1…H6 / Text).
   const [level, setLevel] = useState(null) // { label, kind, top, left } or null
+  // Lightbox: the image src currently shown enlarged, or null.
+  const [zoom, setZoom] = useState(null)
+  // False until Crepe has parsed and rendered the document — drives the loading
+  // skeleton. Only large documents (which actually take a moment to render) show
+  // it, so small files never flash a placeholder.
+  const [loaded, setLoaded] = useState(false)
+  const isLargeDoc = (initialContent?.length || 0) > 20000
 
   useEffect(() => {
     const host = hostRef.current
@@ -76,16 +109,21 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
     })
 
     // Render raw HTML blocks (e.g. <table>…</table>) as actual HTML, like Typora.
-    // Milkdown's default `html` node shows the markup as escaped text. We add a
-    // ProseMirror node view that renders the HTML instead. The document model is
-    // unchanged (the node still round-trips through attrs.value), so saving keeps
-    // the original HTML source — we only change how it's displayed.
+    // Milkdown's default `html` node shows the markup as escaped text; we add a
+    // ProseMirror node view that renders it instead. Display-only — the node
+    // still round-trips through attrs.value, so saving keeps the original HTML.
+    //
+    // Register through nodeViewCtx (the shared registry Milkdown's $view uses),
+    // NOT editorViewOptionsCtx.nodeViews: the core spreads editorViewOptionsCtx
+    // LAST into the EditorView constructor, so setting .nodeViews there would
+    // overwrite every component node view (image-block captions, CodeMirror code
+    // blocks, tables, list items). Appending here merges with them.
     crepe.editor.config((ctx) => {
-      ctx.update(editorViewOptionsCtx, (prev) => ({
-        ...prev,
-        nodeViews: { ...(prev?.nodeViews || {}), html: renderHtmlNodeView }
-      }))
+      ctx.update(nodeViewCtx, (views) => [...views, ['html', (node) => renderHtmlNodeView(node)]])
+      // Localize the image caption / upload text to the current language.
+      applyImageText(ctx, tRef.current)
     })
+    crepeRef.current = crepe
 
     // Convert the block the cursor sits in to a given block id (paragraph/h1…h6).
     const setBlock = (id) => {
@@ -300,9 +338,69 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
           }
         }
 
+        // --- Double-click an image → open it enlarged in a lightbox ---
+        // Display-only: opens an overlay, never changes the document. We detect
+        // the double-click ourselves (two clicks on the same image within 350ms)
+        // instead of relying on the native `dblclick` event: the image-block
+        // component re-renders when the first click selects it, so the two
+        // physical clicks can land on different DOM nodes and no `dblclick`
+        // fires. A single click is left untouched so Crepe's native image
+        // interaction (select + caption editing) keeps working.
+        let lastImgClick = { src: null, at: 0 }
+        const onImgClick = (e) => {
+          if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+          // Never treat clicks on the image-block's controls as image clicks:
+          // the caption input, the caption/operation button, and the resize
+          // handle must keep their own behavior (typing, toggling, resizing).
+          if (
+            e.target.closest?.(
+              '.caption-input, .operation, .operation-item, .image-resize-handle, button, input, textarea'
+            )
+          )
+            return
+          // Match the image body itself — directly, or via the wrapper, so a
+          // click still lands on the image even when it's selected and a
+          // transparent overlay sits on top of it.
+          const img = e.target.closest?.('img') || e.target.closest?.('.image-wrapper')?.querySelector?.('img')
+          if (!img || !view.dom.contains(img)) return
+          const src = img.currentSrc || img.getAttribute('src')
+          if (!src) return
+          const now = e.timeStamp || Date.now()
+          if (lastImgClick.src === src && now - lastImgClick.at < 350) {
+            e.preventDefault()
+            setZoom(src)
+            lastImgClick = { src: null, at: 0 }
+          } else {
+            lastImgClick = { src, at: now }
+          }
+        }
+
+        // When the caption (operation) button is clicked, focus the caption
+        // input the component reveals so the user can type the caption straight
+        // away — otherwise focus stays in the editor and typing hits the body.
+        const onCaptionBtn = (e) => {
+          const op = e.target.closest?.('.milkdown-image-block .operation-item')
+          if (!op) return
+          const block = op.closest('.milkdown-image-block')
+          let tries = 0
+          const tryFocus = () => {
+            const input = block?.querySelector('input.caption-input')
+            if (input) {
+              input.focus()
+            } else if (tries++ < 12) {
+              setTimeout(tryFocus, 30)
+            }
+          }
+          setTimeout(tryFocus, 0)
+        }
+
         view.dom.addEventListener('click', onLinkClick, true)
+        view.dom.addEventListener('click', onImgClick, true)
+        view.dom.addEventListener('click', onCaptionBtn)
         view.dom.addEventListener('copy', onCopy, true)
         cleanups.push(() => view.dom.removeEventListener('click', onLinkClick, true))
+        cleanups.push(() => view.dom.removeEventListener('click', onImgClick, true))
+        cleanups.push(() => view.dom.removeEventListener('click', onCaptionBtn))
         cleanups.push(() => view.dom.removeEventListener('copy', onCopy, true))
 
         // --- Resolve relative image paths against the file's folder ---
@@ -473,6 +571,7 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
         const md = crepe.getMarkdown()
         onChange?.(md, true)
         ready = true
+        setLoaded(true)
         reportActiveBlock()
         // Produce a clean, inline-styled HTML snapshot of the whole document
         // for PDF export (reuses the rich-copy styling; flattens CodeMirror code
@@ -530,6 +629,7 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
         }
       })
       viewRef.current = null
+      crepeRef.current = null
       try {
         crepe.destroy()
       } catch {
@@ -538,6 +638,37 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Re-localize the image caption / upload text when the language changes. The
+  // editor isn't re-created, so we (1) update the config for images rendered
+  // later, and (2) patch the placeholder on any caption inputs already in the
+  // DOM — the image-block component caches the config and won't re-read it.
+  useEffect(() => {
+    const crepe = crepeRef.current
+    if (crepe) {
+      try {
+        crepe.editor.action((ctx) => applyImageText(ctx, t))
+      } catch {
+        /* editor not ready yet */
+      }
+    }
+    const root = hostRef.current
+    if (root) {
+      root.querySelectorAll('input.caption-input').forEach((inp) => {
+        inp.placeholder = t('image.caption')
+      })
+    }
+  }, [t])
+
+  // Close the image lightbox on Escape.
+  useEffect(() => {
+    if (!zoom) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') setZoom(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [zoom])
 
   // The floating bar and context menu reuse the same conversion path as the
   // keyboard shortcuts (defined inside the effect, reached through apiRef).
@@ -554,6 +685,25 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
         ref={hostRef}
         style={{ '--hm-placeholder': JSON.stringify(t('editor.placeholder')) }}
       />
+
+      {/* Loading skeleton — pulsing gray bars shown while a large document is
+          still parsing/rendering. Gated on document size so small files (which
+          load instantly) never flash a placeholder. */}
+      {!loaded && isLargeDoc && (
+        <div className="editor-skeleton" aria-hidden="true">
+          <div className="skel-line skel-title" />
+          <div className="skel-line" style={{ width: '94%' }} />
+          <div className="skel-line" style={{ width: '99%' }} />
+          <div className="skel-line" style={{ width: '86%' }} />
+          <div className="skel-line skel-gap" style={{ width: '64%' }} />
+          <div className="skel-line" style={{ width: '97%' }} />
+          <div className="skel-line" style={{ width: '90%' }} />
+          <div className="skel-line" style={{ width: '72%' }} />
+          <div className="skel-line skel-gap" style={{ width: '50%' }} />
+          <div className="skel-line" style={{ width: '93%' }} />
+          <div className="skel-line" style={{ width: '80%' }} />
+        </div>
+      )}
 
       {level && (
         <div
@@ -582,6 +732,25 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
             ))}
           </div>
         </>
+      )}
+
+      {zoom && (
+        <div
+          className="hm-image-lightbox"
+          onClick={() => setZoom(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <img src={zoom} alt="" />
+          <button
+            className="hm-lightbox-close"
+            title={t('lightbox.close')}
+            aria-label={t('lightbox.close')}
+            onClick={() => setZoom(null)}
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
       )}
     </>
   )

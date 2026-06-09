@@ -70,6 +70,9 @@ const PDF_CSS = `
 `
 
 let mainWindow = null
+// When true, the window is allowed to close without re-prompting (the renderer
+// has confirmed there are no unsaved changes, or the user chose to discard).
+let allowClose = false
 const watchers = new Map() // folder path -> watcher
 const fileWatchers = new Map() // file path -> { watcher, timer }
 
@@ -176,6 +179,17 @@ function createWindow() {
   const emitMaxState = () => sendToRenderer('window:maximized', mainWindow?.isMaximized() ?? false)
   mainWindow.on('maximize', emitMaxState)
   mainWindow.on('unmaximize', emitMaxState)
+
+  // Warn about unsaved changes before the window closes (macOS traffic light,
+  // the custom Windows close button, Cmd/Ctrl+Q). The dirty state lives in the
+  // renderer, so defer the close and ask it; it calls back via 'app:confirm-close'
+  // when it's safe to close.
+  allowClose = false
+  mainWindow.on('close', (e) => {
+    if (allowClose) return
+    e.preventDefault()
+    sendToRenderer('app-close-request')
+  })
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -454,6 +468,13 @@ ipcMain.handle('window:toggleMaximize', () => {
 })
 ipcMain.handle('window:close', () => mainWindow?.close())
 ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
+
+// The renderer confirmed it's safe to close (no unsaved changes, or the user
+// chose to discard) — let the window close for real.
+ipcMain.on('app:confirm-close', () => {
+  allowClose = true
+  mainWindow?.close()
+})
 
 // ----------------------------- update check --------------------------------
 // Notify-only update check: ask GitHub for the latest *published* release

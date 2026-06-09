@@ -34,6 +34,7 @@ interface speaks both **English and 中文**.
 - Rich-text copy with inline styles (paste into WeChat / email / Notion keeps formatting)
 - **Export to PDF** (`Ctrl/Cmd+Shift+E`) — clean print layout, no editor chrome
 - Relative-path images resolve against the file's folder (display only — your file stays untouched)
+- **Double-click an image to view it enlarged** in a lightbox (Esc / click to close)
 - **Raw HTML tables** (`<table>…</table>` in the Markdown) render as real tables, like Typora — display only, the source is preserved
 - A floating **block-level badge** tracks the caret (H1…H6 / Text)
 

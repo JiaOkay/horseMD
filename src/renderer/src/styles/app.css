@@ -300,6 +300,18 @@ button:focus-visible,
   background: var(--accent);
   border-radius: 0 2px 2px 0;
 }
+/* Home button: the full-color app icon, slightly dimmed until hovered/active. */
+.activity-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: block;
+  object-fit: cover;
+  opacity: 0.8;
+  transition: opacity 0.2s var(--ease-out);
+}
+.activity-home:hover .activity-logo,
+.activity-home.active .activity-logo { opacity: 1; }
 
 /* Top Bar */
 .topbar {
@@ -885,6 +897,43 @@ button:focus-visible,
      scroll-into-view (on click/select) into a visible upward slide.
      Outline/find jumps pass `behavior: 'smooth'` explicitly when wanted. */
   overflow-anchor: none;
+  position: relative; /* containing block for the loading skeleton */
+}
+
+/* Loading skeleton: pulsing gray placeholder bars while a (large) document is
+   still rendering. Positioned over the top of the edit surface, aligned to where
+   the text will appear. The fade-in is delayed so quick loads never flash it. */
+.editor-skeleton {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 60px;
+  pointer-events: none;
+  animation: hmSkelFade 0.15s var(--ease-out) both;
+}
+.skel-line {
+  height: 15px;
+  border-radius: 6px;
+  margin: 16px 0;
+  background: var(--border-soft);
+  animation: hmSkelPulse 1.4s ease-in-out infinite;
+}
+.skel-title {
+  height: 30px;
+  width: 46%;
+  margin-bottom: 30px;
+}
+.skel-gap { margin-top: 34px; }
+@keyframes hmSkelFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes hmSkelPulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
 }
 .editor-host {
   max-width: 800px;
@@ -917,6 +966,44 @@ button:focus-visible,
   font-weight: 700;
 }
 .hm-html-block img { max-width: 100%; }
+
+/* Image lightbox: double-click an image in the editor to view it enlarged.
+   (Single click stays native — selecting the image and editing its caption.) */
+.hm-image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5vh 5vw;
+  background: rgba(0, 0, 0, 0.72);
+  cursor: zoom-out;
+  animation: hmLightboxFade 0.15s var(--ease-out);
+}
+.hm-image-lightbox img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+.hm-lightbox-close {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.15s var(--ease-out);
+}
+.hm-lightbox-close:hover { background: rgba(255, 255, 255, 0.24); }
+@keyframes hmLightboxFade { from { opacity: 0; } to { opacity: 1; } }
 
 /* Block-level hint: a small, quiet tag beside the caret's line naming the
    current block (H1…H6 / 正文). Non-interactive — purely an at-a-glance cue.
@@ -1386,6 +1473,17 @@ button:focus-visible,
   background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: -0.02em;
+}
+/* Version tag next to the title — small and muted, with its own solid color
+   (the h1 uses a transparent gradient text fill, which we override here). */
+.welcome-version {
+  margin-left: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--muted);
+  -webkit-text-fill-color: var(--muted);
+  vertical-align: middle;
 }
 .welcome-card p {
   color: var(--muted);

@@ -6,7 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-06-09
+
 ### Added
+- **Loading skeleton** for large documents — pulsing gray placeholder bars while
+  the editor parses/renders, so opening a big file isn't a blank pause. Small
+  files load instantly and never show it.
+- **Double-click an image to view it enlarged** in a lightbox (click the backdrop,
+  the ✕, or press Esc to close). Display-only — it never changes the document,
+  and a single click still selects the image / edits its caption.
+- **Home button** at the top of the activity bar (the app icon) — returns to the
+  welcome/landing page while keeping open tabs mounted (clicking a tab goes back).
+- **Version number** shown next to "HorseMD" on the welcome page, so you can tell
+  which build you're running.
 - **Raw HTML tables now render as tables** (like Typora). An HTML `<table>…</table>`
   written in the Markdown is shown as a real, theme-styled table instead of
   escaped source. The Markdown source is unchanged — it round-trips and saves as
@@ -23,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   forced a synchronous reflow on every caret move / keystroke), and the
   selection-toolbar observer only re-scans when DOM nodes are actually added
   (debounced per frame) instead of on every edit.
+
+### Fixed
+- **Closing the window now warns about unsaved changes** (macOS traffic light,
+  the Windows close button, Cmd/Ctrl+Q) — previously only closing a tab did.
+- Image **caption** text ("Write image caption") is now localized and follows
+  the zh/en switch.
 
 ## [0.1.5] - 2026-06-08
 
@@ -134,7 +152,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Dark/light themes, session restore, single-instance file association.
 - Windows NSIS installer and macOS dmg/zip packaging.
 
-[Unreleased]: https://github.com/BND-1/horseMD/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/BND-1/horseMD/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/BND-1/horseMD/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/BND-1/horseMD/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/BND-1/horseMD/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/BND-1/horseMD/compare/v0.1.2...v0.1.3
