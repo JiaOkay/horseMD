@@ -8,6 +8,10 @@ const parentDir = (p) => p.replace(/[\\/][^\\/]*$/, '')
 
 const isMarkdownName = (name) => /\.(md|markdown|mdx)$/i.test(name)
 
+// A new/renamed item name must be a single path segment — no separators (which
+// would move it elsewhere or traverse out), and not "." / "..".
+const isValidName = (name) => !!name && !/[\\/:*?"<>|]/.test(name) && name !== '.' && name !== '..'
+
 export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf, refreshNonce }) {
   const { t } = useI18n()
   const [childrenMap, setChildrenMap] = useState({}) // path -> nodes[]
@@ -105,6 +109,11 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
       committingRef.current = false
       return
     }
+    if (!isValidName(name)) {
+      committingRef.current = false
+      window.alert((t('err.invalidName') || 'Invalid name: ') + name)
+      return
+    }
 
     try {
       if (type === 'file') {
@@ -128,8 +137,12 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
 
   const doDelete = async (node) => {
     if (!window.confirm(t('confirm.trash', { name: node.name }))) return
-    await window.api.deleteItem(node.path)
-    await refreshParentOf(node.path)
+    try {
+      await window.api.deleteItem(node.path)
+      await refreshParentOf(node.path)
+    } catch (e) {
+      window.alert((t('err.delete') || 'Could not delete: ') + e.message)
+    }
   }
 
   const doDuplicate = async (node) => {
@@ -141,21 +154,26 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
     }
   }
 
-  // Recursively load every subfolder and expand them all.
+  // Recursively load every subfolder and expand them all. Depth-capped and
+  // visited-guarded so a symlink cycle or a pathologically deep tree can't spin
+  // into unbounded IPC recursion.
   const expandAll = async () => {
     if (!workspace) return
     const dirs = new Set([workspace.rootPath])
-    const walk = async (dir) => {
+    const seen = new Set()
+    const walk = async (dir, depth) => {
+      if (depth > 30 || seen.has(dir)) return
+      seen.add(dir)
       let nodes = childrenMap[dir]
       if (nodes === undefined) nodes = await loadDir(dir)
       for (const n of nodes || []) {
         if (n.type === 'dir') {
           dirs.add(n.path)
-          await walk(n.path)
+          await walk(n.path, depth + 1)
         }
       }
     }
-    await walk(workspace.rootPath)
+    await walk(workspace.rootPath, 0)
     setExpanded(dirs)
   }
 
@@ -200,14 +218,24 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onExportPdf
   })
 
   const commitRename = async () => {
-    if (!rename) return
+    if (!rename || committingRef.current) return
     const { path, value } = rename
-    setRename(null)
     const clean = value.trim()
+    setRename(null)
     if (!clean || clean === baseName(path)) return
-    const newPath = join(parentDir(path), clean)
-    await window.api.rename(path, newPath)
-    await refreshParentOf(path)
+    if (!isValidName(clean)) {
+      window.alert((t('err.invalidName') || 'Invalid name: ') + clean)
+      return
+    }
+    committingRef.current = true
+    try {
+      await window.api.rename(path, join(parentDir(path), clean))
+      await refreshParentOf(path)
+    } catch (e) {
+      window.alert((t('err.rename') || 'Could not rename: ') + e.message)
+    } finally {
+      committingRef.current = false
+    }
   }
 
   if (!workspace) {

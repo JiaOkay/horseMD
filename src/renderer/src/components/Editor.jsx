@@ -329,11 +329,16 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
             const wrap = document.createElement('div')
             wrap.appendChild(frag)
             inlineRichStyles(wrap)
+            const plain = sel.toString()
+            // If the selection produced nothing meaningful (e.g. anchored in a
+            // non-editable rendered HTML block), don't hijack the copy with an
+            // empty payload — let the browser's default copy run.
+            if (!wrap.innerHTML.trim() && !plain) return
             e.clipboardData.setData(
               'text/html',
               `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.7;color:#24292f;">${wrap.innerHTML}</div>`
             )
-            e.clipboardData.setData('text/plain', sel.toString())
+            e.clipboardData.setData('text/plain', plain)
             e.preventDefault()
           } catch {
             /* fall back to default copy */
@@ -386,6 +391,7 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
           const block = op.closest('.milkdown-image-block')
           let tries = 0
           const tryFocus = () => {
+            if (destroyed) return
             const input = block?.querySelector('input.caption-input')
             if (input) {
               input.focus()

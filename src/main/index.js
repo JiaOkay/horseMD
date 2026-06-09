@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, basename, extname } from 'node:path'
 import fs from 'node:fs/promises'
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, statSync, constants as fsConstants } from 'node:fs'
 import chokidar from 'chokidar'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -300,6 +300,12 @@ ipcMain.handle('fs:writeFile', async (_e, path, content) => {
 })
 
 ipcMain.handle('fs:rename', async (_e, oldPath, newPath) => {
+  // Don't clobber an existing different file/folder (fs.rename overwrites
+  // silently → data loss). Still allow a case-only rename on case-insensitive
+  // filesystems (e.g. Foo.md → foo.md), where target and source are "the same".
+  if (existsSync(newPath) && newPath.toLowerCase() !== oldPath.toLowerCase()) {
+    throw new Error('A file or folder with that name already exists.')
+  }
   await fs.rename(oldPath, newPath)
   return true
 })
@@ -383,7 +389,7 @@ ipcMain.handle('fs:openFolderTree', async (_e, dir) => ({
 ipcMain.handle('watch:start', async (_e, dir) => {
   if (watchers.has(dir)) return true
   const w = chokidar.watch(dir, {
-    ignored: (p) => /(^|[\\/])\.(git|obsidian)|node_modules/.test(p),
+    ignored: (p) => /(^|[\\/])(\.(git|obsidian)|node_modules)([\\/]|$)/.test(p),
     ignoreInitial: true,
     depth: 12,
     awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 }
@@ -462,7 +468,9 @@ ipcMain.handle('fs:duplicate', async (_e, path) => {
   let target = join(dir, `${stem} copy${ext}`)
   let i = 2
   while (existsSync(target)) target = join(dir, `${stem} copy ${i++}${ext}`)
-  await fs.copyFile(path, target)
+  // COPYFILE_EXCL: fail rather than overwrite if the target appeared between the
+  // existsSync check and the copy (TOCTOU).
+  await fs.copyFile(path, target, fsConstants.COPYFILE_EXCL)
   return target
 })
 
