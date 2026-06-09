@@ -573,6 +573,8 @@ export default function App() {
       const dirty = tabsRef.current.some((t) => t.content !== t.savedContent)
       if (!dirty || window.confirm(tRef.current('confirm.quitUnsaved'))) {
         window.api.confirmAppClose()
+      } else {
+        window.api.cancelAppClose?.()
       }
     })
     return () => {

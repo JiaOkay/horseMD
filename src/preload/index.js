@@ -46,8 +46,9 @@ const api = {
   checkUpdate: () => ipcRenderer.invoke('update:check'),
 
   // app close: main asks before closing so the renderer can warn about unsaved
-  // changes, then calls confirmAppClose() to let the window actually close.
+  // changes, then calls confirmAppClose() to proceed or cancelAppClose() to abort.
   confirmAppClose: () => ipcRenderer.send('app:confirm-close'),
+  cancelAppClose: () => ipcRenderer.send('app:cancel-close'),
 
   // events from main
   onOpenPaths: on('open-paths'),

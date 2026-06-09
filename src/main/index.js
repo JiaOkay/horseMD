@@ -73,6 +73,10 @@ let mainWindow = null
 // When true, the window is allowed to close without re-prompting (the renderer
 // has confirmed there are no unsaved changes, or the user chose to discard).
 let allowClose = false
+// True once a real app quit is underway (Cmd/Ctrl+Q, menu Quit). Lets the close
+// handler tell "quit the app" apart from "just close the window" (macOS keeps the
+// app running on window close, but Cmd+Q must fully quit).
+let isQuitting = false
 const watchers = new Map() // folder path -> watcher
 const fileWatchers = new Map() // file path -> { watcher, timer }
 
@@ -183,7 +187,7 @@ function createWindow() {
   // Warn about unsaved changes before the window closes (macOS traffic light,
   // the custom Windows close button, Cmd/Ctrl+Q). The dirty state lives in the
   // renderer, so defer the close and ask it; it calls back via 'app:confirm-close'
-  // when it's safe to close.
+  // (proceed) or 'app:cancel-close' (abort).
   allowClose = false
   mainWindow.on('close', (e) => {
     if (allowClose) return
@@ -219,6 +223,12 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+// A real quit is starting (Cmd/Ctrl+Q, menu Quit, app.quit()). Mark it so the
+// window 'close' handler quits the app rather than just closing the window.
+app.on('before-quit', () => {
+  isQuitting = true
 })
 
 app.on('window-all-closed', () => {
@@ -470,10 +480,17 @@ ipcMain.handle('window:close', () => mainWindow?.close())
 ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
 
 // The renderer confirmed it's safe to close (no unsaved changes, or the user
-// chose to discard) — let the window close for real.
+// chose to discard). If a quit is underway (Cmd/Ctrl+Q), quit the whole app;
+// otherwise just close the window (macOS keeps the app running).
 ipcMain.on('app:confirm-close', () => {
   allowClose = true
-  mainWindow?.close()
+  if (isQuitting) app.quit()
+  else mainWindow?.close()
+})
+// The user cancelled the close. Clear the quit intent so a later window-close
+// (e.g. the macOS traffic light) isn't mistaken for a quit.
+ipcMain.on('app:cancel-close', () => {
+  isQuitting = false
 })
 
 // ----------------------------- update check --------------------------------
@@ -520,7 +537,9 @@ function buildMenu() {
         { label: 'Export as PDF…', accelerator: 'CmdOrCtrl+Shift+E', click: menuCmd('exportPdf') },
         { type: 'separator' },
         { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: menuCmd('closeTab') },
-        isMac ? { role: 'close' } : { role: 'quit' }
+        // macOS: give "Close Window" Shift+Cmd+W so it doesn't fight Close Tab
+        // for Cmd+W (role 'close' otherwise defaults to Cmd+W). Windows: Quit.
+        isMac ? { role: 'close', accelerator: 'Shift+CmdOrCtrl+W' } : { role: 'quit' }
       ]
     },
     {
