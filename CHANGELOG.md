@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **Loading skeleton** for large documents — pulsing gray placeholder bars while
-  the editor parses/renders, so opening a big file isn't a blank pause. Small
-  files load instantly and never show it.
+  the editor parses/renders, so opening *or switching to* a big file isn't a
+  frozen/blank pause. (Creation is deferred one paint so the skeleton actually
+  shows before the parse blocks the main thread.) Small files never show it.
 - **Double-click an image to view it enlarged** in a lightbox (click the backdrop,
   the ✕, or press Esc to close). Display-only — it never changes the document,
   and a single click still selects the image / edits its caption.

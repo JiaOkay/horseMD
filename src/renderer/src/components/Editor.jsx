@@ -77,6 +77,7 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
     if (!host) return
     let ready = false
     let destroyed = false
+    let createRaf = 0
     const cleanups = []
 
     // Register this editor so a globally-injected toolbar button can find the
@@ -228,13 +229,14 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
       })
     })
 
-    crepe
-      .create()
-      .then(() => {
-        if (destroyed) {
-          crepe.destroy()
-          return
-        }
+    const runCreate = () =>
+      crepe
+        .create()
+        .then(() => {
+          if (destroyed) {
+            crepe.destroy()
+            return
+          }
 
         // Milkdown stores the ProseMirror view in its context — `editor.view`
         // does not exist in this version, which previously left `view`
@@ -619,8 +621,23 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
       })
       .catch((err) => console.error('Crepe init failed', err))
 
+    // For large docs, defer create() past a paint so the loading skeleton is
+    // actually shown before create() blocks the main thread parsing/rendering —
+    // otherwise switching to (or first opening) a big tab freezes on the
+    // previous view with no feedback. Small docs create immediately.
+    if (isLargeDoc) {
+      createRaf = requestAnimationFrame(() => {
+        createRaf = requestAnimationFrame(() => {
+          if (!destroyed) runCreate()
+        })
+      })
+    } else {
+      runCreate()
+    }
+
     return () => {
       destroyed = true
+      if (createRaf) cancelAnimationFrame(createRaf)
       cleanups.forEach((fn) => {
         try {
           fn()
