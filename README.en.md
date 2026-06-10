@@ -120,14 +120,12 @@ Grab the latest installer from the [**Releases page**](https://github.com/BND-1/
 
 ## Community & support
 
-If HorseMD works well for you, come say hi 🐎
+If HorseMD works well for you, come say hi 🐎 — talk Markdown, request features, report bugs.
 
-| Join the chat group | Buy me a coffee |
-| :---: | :---: |
-| <img src="./docs/community/wechat-group.jpg" width="240" alt="HorseMD WeChat group"> | <img src="./docs/community/coffee.jpg" width="240" alt="Buy the author a coffee"> |
-| Scan with WeChat to join — talk Markdown, request features, report bugs | If it's useful, treat the author to a coffee — it's the best fuel for updates ☕ |
-
-> WeChat group QR codes expire periodically; if it's stale, drop a note in [Issues](https://github.com/BND-1/horseMD/issues) or grab the latest QR from the repo.
+| Add me on WeChat | WeChat group | Buy me a coffee ☕ |
+| :---: | :---: | :---: |
+| <img src="./docs/community/wechat-personal.jpg" width="220" alt="Author's WeChat"> | <img src="./docs/community/wechat-group.jpg" width="220" alt="HorseMD WeChat group"> | <img src="./docs/community/coffee.jpg" width="220" alt="Buy the author a coffee"> |
+| Add me (note "HorseMD") and I'll pull you into the group | Scan to join (group QR refreshes periodically — **if expired, add me on the left**) | If it's useful, treat the author to a coffee — the best fuel for updates |
 
 ## Develop
 

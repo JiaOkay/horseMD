@@ -9,7 +9,7 @@ const I18N = {
     'hero.kicker': '免费 · 开源 · 不要账号',
     'hero.l1': '一个窗口，', 'hero.l2': '装下所有 .md 文件',
     'hero.sub': '一个免费的 Typora 平替，但不止于此。',
-    'cta.win': '下载 Windows 版', 'cta.mac': '下载 macOS 版',
+    'cta.win': '下载 Windows 版', 'cta.mac': 'macOS 下载 & 安装',
     'hero.note': '构建未签名 — Windows：更多信息 → 仍要运行 · macOS：右键 → 打开',
     'hero.caption': 'HORSEMD · 文件树 / 标签页 / 所见即所得',
     'strip.tabs': '标签页', 'strip.tree': '文件树', 'strip.i18n': 'EN / 中文', 'strip.themes': '6 套主题',
@@ -29,7 +29,7 @@ const I18N = {
     'hero.kicker': 'FREE · OPEN SOURCE · NO ACCOUNT',
     'hero.l1': 'One window.', 'hero.l2': 'Every .md file.',
     'hero.sub': 'A free Typora alternative, and then some.',
-    'cta.win': 'Download for Windows', 'cta.mac': 'Download for macOS',
+    'cta.win': 'Download for Windows', 'cta.mac': 'macOS — download & install',
     'hero.note': 'Unsigned builds — Windows: More info → Run anyway · macOS: right-click → Open',
     'hero.caption': 'HORSEMD · FILE TREE / TABS / WYSIWYG',
     'strip.tabs': 'Tabs', 'strip.tree': 'File tree', 'strip.i18n': 'EN / 中文', 'strip.themes': '6 themes',
@@ -123,8 +123,9 @@ fetch('https://api.github.com/repos/BND-1/horseMD/releases/latest')
     }
     const assets = rel.assets || []
     const win = assets.find(a => /\.exe$/i.test(a.name))
-    const mac = assets.find(a => /\.dmg$/i.test(a.name))
     if (win) document.getElementById('dlWin').href = win.browser_download_url
-    if (mac) document.getElementById('dlMac').href = mac.browser_download_url
+    // macOS button intentionally points to the GitHub install guide (#安装),
+    // NOT the direct .dmg — unsigned builds need the "right-click → Open" /
+    // xattr step, so we send first-timers to the step-by-step instructions.
   })
   .catch(() => { /* 静默回退到 releases 页 */ })
