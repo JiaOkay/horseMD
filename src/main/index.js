@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, basename, extname, resolve } from 'node:path'
 import fs from 'node:fs/promises'
 import { existsSync, statSync, constants as fsConstants } from 'node:fs'
+import { exec } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import chokidar from 'chokidar'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -513,6 +515,63 @@ ipcMain.handle('watch:unfile', async (_e, path) => {
 
 ipcMain.handle('shell:openExternal', async (_e, url) => shell.openExternal(url))
 ipcMain.handle('shell:showInFolder', async (_e, path) => shell.showItemInFolder(path))
+
+// ----------------------------- image host upload ---------------------------
+// Typora-style custom uploader: write the image bytes to a temp file, run the
+// user's command with the file path appended as an argument, and return the URL
+// it prints to stdout. PicGo-Core (`picgo upload`) and most uploaders print the
+// final URL on its own line; we take the last http(s) URL in the output.
+function runUploadCommand(command, file) {
+  return new Promise((resolve, reject) => {
+    const full = `${command} "${file}"`
+    exec(
+      full,
+      { timeout: 60000, maxBuffer: 16 * 1024 * 1024, windowsHide: true },
+      (err, stdout, stderr) => {
+        const out = `${stdout || ''}\n${stderr || ''}`
+        // Many uploaders exit non-zero but still print the URL; only treat it as a
+        // failure if there's no URL anywhere in the output.
+        if (err && !/https?:\/\//i.test(out)) {
+          reject(new Error((stderr || err.message || '').slice(0, 500)))
+          return
+        }
+        resolve(out)
+      }
+    )
+  })
+}
+
+function parseUploadedUrl(out) {
+  const lines = String(out)
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+  // Prefer a line that is exactly a URL (the uploader's final output line).
+  const exact = lines.filter((l) => /^https?:\/\/\S+$/i.test(l))
+  if (exact.length) return exact[exact.length - 1]
+  // Fallback: the first URL found anywhere, trimmed of trailing punctuation.
+  const m = String(out).match(/https?:\/\/\S+/i)
+  return m ? m[0].replace(/[)\]>"',.]+$/, '') : null
+}
+
+ipcMain.handle('image:upload', async (_e, command, name, bytes) => {
+  if (!command || !String(command).trim()) return { ok: false, error: 'No upload command configured.' }
+  let dir
+  try {
+    dir = await fs.mkdtemp(join(tmpdir(), 'horsemd-img-'))
+    const safe = (name || 'image.png').replace(/[\\/:*?"<>|]/g, '_') || 'image.png'
+    const file = join(dir, safe)
+    await fs.writeFile(file, Buffer.from(bytes))
+    const out = await runUploadCommand(String(command).trim(), file)
+    const url = parseUploadedUrl(out)
+    if (url) return { ok: true, url }
+    return { ok: false, error: out.slice(-500) || 'No URL in command output.' }
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) }
+  } finally {
+    if (dir) fs.rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+})
 
 // Copy a file next to itself as "<name> copy<ext>", picking a free name.
 ipcMain.handle('fs:duplicate', async (_e, path) => {

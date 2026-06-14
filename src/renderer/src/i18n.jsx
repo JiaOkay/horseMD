@@ -123,6 +123,31 @@ export const STRINGS = {
     'cmd.theme': 'Cycle Theme',
     'cmd.find': 'Find in File',
 
+    // page width (status-bar popover) + image host (top-bar popover)
+    'settings.pageWidth': 'Editor width',
+    'settings.width.narrow': 'Narrow',
+    'settings.width.medium': 'Medium',
+    'settings.width.wide': 'Wide',
+    'settings.width.full': 'Full width',
+    'settings.fineTune': 'Fine',
+    'imghost.button': 'Image host',
+    'imghost.on': 'Ready',
+    'imghost.off': 'Off',
+    'settings.imageHost': 'Image upload command',
+    'settings.imageHostDesc':
+      'When set, pasted, dropped or uploaded images run through this command and the returned URL is inserted (like Typora).',
+    'settings.imageHostPlaceholder': 'e.g. picgo upload',
+    'settings.imageHostHint':
+      'The image file path is appended as an argument; the command must print the image URL to stdout. Leave empty to keep images local.',
+    'imghost.uploading': 'Uploading image…',
+    'imghost.uploaded': 'Image uploaded',
+    'imghost.failed': 'Image upload failed — kept a local copy',
+
+    // mermaid live preview
+    'mermaid.rendering': 'Rendering diagram…',
+    'mermaid.empty': 'Empty mermaid block',
+    'mermaid.error': 'Diagram error:',
+
     // block types
     'block.turnInto': 'Turn into',
     'block.paragraph': 'Text',
@@ -270,6 +295,31 @@ export const STRINGS = {
     'cmd.source': '切换源码模式',
     'cmd.theme': '切换主题',
     'cmd.find': '在文件中查找',
+
+    // 页宽（状态栏弹窗）+ 图床（顶栏弹窗）
+    'settings.pageWidth': '编辑区宽度',
+    'settings.width.narrow': '窄',
+    'settings.width.medium': '中',
+    'settings.width.wide': '宽',
+    'settings.width.full': '全宽',
+    'settings.fineTune': '微调',
+    'imghost.button': '图床',
+    'imghost.on': '已就绪',
+    'imghost.off': '未配置',
+    'settings.imageHost': '图床上传命令',
+    'settings.imageHostDesc':
+      '设置后，粘贴、拖入或上传的图片会经此命令处理，并把返回的链接插入文档（类似 Typora）。',
+    'settings.imageHostPlaceholder': '例如：picgo upload',
+    'settings.imageHostHint':
+      '图片文件路径会作为参数追加到命令末尾；命令需将图片 URL 打印到标准输出。留空则图片保持本地。',
+    'imghost.uploading': '正在上传图片…',
+    'imghost.uploaded': '图片已上传',
+    'imghost.failed': '图片上传失败 —— 已保留本地副本',
+
+    // mermaid 实时预览
+    'mermaid.rendering': '正在渲染图表…',
+    'mermaid.empty': '空的 mermaid 代码块',
+    'mermaid.error': '图表错误：',
 
     'block.turnInto': '转换为',
     'block.paragraph': '正文',

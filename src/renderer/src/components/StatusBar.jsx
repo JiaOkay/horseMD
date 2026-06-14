@@ -4,6 +4,7 @@ import { BLOCK_TYPES, blockById, labelForBlockId } from '../blocks.js'
 import { useI18n } from '../i18n.jsx'
 import { THEMES, themeById } from '../themes.js'
 import { LANGS } from '../i18n.jsx'
+import { PAGE_WIDTH_PRESETS, PAGE_WIDTH_MIN, PAGE_WIDTH_MAX } from '../settings.js'
 
 function stats(md) {
   const text = (md || '')
@@ -58,6 +59,81 @@ function BlockSwitcher({ activeBlock, onPickBlock }) {
               <span className="block-menu-sc">{b.shortcut}</span>
             </button>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Page-width control: a status-bar button → small popover with a segmented
+// button group (the obvious, clickable presets, with a sliding highlight pill)
+// plus a separate minimal "fine-tune" slider for exact pixels. Two clear roles.
+function PageWidthControl({ pageWidth, onSetPageWidth }) {
+  const { t } = useI18n()
+  const { open, setOpen, ref } = usePopover()
+  const trackRef = useRef(null)
+  const [dragging, setDragging] = useState(false)
+  const isFull = pageWidth === 'full'
+  // Fine-tune slider fraction (0..1); 'full' pins the thumb to the far right.
+  const pct = isFull ? 1 : (pageWidth - PAGE_WIDTH_MIN) / (PAGE_WIDTH_MAX - PAGE_WIDTH_MIN)
+  const activeIndex = PAGE_WIDTH_PRESETS.findIndex((p) =>
+    p.width === 'full' ? isFull : !isFull && pageWidth === p.width
+  )
+
+  const valueFromX = (clientX) => {
+    const r = trackRef.current.getBoundingClientRect()
+    let p = (clientX - r.left) / r.width
+    p = Math.min(1, Math.max(0, p))
+    return Math.round((PAGE_WIDTH_MIN + p * (PAGE_WIDTH_MAX - PAGE_WIDTH_MIN)) / 10) * 10
+  }
+  const startDrag = (e) => {
+    e.preventDefault()
+    setDragging(true)
+    onSetPageWidth(valueFromX(e.clientX))
+    const onMove = (ev) => onSetPageWidth(valueFromX(ev.clientX))
+    const onUp = () => {
+      setDragging(false)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  return (
+    <div className="block-switch" ref={ref}>
+      <button className="status-btn" onClick={() => setOpen((v) => !v)} title={t('settings.pageWidth')}>
+        <Icon name="width" size={14} /> {isFull ? t('settings.width.full') : pageWidth + 'px'}
+      </button>
+      {open && (
+        <div className="hm-pop hm-width-pop">
+          <div className="hm-pop-head">
+            <span className="hm-pop-title">{t('settings.pageWidth')}</span>
+            <span className="hm-pop-value">
+              {isFull ? t('settings.width.full') : pageWidth + ' px'}
+            </span>
+          </div>
+          {/* Preset buttons — segmented control with a sliding highlight pill. */}
+          <div className="hm-seg" style={{ '--seg-count': PAGE_WIDTH_PRESETS.length, '--seg-index': activeIndex }}>
+            {activeIndex >= 0 && <span className="hm-seg-pill" aria-hidden="true" />}
+            {PAGE_WIDTH_PRESETS.map((p, i) => (
+              <button
+                key={p.id}
+                className={`hm-seg-item${i === activeIndex ? ' active' : ''}`}
+                onClick={() => onSetPageWidth(p.width)}
+              >
+                {t('settings.width.' + p.id)}
+              </button>
+            ))}
+          </div>
+          {/* Fine-tune slider for exact pixels. */}
+          <div className={`hm-fine${dragging ? ' dragging' : ''}`}>
+            <span className="hm-fine-label">{t('settings.fineTune')}</span>
+            <div className="hm-ftrack" ref={trackRef} onPointerDown={startDrag}>
+              <div className="hm-ffill" style={{ width: pct * 100 + '%' }} />
+              <div className="hm-fthumb" style={{ left: pct * 100 + '%' }} />
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -133,7 +209,9 @@ export default function StatusBar({
   sourceMode,
   onToggleSource,
   activeBlock,
-  onPickBlock
+  onPickBlock,
+  pageWidth,
+  onSetPageWidth
 }) {
   const { t } = useI18n()
   const s = useMemo(() => stats(tab?.content), [tab?.content])
@@ -166,6 +244,7 @@ export default function StatusBar({
         <button className="status-btn" onClick={onToggleSource} title={t('tip.toggleSource')}>
           <Icon name="code" size={14} /> {sourceMode ? t('status.source') : t('status.rich')}
         </button>
+        <PageWidthControl pageWidth={pageWidth} onSetPageWidth={onSetPageWidth} />
         <ThemePicker theme={theme} setTheme={setTheme} />
         <LangSwitch lang={lang} setLang={setLang} />
         <button

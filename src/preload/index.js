@@ -36,6 +36,11 @@ const api = {
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   showInFolder: (path) => ipcRenderer.invoke('shell:showInFolder', path),
 
+  // image host: write the bytes to a temp file, run the user's upload command on
+  // it, and return the URL it prints. Returns { ok, url } or { ok:false, error }.
+  uploadImage: (command, name, bytes) =>
+    ipcRenderer.invoke('image:upload', command, name, bytes),
+
   // window controls (custom title-bar buttons on Windows/Linux)
   windowMinimize: () => ipcRenderer.invoke('window:minimize'),
   windowToggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize'),

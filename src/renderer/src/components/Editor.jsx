@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Crepe, CrepeFeature } from '@milkdown/crepe'
-import { editorViewCtx, nodeViewCtx } from '@milkdown/kit/core'
+import { editorViewCtx, nodeViewCtx, prosePluginsCtx } from '@milkdown/kit/core'
 import { imageBlockConfig } from '@milkdown/kit/component/image-block'
 import { inlineImageConfig } from '@milkdown/kit/component/image-inline'
 import { TextSelection } from '@milkdown/prose/state'
@@ -14,6 +14,7 @@ import { fireToast } from '../ui.js'
 import { renderHtmlNodeView, convertBlock } from './editor-html.js'
 import { dirOf, isRelativePath, resolveToFileUrl } from './editor-images.js'
 import { inlineRichStyles } from './editor-copy.js'
+import { createMermaidPlugin } from './editor-mermaid.js'
 
 // Every mounted rich editor registers itself here. A rich-text tab stays mounted
 // after its first activation, so several editors (and several Crepe selection
@@ -57,10 +58,21 @@ function applyImageText(ctx, tt) {
  *   - Status bar:      always-visible switcher (wired from App via onReady)
  *   - Plus Crepe's built-in slash menu (`/`) and block handle.
  */
-export default function Editor({ initialContent, docPath, onChange, onReady, onActiveBlock }) {
+export default function Editor({
+  initialContent,
+  docPath,
+  imageUploadCommand,
+  onChange,
+  onReady,
+  onActiveBlock
+}) {
   const { t } = useI18n()
   const tRef = useRef(t)
   tRef.current = t
+  // Live mirror of the image-host upload command, read at upload time (the Crepe
+  // onUpload callback is registered once at create but always uses the latest).
+  const uploadCmdRef = useRef(imageUploadCommand)
+  uploadCmdRef.current = imageUploadCommand
   const hostRef = useRef(null)
   const viewRef = useRef(null)
   const apiRef = useRef(null)
@@ -94,6 +106,41 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
     const self = { host, getView: () => viewRef.current, getApi: () => apiRef.current }
     liveEditors.add(self)
     cleanups.push(() => liveEditors.delete(self))
+
+    // --- Image host: upload a file via the configured custom command ---
+    // Typora-style: the command receives the image file path as an argument and
+    // prints the resulting URL to stdout (e.g. PicGo-Core `picgo upload`). With no
+    // command configured, fall back to a local object URL so the image isn't lost.
+    const uploadViaCommand = async (file) => {
+      const cmd = (uploadCmdRef.current || '').trim()
+      if (!cmd) return URL.createObjectURL(file)
+      fireToast(tRef.current('imghost.uploading'))
+      try {
+        const buf = await file.arrayBuffer()
+        const res = await window.api.uploadImage(cmd, file.name || 'image.png', new Uint8Array(buf))
+        if (res?.ok && res.url) {
+          fireToast(tRef.current('imghost.uploaded'))
+          return res.url
+        }
+        fireToast(tRef.current('imghost.failed'))
+      } catch {
+        fireToast(tRef.current('imghost.failed'))
+      }
+      // Upload failed — keep a local preview so the paste/drop isn't silently dropped.
+      return URL.createObjectURL(file)
+    }
+
+    // Insert an image at the caret (used by paste / drop of image files). Uploads
+    // first (via the command if set), then drops an inline image node with the URL.
+    const insertUploadedImage = async (file) => {
+      const url = await uploadViaCommand(file)
+      const v = viewRef.current
+      if (!v || !url) return
+      const imgType = v.state.schema.nodes.image
+      if (!imgType) return
+      const node = imgType.create({ src: url, alt: file.name || '' })
+      v.dispatch(v.state.tr.replaceSelectionWith(node, false).scrollIntoView())
+    }
 
     const crepe = new Crepe({
       root: host,
@@ -136,6 +183,17 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
       ctx.update(nodeViewCtx, (views) => [...views, ['html', (node) => renderHtmlNodeView(node)]])
       // Localize the image caption / upload text to the current language.
       applyImageText(ctx, tRef.current)
+      // Route the image-block / inline-image "Upload" button through the image
+      // host. applyImageText spreads the existing config, so re-applying it on a
+      // language switch preserves this onUpload.
+      ctx.update(imageBlockConfig.key, (v) => ({ ...v, onUpload: uploadViaCommand }))
+      ctx.update(inlineImageConfig.key, (v) => ({ ...v, onUpload: uploadViaCommand }))
+      // Live-render ```mermaid code blocks as diagrams (widget decoration after
+      // the editable source — see editor-mermaid.js).
+      ctx.update(prosePluginsCtx, (plugins) => [
+        ...plugins,
+        createMermaidPlugin((k) => tRef.current(k))
+      ])
     })
     crepeRef.current = crepe
 
@@ -382,6 +440,50 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
           }
         }
 
+        // --- Paste / drop an image file → upload it via the image host ---
+        // ProseMirror/Crepe doesn't ingest pasted or dropped image *files* by
+        // default. We intercept them, run the upload (custom command if set), and
+        // insert the returned URL — the Typora-style "paste image → it's hosted"
+        // flow. Pasted/dropped text and HTML are left to the editor's own paste.
+        // Only intercept image files when an image host is configured: without
+        // one we'd insert a blob: URL that dies on reload (there's no local-save
+        // path). With no host, leave paste/drop to the editor's default. Also
+        // never hijack a paste/drop inside a code block (CodeMirror) or input —
+        // replacing the ProseMirror node selection there would clobber the block.
+        const imageHandlingActive = (e) =>
+          (uploadCmdRef.current || '').trim() &&
+          !e.target.closest?.('.cm-editor, input, textarea, .caption-input')
+        const onPasteImage = (e) => {
+          if (!imageHandlingActive(e)) return
+          const items = e.clipboardData?.items
+          if (!items) return
+          const imgItem = [...items].find(
+            (it) => it.kind === 'file' && it.type.startsWith('image/')
+          )
+          if (!imgItem) return
+          const file = imgItem.getAsFile()
+          if (!file) return
+          e.preventDefault()
+          e.stopPropagation()
+          insertUploadedImage(file)
+        }
+        const onDropImage = (e) => {
+          if (!imageHandlingActive(e)) return
+          const files = [...(e.dataTransfer?.files || [])].filter((f) =>
+            f.type.startsWith('image/')
+          )
+          if (!files.length) return
+          e.preventDefault()
+          e.stopPropagation()
+          // Move the caret to the drop point before inserting.
+          const at = view.posAtCoords({ left: e.clientX, top: e.clientY })
+          if (at) {
+            const $pos = view.state.doc.resolve(at.pos)
+            view.dispatch(view.state.tr.setSelection(TextSelection.near($pos)))
+          }
+          files.forEach(insertUploadedImage)
+        }
+
         // --- Double-click an image → open it enlarged in a lightbox ---
         // Display-only: opens an overlay, never changes the document. We detect
         // the double-click ourselves (two clicks on the same image within 350ms)
@@ -456,11 +558,15 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
         view.dom.addEventListener('click', onCaptionBtn)
         view.dom.addEventListener('click', onCopyBtn, true)
         view.dom.addEventListener('copy', onCopy, true)
+        view.dom.addEventListener('paste', onPasteImage, true)
+        view.dom.addEventListener('drop', onDropImage, true)
         cleanups.push(() => view.dom.removeEventListener('click', onLinkClick, true))
         cleanups.push(() => view.dom.removeEventListener('click', onImgClick, true))
         cleanups.push(() => view.dom.removeEventListener('click', onCaptionBtn))
         cleanups.push(() => view.dom.removeEventListener('click', onCopyBtn, true))
         cleanups.push(() => view.dom.removeEventListener('copy', onCopy, true))
+        cleanups.push(() => view.dom.removeEventListener('paste', onPasteImage, true))
+        cleanups.push(() => view.dom.removeEventListener('drop', onDropImage, true))
 
         // --- Resolve relative image paths against the file's folder ---
         const baseDir = dirOf(docPath)
@@ -653,7 +759,7 @@ export default function Editor({ initialContent, docPath, onChange, onReady, onA
                 '.tools-button-group, .button-group, .cm-panel, .cm-tooltip, ' +
                 '.preview-panel, .cell-handle, .line-handle, .handle, .add-button, ' +
                 '.operation, .operation-item, .drag-preview, .milkdown-block-handle, ' +
-                '.milkdown-toolbar, .image-resize-handle, .label-wrapper'
+                '.milkdown-toolbar, .image-resize-handle, .label-wrapper, .hm-mermaid-preview'
             )
             .forEach((el) => el.remove())
           // Flatten CodeMirror editors to plain <pre><code>.

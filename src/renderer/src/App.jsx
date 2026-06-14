@@ -13,6 +13,8 @@ import Welcome from './components/Welcome.jsx'
 import WindowControls from './components/WindowControls.jsx'
 import UpdateToast from './components/UpdateToast.jsx'
 import RenameModal from './components/RenameModal.jsx'
+import ImageHostButton from './components/ImageHostButton.jsx'
+import { loadSettings, saveSettings, applyPageWidth } from './settings.js'
 import { fireToast, HM_TOAST_EVENT } from './ui.js'
 import logoUrl from './assets/logo.png'
 import { clearFindHighlights, findRangesInEl, paintFindHighlights, scrollRangeIntoView, matchIndices } from './find.js'
@@ -68,6 +70,9 @@ export default function App() {
   // Rename-from-tab-menu modal: { id, value } or null. (Electron has no
   // window.prompt, so renaming a tab's file uses this small inline dialog.)
   const [renameState, setRenameState] = useState(null)
+  // User preferences (page width, image-host command). Persisted separately from
+  // the session; see settings.js.
+  const [settings, setSettings] = useState(loadSettings)
 
   const editorHostRef = useRef(null) // active rich editor's scroll container
   const editorAreaRef = useRef(null) // flex row holding the editor panes (for split-drag math)
@@ -180,6 +185,19 @@ export default function App() {
   useEffect(() => {
     applyTheme(theme)
   }, [theme])
+
+  // ----------------------------- settings ---------------------------------
+  // Apply the editor page width live, and persist any settings change.
+  useEffect(() => {
+    applyPageWidth(settings.pageWidth)
+  }, [settings.pageWidth])
+  useEffect(() => {
+    saveSettings(settings)
+  }, [settings])
+  // Merge a partial settings change (from the Settings modal).
+  const updateSettings = useCallback((partial) => {
+    setSettings((prev) => ({ ...prev, ...partial }))
+  }, [])
 
   const t = useCallback((key, vars) => translate(lang, key, vars), [lang])
   // Always-current translator for stable callbacks (e.g. openPaths) that must
@@ -1058,6 +1076,11 @@ export default function App() {
         >
           <Icon name="columns" size={16} />
         </button>
+        <ImageHostButton
+          t={t}
+          command={settings.imageUploadCommand}
+          onChange={(cmd) => updateSettings({ imageUploadCommand: cmd })}
+        />
         <button className="icon-btn drag-no" title="Command palette (Ctrl+P)" onClick={() => setPaletteOpen(true)}>
           <Icon name="command" size={16} />
         </button>
@@ -1189,6 +1212,7 @@ export default function App() {
                     tabId={`${tab.id}:${tab.reloadNonce}`}
                     initialContent={tab.content}
                     docPath={tab.path}
+                    imageUploadCommand={settings.imageUploadCommand}
                     onChange={(md, isInitial) => updateContent(tab.id, md, isInitial)}
                     onReady={(api) => {
                       editorApis.current[tab.id] = api
@@ -1253,6 +1277,8 @@ export default function App() {
         onToggleSource={toggleSource}
         activeBlock={activeBlock}
         onPickBlock={(id) => editorApis.current[activeId]?.setBlock(id)}
+        pageWidth={settings.pageWidth}
+        onSetPageWidth={(w) => updateSettings({ pageWidth: w })}
       />
 
       <CommandPalette

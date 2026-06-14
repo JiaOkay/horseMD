@@ -566,6 +566,234 @@ button:focus-visible,
   background: var(--accent-strong);
 }
 
+/* ============================================================
+   Lightweight popovers (page width · image host)
+   Minimal, roomy, with a sliding segmented control. Shared base
+   = .hm-pop; each control adds its own width/anchor.
+   ============================================================ */
+.hm-pop {
+  padding: 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+.hm-pop-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 13px;
+}
+.hm-pop-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
+}
+.hm-pop-value {
+  font-size: 12px;
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+.hm-pop-hint {
+  font-size: 11px;
+  color: var(--faint);
+  margin-top: 9px;
+  line-height: 1.55;
+}
+/* "Ready / Off" status pill in a popover head. */
+.hm-pop-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--faint);
+}
+.hm-pop-tag.on {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* Preset buttons: segmented control with a sliding highlight pill. */
+.hm-seg {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--seg-count, 4), 1fr);
+  padding: 3px;
+  margin-bottom: 14px;
+  background: var(--hover);
+  border-radius: 999px;
+}
+.hm-seg-pill {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--seg-count, 4));
+  border-radius: 999px;
+  background: var(--bg-editor);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(calc(var(--seg-index, 0) * 100%));
+  transition: transform 0.32s var(--ease-spring);
+}
+.hm-seg-item {
+  position: relative;
+  z-index: 1;
+  padding: 7px 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: center;
+  transition: color 0.18s;
+}
+.hm-seg-item:hover {
+  color: var(--text);
+}
+.hm-seg-item.active {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+/* Fine-tune slider (exact pixels). A custom track so the thumb springs to a
+   clicked preset and the styling stays minimal/on-theme. */
+.hm-fine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  user-select: none;
+}
+.hm-fine-label {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.hm-ftrack {
+  position: relative;
+  flex: 1;
+  height: 5px;
+  margin: 0 8px;
+  background: var(--border-soft);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.hm-ffill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.3s var(--ease-spring);
+}
+.hm-fthumb {
+  position: absolute;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  margin-left: -7.5px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--bg-editor);
+  border: 2px solid var(--accent);
+  box-shadow: var(--shadow-sm);
+  transition: left 0.3s var(--ease-spring);
+  pointer-events: none;
+}
+.hm-ftrack:hover .hm-fthumb {
+  box-shadow: 0 0 0 5px var(--accent-soft), var(--shadow-sm);
+}
+/* No easing lag while dragging; clicking a preset still springs smoothly. */
+.hm-fine.dragging .hm-ffill,
+.hm-fine.dragging .hm-fthumb {
+  transition: none;
+}
+
+/* Command input (image-host). */
+.hm-cmd-input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-editor);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.hm-cmd-input:focus {
+  border-color: var(--accent);
+}
+
+/* Page-width popover: anchored above the status-bar button (the wrapper
+   .block-switch is position:relative). */
+.hm-width-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 200;
+  min-width: 268px;
+  animation: menuFadeIn 0.12s var(--ease-out);
+}
+
+/* Image-host popover: position:fixed (set inline) so the top bar's
+   overflow:hidden can't clip it. */
+.hm-imghost {
+  position: relative;
+  display: inline-flex;
+}
+.icon-btn.hm-imghost-on {
+  position: relative;
+  color: var(--accent);
+}
+.icon-btn.hm-imghost-on::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.hm-imghost-pop {
+  position: fixed;
+  z-index: 200;
+  width: 320px;
+  max-width: 86vw;
+  animation: menuFadeIn 0.12s var(--ease-out);
+}
+
+/* ---- Mermaid live preview (rendered under a ```mermaid code block) ---- */
+.hm-mermaid-preview {
+  margin: 2px 0 16px;
+  padding: 16px 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  user-select: none;
+}
+.hm-mermaid-preview svg {
+  max-width: 100%;
+  height: auto;
+}
+.hm-mermaid-hint {
+  color: var(--faint);
+  font-size: 13px;
+  font-style: italic;
+}
+.hm-mermaid-error {
+  color: var(--danger);
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  text-align: left;
+  width: 100%;
+}
+
 /* ---- Transient toast (copy feedback, etc.) ---- */
 .hm-toast {
   position: fixed;
@@ -1163,7 +1391,7 @@ body.hm-col-resizing * {
   top: 0;
   left: 0;
   right: 0;
-  max-width: 800px;
+  max-width: var(--editor-max-width, 800px);
   margin: 0 auto;
   padding: 24px 60px;
   pointer-events: none;
@@ -1191,9 +1419,15 @@ body.hm-col-resizing * {
   50% { opacity: 0.9; }
 }
 .editor-host {
-  max-width: 800px;
+  max-width: var(--editor-max-width, 800px);
   margin: 0 auto;
   padding: 16px 60px 60vh;
+}
+/* Full-width preset: fill the pane (the CSS var can't express "no max-width"
+   while the source editor centers via calc(), so a body class handles it). */
+body.hm-full-width .editor-host,
+body.hm-full-width .editor-skeleton {
+  max-width: none;
 }
 .milkdown { background: transparent !important; }
 .milkdown .ProseMirror { padding: 0 !important; }
@@ -1470,8 +1704,12 @@ body.hm-col-resizing * {
   font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1.75;
-  padding: 40px max(60px, calc((100% - 800px) / 2)) 60vh;
+  padding: 40px max(60px, calc((100% - var(--editor-max-width, 800px)) / 2)) 60vh;
   user-select: text;
+}
+body.hm-full-width .source-editor {
+  padding-left: 60px;
+  padding-right: 60px;
 }
 
 /* Find Bar */
@@ -2163,6 +2401,17 @@ body.dark .milkdown {
 .milkdown .milkdown-table-block th:has(.ProseMirror-selectednode),
 .milkdown .milkdown-table-block td:has(.ProseMirror-selectednode) {
   outline: none;
+}
+/* Images: clicking an image shouldn't draw a hard ring on its edge — it read as
+   an ugly wireframe around the picture. Drop the selected-node ring (Crepe's
+   resize handle + caption button are cue enough) and replace Crepe's gray
+   selection overlay with a barely-there on-theme tint. */
+.milkdown .milkdown-image-block.ProseMirror-selectednode,
+.milkdown .milkdown-image-inline.ProseMirror-selectednode {
+  outline: none;
+}
+.milkdown .milkdown-image-block.selected > .image-wrapper::before {
+  background: var(--accent-soft) !important;
 }
 /* Theme the column-resize handle (default is a hard blue #adf bar). */
 .milkdown .ProseMirror .column-resize-handle {

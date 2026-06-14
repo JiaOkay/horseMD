@@ -1,6 +1,6 @@
 {
   "name": "horse",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "HorseMD Markdown Editor",
   "author": "mini_md",
   "license": "MIT",
@@ -24,7 +24,8 @@
   },
   "dependencies": {
     "@milkdown/crepe": "^7.6.5",
-    "chokidar": "^4.0.3"
+    "chokidar": "^4.0.3",
+    "mermaid": "^11.15.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
@@ -38,7 +39,9 @@
   "build": {
     "appId": "com.horsemd.app",
     "productName": "HorseMD",
-    "files": ["out/**/*"],
+    "files": [
+      "out/**/*"
+    ],
     "icon": "build/icon.ico",
     "publish": [
       {
@@ -48,20 +51,43 @@
       }
     ],
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ],
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
       "fileAssociations": [
-        { "ext": "md", "name": "Markdown Document", "role": "Editor" },
-        { "ext": "markdown", "name": "Markdown Document", "role": "Editor" }
+        {
+          "ext": "md",
+          "name": "Markdown Document",
+          "role": "Editor"
+        },
+        {
+          "ext": "markdown",
+          "name": "Markdown Document",
+          "role": "Editor"
+        }
       ]
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "build/icon.ico",
       "fileAssociations": [
-        { "ext": "md", "name": "Markdown Document", "role": "Editor", "icon": "build/icon.ico" },
-        { "ext": "markdown", "name": "Markdown Document", "role": "Editor", "icon": "build/icon.ico" }
+        {
+          "ext": "md",
+          "name": "Markdown Document",
+          "role": "Editor",
+          "icon": "build/icon.ico"
+        },
+        {
+          "ext": "markdown",
+          "name": "Markdown Document",
+          "role": "Editor",
+          "icon": "build/icon.ico"
+        }
       ]
     },
     "nsis": {
