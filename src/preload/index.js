@@ -41,6 +41,11 @@ const api = {
   uploadImage: (command, name, bytes) =>
     ipcRenderer.invoke('image:upload', command, name, bytes),
 
+  // custom themes (user CSS files in userData/themes)
+  themesList: () => ipcRenderer.invoke('themes:list'),
+  themeRead: (file) => ipcRenderer.invoke('themes:read', file),
+  themesReveal: () => ipcRenderer.invoke('themes:reveal'),
+
   // window controls (custom title-bar buttons on Windows/Linux)
   windowMinimize: () => ipcRenderer.invoke('window:minimize'),
   windowToggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize'),

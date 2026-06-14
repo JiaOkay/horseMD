@@ -168,6 +168,42 @@ body.theme-morandi-dark {
 .theme-menu .block-menu-item {
   gap: 9px;
 }
+/* Custom-theme swatch (no single color → a soft accent gradient marker). */
+.theme-swatch-custom {
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+}
+/* Section label + separator + folder/gallery actions in the theme menu. */
+.theme-menu-label {
+  padding: 8px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.theme-menu-sep {
+  height: 1px;
+  margin: 6px 6px;
+  background: var(--border-soft);
+}
+.theme-menu .theme-menu-action {
+  gap: 9px;
+  color: var(--muted);
+}
+.theme-menu .theme-menu-action:hover {
+  color: var(--text);
+}
+
+/* While a custom (e.g. Typora) theme is active, let it own the writing-area
+   background and column width — our defaults would otherwise sit on top. The app
+   chrome (sidebar, tabs, status bar) keeps its built-in styling. */
+body.hm-has-custom-theme .pane-center,
+body.hm-has-custom-theme .editor-scroll {
+  background: transparent;
+}
+body.hm-has-custom-theme .editor-host {
+  max-width: none;
+}
 
 /* =====================================================
    Base Styles
@@ -2360,6 +2396,34 @@ body.dark .milkdown {
   margin: 0.4em 0;
 }
 
+/* Math (KaTeX) — keep long formulas inside the column. A long display equation
+   would otherwise overflow to the right and overlap the page edge (issue #5);
+   let it scroll horizontally instead. */
+/* Keep a wide display equation inside the column: scroll horizontally instead of
+   overflowing the page (issue #5). Short formulas still center as usual. The
+   block-math preview panel scrolls too. */
+.milkdown .katex-display,
+.milkdown .milkdown-code-block .preview {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.milkdown .katex-display {
+  padding: 4px 2px;
+}
+.milkdown .ProseMirror span[data-type='math_inline'] {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: bottom;
+}
+/* A KaTeX parse error (e.g. \tag in inline math) should wrap, not run off-edge. */
+.milkdown .ProseMirror .katex-error {
+  white-space: normal !important;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 /* Tables — elegant borders */
 .milkdown .ProseMirror table {
   border-collapse: collapse;
@@ -2375,6 +2439,11 @@ body.dark .milkdown {
   border-bottom: 1px solid var(--border-soft);
   padding: 10px 14px;
   text-align: left;
+  /* Wrap long content (incl. unbroken CJK / URLs) instead of letting it overflow
+     and overlap neighbouring cells/rows (issue #6). */
+  vertical-align: top;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 .milkdown .ProseMirror th {
   background: var(--code-bg);

@@ -153,6 +153,9 @@ export default function Editor({
         [CrepeFeature.Table]: true,
         [CrepeFeature.InlineCode]: true,
         [CrepeFeature.LinkTooltip]: true,
+        // Render LaTeX math ($…$ / $$…$$) via KaTeX. Off by default in Crepe; the
+        // KaTeX + latex styles are already bundled through the imported theme CSS.
+        [CrepeFeature.Latex]: true,
         // Disable Crepe's virtual cursor: it replaces the native caret with a
         // custom element that reflows text on selection/focus (content jumps),
         // and hides the native caret (invisible in table cells). We use the
@@ -331,6 +334,16 @@ export default function Editor({
           view = crepe.editor?.view
         }
         viewRef.current = view
+
+        // Typora-theme hooks: most Typora themes target `#write` (the content
+        // container) and `.markdown-body`. Tagging the ProseMirror element with
+        // both lets a migrated Typora CSS style our editor. (Several editors can
+        // be mounted at once, so `id="write"` may repeat — invalid HTML but
+        // harmless: CSS `#write` still matches all, and we never getElementById it.)
+        if (view?.dom) {
+          view.dom.id = 'write'
+          view.dom.classList.add('markdown-body')
+        }
 
         // Content is in the DOM now — remove the loading skeleton SYNCHRONOUSLY
         // (flushSync) so it's gone before the heavy getMarkdown + onChange work

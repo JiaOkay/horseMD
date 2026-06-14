@@ -14,9 +14,12 @@ export const DEFAULT_THEME = 'light'
 
 export const themeById = (id) => THEMES.find((t) => t.id === id) || THEMES[0]
 
-// Apply a theme to <body>. Returns the resolved theme def.
+// Apply a theme to <body>. Returns the resolved theme def. Preserves any
+// app-managed `hm-*` classes (page-width full-width, custom-theme marker) —
+// setting className wholesale would otherwise wipe them on every theme switch.
 export function applyTheme(id) {
   const def = themeById(id)
-  document.body.className = def.base + (def.cls ? ' ' + def.cls : '')
+  const keep = [...document.body.classList].filter((c) => c.startsWith('hm-'))
+  document.body.className = [def.base, def.cls, ...keep].filter(Boolean).join(' ')
   return def
 }

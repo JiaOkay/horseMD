@@ -246,6 +246,7 @@ app.on('open-file', (event, path) => {
 })
 
 app.whenReady().then(() => {
+  ensureThemesDir()
   buildMenu()
   createWindow()
   app.on('activate', () => {
@@ -515,6 +516,46 @@ ipcMain.handle('watch:unfile', async (_e, path) => {
 
 ipcMain.handle('shell:openExternal', async (_e, url) => shell.openExternal(url))
 ipcMain.handle('shell:showInFolder', async (_e, path) => shell.showItemInFolder(path))
+
+// ----------------------------- custom themes -------------------------------
+// User-supplied CSS themes (e.g. migrated Typora themes) live in a `themes`
+// folder under userData. Users drop a .css file in (their own, or one downloaded
+// from theme.typora.io); the renderer lists them, reads the CSS, and injects it.
+const themesDir = () => join(app.getPath('userData'), 'themes')
+async function ensureThemesDir() {
+  try {
+    await fs.mkdir(themesDir(), { recursive: true })
+  } catch {
+    /* ignore */
+  }
+}
+
+ipcMain.handle('themes:list', async () => {
+  await ensureThemesDir()
+  let entries = []
+  try {
+    entries = await fs.readdir(themesDir(), { withFileTypes: true })
+  } catch {
+    return []
+  }
+  return entries
+    .filter((e) => e.isFile() && /\.css$/i.test(e.name))
+    .map((e) => ({ file: e.name, name: e.name.replace(/\.css$/i, '') }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+})
+
+ipcMain.handle('themes:read', async (_e, file) => {
+  // Only a bare .css filename inside the themes dir — no path traversal.
+  if (!file || /[\\/]/.test(file) || !/\.css$/i.test(file)) throw new Error('Invalid theme file.')
+  const full = join(themesDir(), file)
+  if (!full.startsWith(themesDir())) throw new Error('Invalid theme path.')
+  return await fs.readFile(full, 'utf8')
+})
+
+ipcMain.handle('themes:reveal', async () => {
+  await ensureThemesDir()
+  return shell.openPath(themesDir())
+})
 
 // ----------------------------- image host upload ---------------------------
 // Typora-style custom uploader: write the image bytes to a temp file, run the

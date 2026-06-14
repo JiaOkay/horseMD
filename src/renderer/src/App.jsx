@@ -15,6 +15,7 @@ import UpdateToast from './components/UpdateToast.jsx'
 import RenameModal from './components/RenameModal.jsx'
 import ImageHostButton from './components/ImageHostButton.jsx'
 import { loadSettings, saveSettings, applyPageWidth } from './settings.js'
+import { applyCustomTheme } from './customThemes.js'
 import { fireToast, HM_TOAST_EVENT } from './ui.js'
 import logoUrl from './assets/logo.png'
 import { clearFindHighlights, findRangesInEl, paintFindHighlights, scrollRangeIntoView, matchIndices } from './find.js'
@@ -34,6 +35,10 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(session.sidebarOpen ?? true)
   const [sidebarMode, setSidebarMode] = useState(session.sidebarMode || 'files') // 'files' or 'outline'
   const [theme, setTheme] = useState(session.theme || DEFAULT_THEME)
+  // Active custom CSS theme (filename in userData/themes), or null. Overlays the
+  // built-in base theme. `customThemes` is the list scanned from that folder.
+  const [customTheme, setCustomTheme] = useState(session.customTheme || null)
+  const [customThemes, setCustomThemes] = useState([])
   const [lang, setLang] = useState(session.lang || DEFAULT_LANG)
   const [recents, setRecents] = useState(session.recents || [])
   const [sourceMode, setSourceMode] = useState(false)
@@ -199,6 +204,40 @@ export default function App() {
     setSettings((prev) => ({ ...prev, ...partial }))
   }, [])
 
+  // ----------------------------- custom themes ----------------------------
+  const refreshThemes = useCallback(() => {
+    window.api.themesList?.().then(setCustomThemes).catch(() => {})
+  }, [])
+  useEffect(() => {
+    refreshThemes()
+  }, [refreshThemes])
+  // Inject the selected custom theme's CSS (or clear it). If its file vanished,
+  // fall back to no custom theme.
+  useEffect(() => {
+    if (!customTheme) {
+      applyCustomTheme(null)
+      return
+    }
+    let alive = true
+    window.api
+      .themeRead(customTheme)
+      .then((css) => alive && applyCustomTheme(css))
+      .catch(() => {
+        if (!alive) return
+        applyCustomTheme(null)
+        setCustomTheme(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [customTheme])
+  // Picking a built-in theme clears any custom overlay; picking a custom one
+  // keeps the built-in as the base (chrome + light/dark).
+  const pickBuiltinTheme = useCallback((id) => {
+    setTheme(id)
+    setCustomTheme(null)
+  }, [])
+
   const t = useCallback((key, vars) => translate(lang, key, vars), [lang])
   // Always-current translator for stable callbacks (e.g. openPaths) that must
   // not be recreated on every language change.
@@ -209,6 +248,7 @@ export default function App() {
       const i = THEMES.findIndex((x) => x.id === cur)
       return THEMES[(i + 1) % THEMES.length].id
     })
+    setCustomTheme(null)
   }, [])
 
   // Toggle source/rich mode while keeping the reading position. The two modes
@@ -827,6 +867,7 @@ export default function App() {
     const data = {
       workspace,
       theme,
+      customTheme,
       lang,
       recents,
       sidebarOpen,
@@ -849,7 +890,7 @@ export default function App() {
     // for a brief pause, then write once. The close path flushes the last edit.
     const id = setTimeout(flushSession, 400)
     return () => clearTimeout(id)
-  }, [workspace, theme, lang, recents, sidebarOpen, sidebarMode, tabs, activePath, flushSession])
+  }, [workspace, theme, customTheme, lang, recents, sidebarOpen, sidebarMode, tabs, activePath, flushSession])
 
   // Flush the pending session snapshot immediately when the window is closing,
   // so the debounce above never drops the user's last few keystrokes.
@@ -1269,8 +1310,14 @@ export default function App() {
       <StatusBar
         tab={home ? null : activeTab}
         theme={theme}
-        setTheme={setTheme}
+        setTheme={pickBuiltinTheme}
         cycleTheme={cycleTheme}
+        customThemes={customThemes}
+        customTheme={customTheme}
+        onPickCustom={setCustomTheme}
+        onRefreshThemes={refreshThemes}
+        onOpenThemesFolder={() => window.api.themesReveal?.()}
+        onGetMoreThemes={() => window.api.openExternal('https://theme.typora.io/')}
         lang={lang}
         setLang={setLang}
         sourceMode={sourceMode}

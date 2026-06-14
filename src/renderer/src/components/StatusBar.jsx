@@ -140,15 +140,32 @@ function PageWidthControl({ pageWidth, onSetPageWidth }) {
   )
 }
 
-function ThemePicker({ theme, setTheme }) {
+function ThemePicker({
+  theme,
+  setTheme,
+  customThemes = [],
+  customTheme,
+  onPickCustom,
+  onRefreshThemes,
+  onOpenThemesFolder,
+  onGetMoreThemes
+}) {
   const { lang, t } = useI18n()
   const { open, setOpen, ref } = usePopover()
   const cur = themeById(theme)
+  // Re-scan the themes folder each time the menu opens so freshly-dropped CSS
+  // files show up without a restart.
+  const toggle = () => {
+    if (!open) onRefreshThemes?.()
+    setOpen((v) => !v)
+  }
+  const activeCustom = customThemes.find((c) => c.file === customTheme)
+  const triggerLabel = activeCustom ? activeCustom.name : lang === 'zh' ? cur.zh : cur.en
   return (
     <div className="block-switch" ref={ref}>
-      <button className="status-btn" onClick={() => setOpen((v) => !v)} title={t('tip.toggleTheme')}>
-        <span className="theme-swatch" style={{ background: cur.swatch }} />
-        {lang === 'zh' ? cur.zh : cur.en}
+      <button className="status-btn" onClick={toggle} title={t('tip.toggleTheme')}>
+        <span className="theme-swatch" style={{ background: activeCustom ? 'var(--accent)' : cur.swatch }} />
+        {triggerLabel}
         <span className="block-switch-caret">▾</span>
       </button>
       {open && (
@@ -156,7 +173,7 @@ function ThemePicker({ theme, setTheme }) {
           {THEMES.map((th) => (
             <button
               key={th.id}
-              className={`block-menu-item${th.id === theme ? ' active' : ''}`}
+              className={`block-menu-item${!customTheme && th.id === theme ? ' active' : ''}`}
               onClick={() => {
                 setTheme(th.id)
                 setOpen(false)
@@ -166,6 +183,47 @@ function ThemePicker({ theme, setTheme }) {
               <span className="block-menu-name">{lang === 'zh' ? th.zh : th.en}</span>
             </button>
           ))}
+
+          {customThemes.length > 0 && (
+            <>
+              <div className="theme-menu-label">{t('theme.custom')}</div>
+              {customThemes.map((c) => (
+                <button
+                  key={c.file}
+                  className={`block-menu-item${customTheme === c.file ? ' active' : ''}`}
+                  onClick={() => {
+                    onPickCustom?.(c.file)
+                    setOpen(false)
+                  }}
+                >
+                  <span className="theme-swatch theme-swatch-custom" />
+                  <span className="block-menu-name">{c.name}</span>
+                </button>
+              ))}
+            </>
+          )}
+
+          <div className="theme-menu-sep" />
+          <button
+            className="block-menu-item theme-menu-action"
+            onClick={() => {
+              onOpenThemesFolder?.()
+              setOpen(false)
+            }}
+          >
+            <Icon name="folder" size={13} />
+            <span className="block-menu-name">{t('theme.openFolder')}</span>
+          </button>
+          <button
+            className="block-menu-item theme-menu-action"
+            onClick={() => {
+              onGetMoreThemes?.()
+              setOpen(false)
+            }}
+          >
+            <Icon name="globe" size={13} />
+            <span className="block-menu-name">{t('theme.getMore')}</span>
+          </button>
         </div>
       )}
     </div>
@@ -211,7 +269,13 @@ export default function StatusBar({
   activeBlock,
   onPickBlock,
   pageWidth,
-  onSetPageWidth
+  onSetPageWidth,
+  customThemes,
+  customTheme,
+  onPickCustom,
+  onRefreshThemes,
+  onOpenThemesFolder,
+  onGetMoreThemes
 }) {
   const { t } = useI18n()
   const s = useMemo(() => stats(tab?.content), [tab?.content])
@@ -245,7 +309,16 @@ export default function StatusBar({
           <Icon name="code" size={14} /> {sourceMode ? t('status.source') : t('status.rich')}
         </button>
         <PageWidthControl pageWidth={pageWidth} onSetPageWidth={onSetPageWidth} />
-        <ThemePicker theme={theme} setTheme={setTheme} />
+        <ThemePicker
+          theme={theme}
+          setTheme={setTheme}
+          customThemes={customThemes}
+          customTheme={customTheme}
+          onPickCustom={onPickCustom}
+          onRefreshThemes={onRefreshThemes}
+          onOpenThemesFolder={onOpenThemesFolder}
+          onGetMoreThemes={onGetMoreThemes}
+        />
         <LangSwitch lang={lang} setLang={setLang} />
         <button
           className="status-btn"
