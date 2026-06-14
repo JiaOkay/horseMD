@@ -910,7 +910,7 @@ export default function App() {
       if (!alive || !r?.ok || !r.latest) return
       const dismissed = localStorage.getItem(UPDATE_DISMISS_KEY)
       if (isNewerVersion(r.latest, r.current) && r.latest !== dismissed) {
-        setUpdate({ latest: r.latest, current: r.current, url: r.url })
+        setUpdate({ latest: r.latest, current: r.current, url: r.url, notes: r.notes, name: r.name })
       }
     }).catch(() => {})
     return () => {
@@ -1356,6 +1356,7 @@ export default function App() {
           t={t}
           latest={update.latest}
           current={update.current}
+          notes={update.notes}
           onDownload={() => {
             window.api.openExternal(update.url)
             dismissUpdate()

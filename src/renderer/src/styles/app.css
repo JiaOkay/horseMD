@@ -172,6 +172,11 @@ body.theme-morandi-dark {
 .theme-swatch-custom {
   background: linear-gradient(135deg, var(--accent), var(--accent-soft));
 }
+/* Subfolder hint for a nested theme css (e.g. amatriz · coding). */
+.theme-custom-dir {
+  color: var(--faint);
+  font-size: 0.85em;
+}
 /* Section label + separator + folder/gallery actions in the theme menu. */
 .theme-menu-label {
   padding: 8px 10px 4px;
@@ -203,6 +208,26 @@ body.hm-has-custom-theme .editor-scroll {
 }
 body.hm-has-custom-theme .editor-host {
   max-width: none;
+}
+/* Let the custom theme own content text colors. Our defaults (heading/emphasis
+   colors etc.) are more specific than a theme's `html, body { color }`, so without
+   this the theme's text would be overridden and read as low-contrast. `inherit`
+   lets the theme's cascade through #write/body flow; a theme that sets a specific
+   element color (e.g. `#write h1`) still wins via ID specificity. */
+body.hm-has-custom-theme .milkdown,
+body.hm-has-custom-theme .milkdown .ProseMirror,
+body.hm-has-custom-theme .milkdown .ProseMirror h1,
+body.hm-has-custom-theme .milkdown .ProseMirror h2,
+body.hm-has-custom-theme .milkdown .ProseMirror h3,
+body.hm-has-custom-theme .milkdown .ProseMirror h4,
+body.hm-has-custom-theme .milkdown .ProseMirror h5,
+body.hm-has-custom-theme .milkdown .ProseMirror h6,
+body.hm-has-custom-theme .milkdown .ProseMirror strong,
+body.hm-has-custom-theme .milkdown .ProseMirror em,
+body.hm-has-custom-theme .milkdown .ProseMirror blockquote,
+body.hm-has-custom-theme .milkdown .ProseMirror th,
+body.hm-has-custom-theme .milkdown .ProseMirror td {
+  color: inherit;
 }
 
 /* =====================================================
@@ -401,57 +426,165 @@ button:focus-visible,
   right: 18px;
   bottom: calc(var(--status-h, 28px) + 16px);
   z-index: 200;
-  width: 264px;
-  padding: 14px 16px 16px;
+  width: 322px;
+  max-width: calc(100vw - 36px);
   background: var(--bg-elevated);
   border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.2), 0 3px 10px rgba(0, 0, 0, 0.1);
-  animation: update-toast-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.25);
+  border-radius: 16px;
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+  animation: update-toast-in 0.42s var(--ease-spring);
 }
 .update-toast-head {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
+  padding: 16px 16px 12px;
 }
 .update-toast-icon {
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  color: var(--accent-strong);
-  background: var(--accent-soft);
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
 .update-toast-text {
   min-width: 0;
+  flex: 1;
 }
 .update-toast-title {
-  font-size: 13.5px;
-  font-weight: 650;
-  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong);
   letter-spacing: 0.01em;
 }
 .update-toast-sub {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--muted, #8a8a8a);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
 }
-.update-toast-sub b {
-  color: var(--accent-strong);
+.update-ver-old {
+  color: var(--faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--border);
+}
+.update-ver-arrow {
+  color: var(--faint);
+}
+.update-ver-new {
   font-weight: 700;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  padding: 1px 8px;
+  border-radius: 999px;
 }
-.update-toast-arrow {
-  opacity: 0.5;
-  margin: 0 1px;
+
+/* Release notes ("what's new") — auto-loaded from the GitHub release body. */
+.update-toast-notes {
+  padding: 0 16px;
+}
+.update-toast-notes-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 8px;
+}
+.update-toast-notes-body {
+  max-height: 196px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  padding-right: 8px;
+  /* Slim, themed scrollbar instead of the chunky default. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.update-toast-notes-body::-webkit-scrollbar {
+  width: 8px;
+}
+.update-toast-notes-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.update-toast-notes-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid var(--bg-elevated);
+}
+.update-toast-notes-body::-webkit-scrollbar-thumb:hover {
+  background: var(--faint);
+}
+.update-notes-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  color: var(--text-strong);
+  margin: 11px 0 4px;
+}
+.update-notes-h::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.update-notes-h:first-child {
+  margin-top: 0;
+}
+.update-notes-p {
+  margin: 4px 0;
+}
+.update-notes-list {
+  margin: 3px 0;
+  padding-left: 2px;
+  list-style: none;
+}
+.update-notes-list li {
+  position: relative;
+  padding-left: 14px;
+  margin: 4px 0;
+}
+.update-notes-list li::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0.62em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.update-toast-notes-body code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--code-bg);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.update-toast-notes-body b {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.update-toast-foot {
+  padding: 14px 16px 16px;
 }
 .update-toast-primary {
-  margin-top: 13px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 9px 12px;
   border: none;
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--accent);
   color: #fff;
   font-size: 13px;
@@ -467,8 +600,8 @@ button:focus-visible,
 }
 .update-toast-close {
   position: absolute;
-  top: 9px;
-  right: 9px;
+  top: 11px;
+  right: 11px;
   width: 22px;
   height: 22px;
   display: grid;
@@ -476,7 +609,7 @@ button:focus-visible,
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--muted, #999);
+  color: var(--faint);
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
@@ -2428,22 +2561,33 @@ body.dark .milkdown {
 .milkdown .ProseMirror table {
   border-collapse: collapse;
   width: 100%;
-  margin: 1.5em 0;
+  margin: 1.1em 0;
   overflow: hidden;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
+  font-size: 0.95em;
 }
 .milkdown .ProseMirror th,
 .milkdown .ProseMirror td {
   border: none;
   border-bottom: 1px solid var(--border-soft);
-  padding: 10px 14px;
+  /* Compact rows: tight padding + line-height so a Markdown table reads densely
+     instead of wasting vertical space. */
+  padding: 6px 12px;
+  line-height: 1.5;
   text-align: left;
   /* Wrap long content (incl. unbroken CJK / URLs) instead of letting it overflow
      and overlap neighbouring cells/rows (issue #6). */
   vertical-align: top;
   overflow-wrap: break-word;
   word-break: break-word;
+}
+/* Cell content is a paragraph; drop its block margins so each row stays one line
+   tall (this was the main reason rows looked so airy). */
+.milkdown .ProseMirror th > p,
+.milkdown .ProseMirror td > p {
+  margin: 0;
+  line-height: inherit;
 }
 .milkdown .ProseMirror th {
   background: var(--code-bg);
@@ -2471,16 +2615,17 @@ body.dark .milkdown {
 .milkdown .milkdown-table-block td:has(.ProseMirror-selectednode) {
   outline: none;
 }
-/* Images: clicking an image shouldn't draw a hard ring on its edge — it read as
-   an ugly wireframe around the picture. Drop the selected-node ring (Crepe's
-   resize handle + caption button are cue enough) and replace Crepe's gray
-   selection overlay with a barely-there on-theme tint. */
+/* Images: clicking an image shouldn't draw any frame/box around it — Crepe's
+   resize handle + caption controls already signal selection. Remove the
+   selected-node ring, the inline-image 1px outline, AND the block selection tint
+   overlay (the rectangular box that read as an extra wireframe). */
 .milkdown .milkdown-image-block.ProseMirror-selectednode,
-.milkdown .milkdown-image-inline.ProseMirror-selectednode {
-  outline: none;
+.milkdown .milkdown-image-inline.ProseMirror-selectednode,
+.milkdown .milkdown-image-inline.selected {
+  outline: none !important;
 }
 .milkdown .milkdown-image-block.selected > .image-wrapper::before {
-  background: var(--accent-soft) !important;
+  display: none !important;
 }
 /* Theme the column-resize handle (default is a hard blue #adf bar). */
 .milkdown .ProseMirror .column-resize-handle {

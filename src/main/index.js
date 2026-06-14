@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, shell, net } from 'electron'
-import { fileURLToPath } from 'node:url'
-import { dirname, join, basename, extname, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { dirname, join, basename, extname, resolve, sep } from 'node:path'
 import fs from 'node:fs/promises'
 import { existsSync, statSync, constants as fsConstants } from 'node:fs'
 import { exec } from 'node:child_process'
@@ -519,8 +519,9 @@ ipcMain.handle('shell:showInFolder', async (_e, path) => shell.showItemInFolder(
 
 // ----------------------------- custom themes -------------------------------
 // User-supplied CSS themes (e.g. migrated Typora themes) live in a `themes`
-// folder under userData. Users drop a .css file in (their own, or one downloaded
-// from theme.typora.io); the renderer lists them, reads the CSS, and injects it.
+// folder under userData. Users drop a .css file in — OR a whole downloaded theme
+// folder (Typora themes often ship as `name/coding/name.css` + assets), so we
+// scan subfolders too. The renderer lists them, reads the CSS, and injects it.
 const themesDir = () => join(app.getPath('userData'), 'themes')
 async function ensureThemesDir() {
   try {
@@ -530,26 +531,56 @@ async function ensureThemesDir() {
   }
 }
 
+async function collectThemeCss(dir, root, depth, acc) {
+  if (depth > 4 || acc.length > 300) return
+  let entries
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const e of entries) {
+    if (e.name.startsWith('.') || e.name === 'node_modules') continue
+    const full = join(dir, e.name)
+    if (e.isDirectory()) {
+      await collectThemeCss(full, root, depth + 1, acc)
+    } else if (/\.css$/i.test(e.name)) {
+      const rel = full.slice(root.length + 1).replace(/\\/g, '/')
+      const relDir = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''
+      acc.push({ file: rel, name: e.name.replace(/\.css$/i, ''), dir: relDir })
+    }
+  }
+}
+
 ipcMain.handle('themes:list', async () => {
   await ensureThemesDir()
-  let entries = []
-  try {
-    entries = await fs.readdir(themesDir(), { withFileTypes: true })
-  } catch {
-    return []
-  }
-  return entries
-    .filter((e) => e.isFile() && /\.css$/i.test(e.name))
-    .map((e) => ({ file: e.name, name: e.name.replace(/\.css$/i, '') }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const acc = []
+  await collectThemeCss(themesDir(), themesDir(), 0, acc)
+  return acc.sort((a, b) => a.name.localeCompare(b.name) || a.file.localeCompare(b.file))
 })
 
 ipcMain.handle('themes:read', async (_e, file) => {
-  // Only a bare .css filename inside the themes dir — no path traversal.
-  if (!file || /[\\/]/.test(file) || !/\.css$/i.test(file)) throw new Error('Invalid theme file.')
-  const full = join(themesDir(), file)
-  if (!full.startsWith(themesDir())) throw new Error('Invalid theme path.')
-  return await fs.readFile(full, 'utf8')
+  // A .css path inside the themes dir (may be nested). Reject traversal.
+  if (!file || !/\.css$/i.test(file) || file.includes('..')) throw new Error('Invalid theme file.')
+  const root = resolve(themesDir())
+  const full = resolve(root, file)
+  if (full !== root && !full.startsWith(root + sep)) throw new Error('Invalid theme path.')
+  let css = await fs.readFile(full, 'utf8')
+  // Rewrite relative url(...) to absolute file:// so theme fonts/images (referenced
+  // relative to the CSS file) still load when the CSS is injected into the page.
+  const baseDir = dirname(full)
+  css = css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (m, _q, p) => {
+    const t = (p || '').trim()
+    if (!t || /^(https?:|data:|file:|blob:)/i.test(t) || t.startsWith('//') || t.startsWith('#')) {
+      return m
+    }
+    try {
+      return `url("${pathToFileURL(resolve(baseDir, t)).href}")`
+    } catch {
+      return m
+    }
+  })
+  return css
 })
 
 ipcMain.handle('themes:reveal', async () => {
@@ -676,7 +707,11 @@ ipcMain.handle('update:check', async () => {
       ok: true,
       latest,
       current: app.getVersion(),
-      url: data.html_url || 'https://github.com/BND-1/horseMD/releases'
+      url: data.html_url || 'https://github.com/BND-1/horseMD/releases',
+      // The release notes (Markdown) so the prompt can show "what's new". Capped
+      // so a huge changelog can't bloat the IPC payload / the toast.
+      name: typeof data.name === 'string' ? data.name : '',
+      notes: typeof data.body === 'string' ? data.body.slice(0, 4000) : ''
     }
   } catch {
     return { ok: false }

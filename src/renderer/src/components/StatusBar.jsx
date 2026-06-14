@@ -195,9 +195,13 @@ function ThemePicker({
                     onPickCustom?.(c.file)
                     setOpen(false)
                   }}
+                  title={c.file}
                 >
                   <span className="theme-swatch theme-swatch-custom" />
-                  <span className="block-menu-name">{c.name}</span>
+                  <span className="block-menu-name">
+                    {c.name}
+                    {c.dir ? <span className="theme-custom-dir"> · {c.dir}</span> : null}
+                  </span>
                 </button>
               ))}
             </>

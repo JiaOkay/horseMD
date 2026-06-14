@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Crepe, CrepeFeature } from '@milkdown/crepe'
-import { editorViewCtx, nodeViewCtx, prosePluginsCtx } from '@milkdown/kit/core'
+import {
+  editorViewCtx,
+  nodeViewCtx,
+  prosePluginsCtx,
+  remarkPluginsCtx,
+  remarkStringifyOptionsCtx
+} from '@milkdown/kit/core'
 import { imageBlockConfig } from '@milkdown/kit/component/image-block'
 import { inlineImageConfig } from '@milkdown/kit/component/image-inline'
 import { TextSelection } from '@milkdown/prose/state'
@@ -15,6 +21,7 @@ import { renderHtmlNodeView, convertBlock } from './editor-html.js'
 import { dirOf, isRelativePath, resolveToFileUrl } from './editor-images.js'
 import { inlineRichStyles } from './editor-copy.js'
 import { createMermaidPlugin } from './editor-mermaid.js'
+import { tableBreakKeymap, tableCellBreakHandler, brToBreakRemarkPlugin } from './editor-tablebreak.js'
 
 // Every mounted rich editor registers itself here. A rich-text tab stays mounted
 // after its first activation, so several editors (and several Crepe selection
@@ -195,7 +202,19 @@ export default function Editor({
       // the editable source — see editor-mermaid.js).
       ctx.update(prosePluginsCtx, (plugins) => [
         ...plugins,
+        // Table-cell line break (issue #7): keymap first so it wins Enter inside a cell.
+        tableBreakKeymap(),
         createMermaidPlugin((k) => tRef.current(k))
+      ])
+      // Table-cell line break — serialize a break to <br> inside a cell, and parse
+      // inline <br> back into a break (see editor-tablebreak.js).
+      ctx.update(remarkStringifyOptionsCtx, (opts) => ({
+        ...opts,
+        handlers: { ...(opts?.handlers || {}), break: tableCellBreakHandler }
+      }))
+      ctx.update(remarkPluginsCtx, (plugins) => [
+        ...plugins,
+        { plugin: brToBreakRemarkPlugin, options: undefined }
       ])
     })
     crepeRef.current = crepe
@@ -796,8 +815,15 @@ export default function Editor({
           })
           return clone.innerHTML
         }
-        apiRef.current = { setBlock, getDocHTML }
-        onReady?.({ setBlock, getView: () => viewRef.current, getDocHTML })
+        const getMarkdown = () => {
+          try {
+            return crepe.getMarkdown()
+          } catch {
+            return ''
+          }
+        }
+        apiRef.current = { setBlock, getDocHTML, getMarkdown }
+        onReady?.({ setBlock, getView: () => viewRef.current, getDocHTML, getMarkdown })
 
         // Compute the initial markdown snapshot (content baseline for dirty
         // tracking / outline / word count). On a big doc serializing the whole

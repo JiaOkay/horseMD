@@ -186,6 +186,7 @@ export const STRINGS = {
 
     // update
     'update.title': 'Update available',
+    'update.whatsNew': "What's new",
     'update.download': 'Download',
     'update.later': 'Later'
   },
@@ -357,6 +358,7 @@ export const STRINGS = {
     'heavy.loadRich': '渲染为富文本',
 
     'update.title': '发现新版本',
+    'update.whatsNew': '更新内容',
     'update.download': '前往下载',
     'update.later': '稍后'
   }
