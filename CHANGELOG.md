@@ -6,6 +6,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-14
+
+A big feature release: image hosting, custom themes, diagrams & math, adjustable
+page width, in-cell line breaks, an Intel macOS build, and a nicer update prompt.
+
+### Added
+- **Configurable image host** — a Typora-style custom upload command. Pasting,
+  dropping, or uploading an image runs your command (e.g. `picgo upload`) and
+  inserts the returned URL. Configured from a top-bar button (a dot marks it as
+  active). Leave it empty to keep images local.
+- **Custom themes** — drop a `.css` file (or a whole downloaded theme folder) into
+  the themes folder and pick it from the status-bar theme menu, under a **Custom**
+  section with **Open themes folder** / **Get more themes** (theme.typora.io). The
+  editor exposes Typora's `#write` / `markdown-body` hooks so **Typora themes work
+  directly**; subfolders are scanned, and relative `url(...)` assets (fonts/images)
+  resolve correctly.
+- **Mermaid diagrams** — ` ```mermaid ` code blocks render live as diagrams below
+  the editable source (Mermaid is lazy-loaded only when a diagram is present).
+- **LaTeX math** — inline `$…$` and block `$$…$$` render via KaTeX.
+- **Adjustable editor width** — a status-bar control with preset segments
+  (Narrow / Medium / Wide / Full) plus a fine-tune slider.
+- **Line breaks inside table cells** — press Enter / Shift+Enter in a cell; it
+  round-trips cleanly as `<br>` (GFM tables stay single-line, never corrupted).
+- **Update prompt shows what's new** — the "new version available" toast now
+  displays the GitHub release notes (auto-loaded), with a slim scrollbar for long
+  notes.
+- **Intel macOS build** — the macOS target now ships both Apple Silicon (arm64)
+  and Intel (x64).
+- A project [ROADMAP.md](./ROADMAP.md) (incl. planned Android & iOS).
+
+### Changed
+- **Denser tables** — much tighter rows (cell paragraph margins removed, smaller
+  padding/line-height) so a Markdown table no longer wastes vertical space.
+- Redesigned the update toast (gradient icon, version pills, sectioned release
+  notes).
+- Website + README document the Intel download alongside Apple Silicon.
+
+### Fixed
+- **Table text overflow** — long content / inline code in a cell now wraps instead
+  of overlapping the neighbouring column.
+- **Long formulas no longer overlap** — display math scrolls within the column.
+- **Clicking an image no longer draws a selection frame** — the tint overlay and
+  the inline-image outline are removed (resize handle + caption remain the cue).
+- **Switching theme no longer drops the page-width / custom-theme setting** —
+  `applyTheme` preserves app-managed `hm-*` body classes.
+
+### Internal
+- New modules: `settings.js`, `customThemes.js`,
+  `components/{ImageHostButton.jsx, editor-mermaid.js, editor-tablebreak.js}`.
+- Editor exposes a `getMarkdown` API; theme injection scoped so a custom theme
+  owns the writing area while the app chrome keeps its own styling.
+
 ## [0.1.7] - 2026-06-10
 
 ### Added
@@ -231,7 +283,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Dark/light themes, session restore, single-instance file association.
 - Windows NSIS installer and macOS dmg/zip packaging.
 
-[Unreleased]: https://github.com/BND-1/horseMD/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/BND-1/horseMD/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/BND-1/horseMD/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/BND-1/horseMD/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/BND-1/horseMD/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/BND-1/horseMD/compare/v0.1.4...v0.1.5

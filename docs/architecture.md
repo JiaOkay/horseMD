@@ -50,6 +50,8 @@ src/
       paths.js             纯工具：路径/文件名/版本/重文档判定/genId/会话
       find.js              文档内查找的高亮/匹配纯函数
       ui.js                fireToast + copyToClipboard（toast 通道单一来源）
+      settings.js          用户偏好（页面宽度 / 图床命令）持久化 + 应用页宽
+      customThemes.js      注入用户 CSS 主题（迁移自 Typora 的 .css）
       blocks.js            块类型定义（正文/H1–H6）共享数据
       themes.js            主题注册表（6 套配色）
       i18n.jsx             中英文翻译表 + I18nProvider 上下文
@@ -60,6 +62,9 @@ src/
         editor-html.js     原生 HTML 节点视图（表格渲染）+ 块转换（Editor 的纯函数）
         editor-images.js   相对图片路径解析为 file:// （纯函数）
         editor-copy.js     富文本复制的内联样式（纯函数）
+        editor-mermaid.js  Mermaid widget 装饰插件（懒加载 mermaid）
+        editor-tablebreak.js 表格单元格内换行（<br> 往返：keymap + remark 序列化/解析）
+        ImageHostButton.jsx 顶栏图床配置按钮（自定义上传命令）
         Sidebar.jsx        文件树侧边栏
         Tabs.jsx           顶部标签条 + 右键菜单
         Welcome.jsx        首页/欢迎页（logo、版本、最近文件）

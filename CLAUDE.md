@@ -40,9 +40,9 @@ src/renderer/src/
   App.jsx              shell: tabs, state, session, split, theme, lang, editor routing
   components/Editor.jsx  Crepe wrapper + block controls + enhancements
   components/{Sidebar,Tabs,Outline,CommandPalette,StatusBar,icons}.jsx
-  components/{Welcome,WindowControls,UpdateToast,RenameModal}.jsx  leaf views split out of App
-  components/editor-{html,images,copy}.js  Editor's pure helpers (HTML node view, img paths, rich-copy)
-  {paths,find,ui}.js   pure helpers: path/name/doc/session · find-in-doc · toast+clipboard
+  components/{Welcome,WindowControls,UpdateToast,RenameModal,ImageHostButton}.jsx  leaf views split out of App
+  components/editor-{html,images,copy,mermaid,tablebreak}.js  Editor helpers: HTML node view · img paths · rich-copy · mermaid widget · table-cell <br>
+  {paths,find,ui,settings,customThemes}.js  pure helpers: session · find · toast · prefs (page width / image host) · custom-theme injection
   {blocks,themes,i18n,onboarding}.{js,jsx}
   styles/app.css       all styles + theme variables
 build/                 icon.ico (Windows) + icon.icns (macOS) + installer.nsh (NSIS uninstall: keep user files)
@@ -109,15 +109,40 @@ docs/                  architecture / features / implementation-notes / developm
   stays on the left/active pane (find, outline, scroll-ratio target it);
   `focusedTabRef` tracks the last-focused pane so Save/Export hit the pane you're
   editing. The right pane never shows global source mode.
+- **Custom themes (Typora-compatible)**: user `.css` lives in `userData/themes`
+  (scanned **recursively** — Typora themes ship as a folder); `themes:read` rewrites
+  relative `url(...)` to absolute `file://` so theme fonts/images load. The CSS is
+  injected via `customThemes.js` into one `<style>`; the editor content carries
+  Typora's `#write` + `markdown-body` hooks so its selectors match. While a custom
+  theme is active (`body.hm-has-custom-theme`) app.css yields the writing area's
+  background/width AND sets content text `color: inherit` so the theme's colors win;
+  the app chrome keeps its own styling. `applyTheme` preserves `hm-*` body classes.
+- **Mermaid** (`editor-mermaid.js`): rendered via a ProseMirror **widget
+  decoration** after each ` ```mermaid ` code block — NOT a node view (don't fight
+  Crepe's CodeMirror). Mermaid is `import()`-ed lazily; the decoration key includes
+  the render status so the finished SVG replaces the "rendering…" placeholder.
+- **Math**: enable `CrepeFeature.Latex` (off by default). Block math needs `$$` on
+  their own lines. Long display math scrolls (`.katex-display { overflow-x:auto }`).
+- **Table-cell line breaks** (`editor-tablebreak.js`): GFM cells are single-line,
+  so a break must round-trip as `<br>`. A keymap inserts a hardbreak; a custom
+  remark stringify `break` handler emits `<br>` **only inside `tableCell`** (else
+  default); a remark transform parses inline `<br>` back to a break. Don't let a
+  cell break serialize to a newline — it corrupts the table.
+- **Image host** (`ImageHostButton` + `image:upload` IPC): a Typora-style custom
+  command. Renderer reads the file bytes and calls main, which writes a temp file,
+  runs `<command> "<file>"`, and returns the last http(s) URL it prints. Empty
+  command ⇒ paste/drop isn't intercepted (no dead blob: URLs).
 - **Unsaved scratch tabs persist**: the session stores untitled (pathless) tabs
   whose content is dirty under `untitled: [{title, content}]`, and the mount
   restore recreates them (with `savedContent: ''` so they stay marked unsaved).
   Saved files are still reopened from disk via `openPaths`. The onboarding/welcome
   doc is skipped if either `openPaths` or `untitled` is present.
-- **State**: session is `localStorage["minimd.session.v1"]`; onboarding flag is
+- **State**: session is `localStorage["minimd.session.v1"]` (includes the selected
+  `customTheme`); prefs (page width, image-host command) are
+  `localStorage["horsemd.settings.v1"]` (`settings.js`); onboarding flag is
   `localStorage["horsemd.onboarded.v1"]`; dismissed update notice is
   `localStorage["horsemd.update.dismissed"]`. Themes are `body` classes
-  (`light|dark` + optional `theme-*`).
+  (`light|dark` + optional `theme-*`), with custom themes as an injected `<style>`.
 - **Find**: in-document find uses the **CSS Custom Highlight API**
   (`CSS.highlights` + `Highlight`), not `window.find` — it searches only the
   editor body (rich `view.dom` / source `<textarea>`), never UI text, and paints

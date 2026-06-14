@@ -202,11 +202,11 @@ Windows/Linux 下不再用系统原生的标题栏覆盖层，改由渲染层自
 
 > **关键时序**：`loaded` 必须在 `crepe.create()` 一完成（内容已进 DOM）就**用 `flushSync` 同步置 true**，而不是普通 `setState`。否则 React 会把它和紧随其后的重活（`getMarkdown()` 整篇序列化 + `onChange` 触发大纲/字数重算）批处理到一起，导致**正文已渲染、骨架屏却还压在上面几百毫秒**（切换源码↔富文本时尤其明显）。序列化/`onChange` 这步也推迟到下一帧再做，让骨架屏先消失。详见 [implementation-notes.md](./implementation-notes.md)。
 
-## 20. 更新提示（仅通知，不自动下载）
+## 20. 更新提示（仅通知，不自动下载）+ 更新内容
 
-启动时查一次 GitHub 最新**正式** release（草稿/预发布被该接口排除），若有新版本则弹一个可关闭的"有新版本"提示；关掉后记住，不再骚扰。**不在应用内下载/安装**。
+启动时查一次 GitHub 最新**正式** release（草稿/预发布被该接口排除），若有新版本则弹一个可关闭的"有新版本"提示;关掉后记住,不再骚扰。**不在应用内下载/安装**。提示里**自动展示该 release 的更新说明**(GitHub release notes),内容长则在卡片内滚动(细滚动条)。
 
-**实现**：主进程 `update:check` 用 `fetch` 打 `releases/latest`，比对 `app.getVersion()`；渲染层启动时调一次，记 `localStorage["horsemd.update.dismissed"]`（`App.jsx`）。
+**实现**：主进程 `update:check` 用 `net.fetch` 打 `releases/latest`，比对 `app.getVersion()`，并把 `data.body`(发布说明)截断后作为 `notes` 一并返回；渲染层启动时调一次,记 `localStorage["horsemd.update.dismissed"]`（`App.jsx`）。`UpdateToast.jsx` 把 `notes`(Markdown)**用纯 React 元素**轻量渲染成标题/要点/粗体/行内代码(**不注入 HTML,无 XSS**),版本号显示为"旧版删除线 → 新版药丸"。
 
 ## 21. 分屏（左右双栏）
 
@@ -246,6 +246,41 @@ Windows/Linux 下不再用系统原生的标题栏覆盖层，改由渲染层自
 **实现**（`App.jsx`）：会话持久化里新增 `untitled: [{title, content}]`，只存**有内容且脏**的无路径标签（未动过的欢迎页/空白页不会反复回来）；启动时重建这些标签（`savedContent:''` 让它们保持"未保存"）。有路径的文件仍从磁盘重开。
 
 > 持久化**防抖 400ms**（并在关闭/刷新时兜底刷一次），避免大文档每敲一个字就整篇序列化写盘导致打字卡顿。
+
+## 25. 可配置图床（类 Typora 自定义命令）
+
+**右上角图片按钮**配置一条上传命令(如 `picgo upload`)。之后**粘贴 / 拖入 / 上传**图片会:把图片写到临时文件 → 运行 `<命令> "<临时文件>"` → 取它打印到 stdout 的图片 URL 插入文档。命令留空 = 保持默认(图片为本地引用,不拦截粘贴/拖入,避免插入刷新即失效的 `blob:`)。
+
+**实现**：`ImageHostButton.jsx`(顶栏 popover,`position:fixed` 避开顶栏 `overflow:hidden`;配置后图标带强调色小点)+ `Editor.jsx` 的 `onUpload` / 粘贴 / 拖放钩子(代码块内不拦截)+ 主进程 `image:upload` IPC(临时文件 + `exec` + 解析最后一个 http(s) URL)。命令存 `localStorage["horsemd.settings.v1"]`。
+
+## 26. 自定义页面宽度
+
+状态栏**页宽按钮** → 小弹窗:分段预设(窄 / 中 / 宽 / 全宽,选中胶囊滑动)+ 「微调」滑块(像素级)。
+
+**实现**：`StatusBar.jsx` 的 `PageWidthControl`;CSS 变量 `--editor-max-width` 驱动 `.editor-host` / `.source-editor` / 骨架屏宽度,「全宽」用 `body.hm-full-width` 类(源码模式靠 calc 居中,变量无法单独表达"无上限")。值存 settings.js。
+
+## 27. Mermaid 图表 + LaTeX 公式
+
+- ` ```mermaid ` 代码块下方**实时渲染图表**(可编辑源码不变)。
+- 行内 `$…$`、块级 `$$…$$`(`$$` 单独成行)经 **KaTeX** 渲染;过长的显示公式在列内**横向滚动**,不溢出。
+
+**实现**：Mermaid 走 ProseMirror **widget 装饰**(`editor-mermaid.js`,**不替换** Crepe 的 CodeMirror node view;`mermaid` 动态 `import()` 懒加载;装饰 key 含渲染状态,异步渲染完成后替换占位)。公式启用 `CrepeFeature.Latex`(默认关),KaTeX/latex 样式随主题 CSS 已打包;`.katex-display { overflow-x:auto }`。
+
+## 28. 自定义主题（可迁移 Typora 主题）
+
+把 `.css`(或整个下载来的主题文件夹)丢进**主题文件夹**,状态栏主题菜单的「自定义」区即可选用;另有「打开主题文件夹」「获取更多主题」(theme.typora.io)。Typora 主题可**直接迁移**。
+
+**实现**(`main` themes IPC + `customThemes.js` + `StatusBar.jsx`):`themes:list` **递归扫描**子目录(Typora 主题常是文件夹);`themes:read` 把相对 `url(...)` 改写成绝对 `file://`(字体/图能加载);CSS 注入到一个 `<style>`,编辑器内容带 Typora 的 `#write` / `markdown-body` 钩子;激活时(`body.hm-has-custom-theme`)正文区背景/宽度与文字 `color:inherit` 让位给主题,应用外壳保持自身风格;`applyTheme` 保留 `hm-*` body 类(切主题不丢全宽/自定义标记)。选择存于会话(`customTheme`)。
+
+## 29. 表格单元格内换行
+
+表格单元格内按 **Enter / Shift+Enter** 换行,保存为 `<br>`(GFM 表格仍是单行,**不损坏**),重开能正确解析回换行。
+
+**实现**(`editor-tablebreak.js`,接入 `Editor.jsx`):keymap 在单元格内插入 hardbreak(渲染为 `<br>`);自定义 remark stringify `break` 处理器**仅在 `tableCell` 上下文**输出 `<br>`(其它走默认,段落换行不变);remark 解析插件把内联 `<br>` 转回 break(顺带修了"单元格 `<br>` 被丢")。
+
+## 30. 表格排版优化
+
+Markdown 表格渲染更紧凑:去掉单元格内段落的上下 margin、收紧内边距与行高(单行行高约从 84px 降到 45px),并对超列宽内容/行内代码自动换行(`word-break`),不再与相邻列重叠。
 
 ## 快捷键一览
 

@@ -28,7 +28,8 @@ interface speaks both **English and 中文**.
 
 - Seamless **WYSIWYG live preview** — type Markdown, see it render in place
 - Slash menu (`/`) for inserting blocks; smart lists, selection toolbar, link tooltips
-- Tables, fenced **code blocks with syntax highlighting**, **LaTeX math**, images, task lists, blockquotes
+- Tables (**with in-cell line breaks**), fenced **code blocks with syntax highlighting**, **LaTeX math**, **Mermaid diagrams**, images, task lists, blockquotes
+- **Configurable image host** — paste / drop / upload an image and it runs your upload command (Typora-style), inserting the returned URL
 - **Source mode** toggle (`Ctrl/Cmd+/`) for raw Markdown — keeps scroll position
 - **Plain-text files (`.txt`) open in a fast plain editor** — no markdown reflow, instant on huge files
 - Rich-text copy with inline styles (paste into WeChat / email / Notion keeps formatting)
@@ -42,6 +43,8 @@ interface speaks both **English and 中文**.
 
 - **Tabs** — many files in one window (`Ctrl/Cmd+Tab` to cycle); a `+` in the top bar for a new doc; right-click a tab to copy its path / name, reveal it in Finder/Explorer, or close others
 - **Split view** — two documents side by side, both editable (right-click a tab → "Open in Split", or the split button in the top bar; close with the ✕ on the right pane)
+- **Adjustable editor width** — status-bar presets (Narrow/Medium/Wide/Full) + a fine-tune slider
+- **Custom themes** — drop a `.css` into the themes folder; **Typora themes work directly**
 - **Unsaved scratch tabs survive a restart** — a new, never-saved doc is still there next time you open HorseMD
 - **Folder workspace** — a file tree with create / rename / duplicate / delete / reveal / export-PDF, plus **drag-and-drop to move** and expand-all / collapse-all
 - **Open in the same window** — double-clicking a file in Finder/Explorer adds a tab; "Open with HorseMD" on a folder opens it as a workspace
@@ -54,7 +57,7 @@ interface speaks both **English and 中文**.
 - **Home button** in the activity bar — back to the welcome page anytime (open tabs stay loaded)
 - **Loading skeleton** for large documents, so opening a big file isn't a blank pause
 - Unsaved-changes warning when closing the window or quitting (not just closing a tab)
-- Notify-only update check — tells you when a new release is out (no auto-download)
+- Notify-only update check — tells you when a new release is out **and shows what changed** (no auto-download)
 
 Command palette — fuzzy-jump to any file or command:
 
@@ -97,7 +100,9 @@ Grab the latest installer from the [**Releases page**](https://github.com/BND-1/
 
 ### 🍎 macOS (step by step)
 
-1. Check your chip: **Apple menu → "About This Mac"**. If it says **"Apple M1 / M2 / M3…"** you're on Apple Silicon — download **`HorseMD-x.x.x-arm64.dmg`**.
+1. Check your chip: **Apple menu → "About This Mac"**:
+   - **"Apple M1 / M2 / M3…"** (Apple Silicon) → download **`HorseMD-x.x.x-arm64.dmg`**.
+   - **"Intel"** → download **`HorseMD-x.x.x.dmg`** (the one without the `-arm64` suffix).
 2. Double-click the `.dmg` and **drag the HorseMD icon into the Applications folder**.
 3. **First launch** (important): double-clicking usually shows **"damaged and can't be opened"** or **"can't verify the developer"** — that's just the missing signature. Use either:
 
@@ -151,6 +156,7 @@ implementation, and the bugs/decisions log.
 
 ## Docs
 
+- [ROADMAP.md](./ROADMAP.md) — shipped / near-term / longer-term (incl. Android & iOS mobile)
 - [docs/architecture.md](./docs/architecture.md) — tech stack, process model, structure, data flow
 - [docs/features.md](./docs/features.md) — how each feature works (mapped to files)
 - [docs/implementation-notes.md](./docs/implementation-notes.md) — root causes of key bugs, design decisions
