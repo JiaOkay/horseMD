@@ -209,11 +209,26 @@ const saveAs = async (defaultName) => {
 // exist on mobile, so their subscribers are no-ops returning an unsubscribe fn.
 const noopOff = () => () => {}
 
-// File associations: another app opening a .md routes here via appUrlOpen.
+// File associations: another app "opens / copies a .md to HorseMD". iOS/Android
+// hand us a file/content URL; copy it into the library so the editor can open it
+// by a stable path (and the user keeps an editable copy).
 const onOpenPaths = (cb) => {
   let handle
-  CapApp.addListener('appUrlOpen', (e) => {
-    if (e?.url) cb([e.url])
+  CapApp.addListener('appUrlOpen', async (e) => {
+    const url = e?.url
+    if (!url || !/^file:|^content:/i.test(url)) return
+    try {
+      const raw = await Filesystem.readFile({ path: url }) // base64; absolute path
+      await ensureLib()
+      const name = decodeURIComponent((url.split('/').pop() || 'Opened.md').split('?')[0])
+      let dest = `${LIB}/${name}`
+      let n = 2
+      while (await exists(dest)) dest = `${LIB}/${dropExt(name)} ${n++}${extOf(name)}`
+      await Filesystem.writeFile({ path: dest, directory: DIR, data: raw.data, recursive: true })
+      cb([dest])
+    } catch {
+      /* couldn't read the shared file */
+    }
   }).then((h) => (handle = h))
   return () => handle?.remove()
 }

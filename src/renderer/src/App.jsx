@@ -564,7 +564,9 @@ export default function App() {
       )
     )
     setRefreshNonce((n) => n + 1)
-  }, [])
+    // On mobile, where files land in a system folder, confirm where it went.
+    if (isMobile) fireToast(tRef.current('save.savedTo', { name: baseName(targetPath) }))
+  }, [isMobile])
 
   const saveTab = useCallback(
     async (id, forceDialog = false) => {
