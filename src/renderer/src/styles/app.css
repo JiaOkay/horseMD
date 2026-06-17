@@ -2842,3 +2842,11 @@ body.dark .milkdown {
   color: var(--text);
 }
 .app.is-mobile .hm-more-btn:active { background: var(--border-soft); }
+.app.is-mobile .hm-sheet-save { font-weight: 600; }
+.app.is-mobile .hm-sheet-save-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: auto;
+}

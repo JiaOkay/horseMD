@@ -80,6 +80,9 @@ export default function App() {
   // Rename-from-tab-menu modal: { id, value } or null. (Electron has no
   // window.prompt, so renaming a tab's file uses this small inline dialog.)
   const [renameState, setRenameState] = useState(null)
+  // Mobile "save as": prompt for a filename before writing an untitled doc into
+  // the local library (desktop uses the native save dialog instead).
+  const [saveNameState, setSaveNameState] = useState(null)
   // User preferences (page width, image-host command). Persisted separately from
   // the session; see settings.js.
   const [settings, setSettings] = useState(loadSettings)
@@ -569,12 +572,39 @@ export default function App() {
       if (!tab) return
       let target = tab.path
       if (!target || forceDialog) {
+        // Mobile has no native save dialog: ask for a filename, then write into
+        // the local library (see commitMobileSave). Desktop keeps the dialog.
+        if (isMobile) {
+          const base = (tab.title || 'Untitled').replace(/\.(md|markdown|mdx)$/i, '')
+          setSaveNameState({ id, value: base + '.md' })
+          return
+        }
         target = await window.api.saveAs(tab.title.endsWith('.md') ? tab.title : tab.title + '.md')
         if (!target) return
       }
       await writeTab(tab, target)
     },
-    [tabs, writeTab]
+    [tabs, writeTab, isMobile]
+  )
+
+  // Commit a mobile "save as": let the platform layer place the named file in
+  // the local library (it returns a de-duplicated path), then write it.
+  const commitMobileSave = useCallback(
+    async (id, rawName) => {
+      setSaveNameState(null)
+      const tab = tabsRef.current.find((t) => t.id === id)
+      let name = (rawName || '').trim()
+      if (!tab || !name) return
+      if (/[\\/:*?"<>|]/.test(name) || name === '.' || name === '..') {
+        window.alert(tRef.current('err.invalidName') + name)
+        return
+      }
+      if (!/\.(md|markdown|mdx)$/i.test(name)) name += '.md'
+      const target = await window.api.saveAs(name)
+      if (!target) return
+      await writeTab(tab, target)
+    },
+    [writeTab]
   )
 
   // Export a file (by path) to PDF: open/focus it, wait for its editor to mount,
@@ -1339,6 +1369,7 @@ export default function App() {
       <StatusBar
         tab={home ? null : activeTab}
         isMobile={isMobile}
+        onSave={() => handlers.current.save()}
         theme={theme}
         setTheme={pickBuiltinTheme}
         cycleTheme={cycleTheme}
@@ -1378,6 +1409,16 @@ export default function App() {
           initial={renameState.value}
           onConfirm={(name) => commitTabRename(renameState.id, name)}
           onCancel={() => setRenameState(null)}
+        />
+      )}
+
+      {saveNameState && (
+        <RenameModal
+          t={t}
+          title={t('save.nameTitle')}
+          initial={saveNameState.value}
+          onConfirm={(name) => commitMobileSave(saveNameState.id, name)}
+          onCancel={() => setSaveNameState(null)}
         />
       )}
 

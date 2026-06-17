@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 // Small modal for renaming a tab's file (Electron has no window.prompt). The
 // filename (without extension) is pre-selected; Enter confirms, Esc cancels.
-export default function RenameModal({ t, initial, onConfirm, onCancel }) {
+export default function RenameModal({ t, initial, onConfirm, onCancel, title }) {
   const [value, setValue] = useState(initial)
   const inputRef = useRef(null)
   useEffect(() => {
@@ -16,7 +16,7 @@ export default function RenameModal({ t, initial, onConfirm, onCancel }) {
     <>
       <div className="menu-backdrop" onMouseDown={onCancel} />
       <div className="hm-rename-modal" role="dialog" aria-modal="true">
-        <div className="hm-rename-title">{t('side.rename')}</div>
+        <div className="hm-rename-title">{title || t('side.rename')}</div>
         <input
           ref={inputRef}
           className="hm-rename-input"

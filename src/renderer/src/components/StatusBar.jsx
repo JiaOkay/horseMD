@@ -269,6 +269,8 @@ function LangSwitch({ lang, setLang }) {
 // GitHub — so the bar itself stays to just the block type + this one button.
 function MobileMore({
   s,
+  dirty,
+  onSave,
   sourceMode,
   onToggleSource,
   theme,
@@ -293,6 +295,18 @@ function MobileMore({
       </button>
       {open && (
         <div className="block-switch-menu hm-status-sheet">
+          <button
+            className={`block-menu-item hm-sheet-save${dirty ? ' dirty' : ''}`}
+            onClick={() => {
+              onSave?.()
+              setOpen(false)
+            }}
+          >
+            <Icon name="save" size={15} />
+            <span className="block-menu-name">{t('status.save')}</span>
+            {dirty && <span className="hm-sheet-save-dot" />}
+          </button>
+          <div className="theme-menu-sep" />
           <div className="hm-sheet-counts">
             {t('status.words', { n: s.words })} · {t('status.chars', { n: s.chars })} ·{' '}
             {t('status.read', { n: s.readMin })}
@@ -364,6 +378,7 @@ function MobileMore({
 export default function StatusBar({
   tab,
   isMobile,
+  onSave,
   theme,
   setTheme,
   lang,
@@ -412,6 +427,8 @@ export default function StatusBar({
           tab && (
             <MobileMore
               s={s}
+              dirty={dirty}
+              onSave={onSave}
               sourceMode={sourceMode}
               onToggleSource={onToggleSource}
               theme={theme}
