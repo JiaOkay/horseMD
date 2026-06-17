@@ -7,6 +7,10 @@
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
+/* App-like behavior on touch devices: kill double-tap-to-zoom (which otherwise
+   magnifies a blank tap and overflows the layout) and iOS text auto-inflation.
+   No effect on desktop (mouse input ignores touch-action). */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 :root {
   /* Dimensions */
