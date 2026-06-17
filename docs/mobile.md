@@ -158,3 +158,32 @@ npx cap open ios|android   # 出包 / 真机调试
 - **图床 exec 不可用**:移动端无 Node 子进程,MVP 禁用;未来做纯 HTTP 上传版本。
 - **iOS 上架**需 Apple 开发者账号($99/年)与签名;Android 需 keystore。桌面那条
   "未签名"经验不适用,移动端商店强制签名。
+
+## 10. 打包发布(Android / iOS)
+
+### Android —— 出可下载的签名 APK
+1. **生成 keystore(一次性,务必备份;丢了就无法用同一身份更新 App)**:
+   ```bash
+   keytool -genkeypair -v -keystore android/app/horsemd.keystore \
+     -alias horsemd -keyalg RSA -keysize 2048 -validity 10000 \
+     -dname "CN=HorseMD, O=HorseMD, C=CN"
+   ```
+   按提示设一个口令(自己记牢)。
+2. 复制 `android/key.properties.example` → `android/key.properties`,填入口令(此文件已 gitignore)。
+3. 出包:
+   ```bash
+   JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" npm run dist:android
+   ```
+   产物:`android/app/build/outputs/apk/release/app-release.apk`(签名、可分发)。
+4. 上 **Google Play** 用 `./gradlew bundleRelease` 出 `.aab`。
+
+> 没有 `key.properties` 时,release 不签名、debug 不受影响(`assembleDebug` 仍照常)。
+> keystore / key.properties **永不入库**。
+
+### iOS —— TestFlight / App Store(需 Apple 开发者账号 $99/年)
+1. 注册 [Apple Developer Program](https://developer.apple.com/programs/)。
+2. 在 [App Store Connect](https://appstoreconnect.apple.com) 新建一个 App 记录(Bundle ID = `com.horsemd.app`)。
+3. Xcode:`npx cap sync ios` → 打开 `ios/App/App.xcodeproj` → 设好 Team(付费账号)、版本号/构建号 → 顶部设备选 **Any iOS Device** → **Product → Archive**。
+4. Archive 完成 → **Distribute App** → **TestFlight & App Store** → 上传。之后在 App Store Connect 里发 TestFlight 测试或提交审核上架。
+
+> iOS 无法像安卓那样发文件随便装;分发只能走 TestFlight / App Store /(Ad Hoc 限指定 UDID)。免费账号仅能装自己设备、7 天过期。

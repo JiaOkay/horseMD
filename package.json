@@ -24,7 +24,8 @@
     "build:mobile": "vite build --config vite.mobile.config.mjs",
     "cap:sync": "npm run build:mobile && cap sync",
     "cap:ios": "npm run build:mobile && cap sync ios && cap open ios",
-    "cap:android": "npm run build:mobile && cap sync android && cap open android"
+    "cap:android": "npm run build:mobile && cap sync android && cap open android",
+    "dist:android": "npm run build:mobile && cap sync android && cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.0",

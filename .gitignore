@@ -17,6 +17,11 @@ android/local.properties
 android/app/src/main/assets/public/
 .capacitor/
 
+# Android release signing — NEVER commit these (lose the keystore = can't update the app)
+android/key.properties
+*.keystore
+*.jks
+
 # local test fixtures (generated)
 test-articles/
 
