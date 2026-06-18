@@ -555,18 +555,27 @@ export default function App() {
   }, [])
 
   const writeTab = useCallback(async (tab, targetPath) => {
-    const { mtimeMs } = await window.api.writeFile(targetPath, tab.content)
-    setTabs((prev) =>
-      prev.map((t) =>
-        t.id === tab.id
-          ? { ...t, path: targetPath, title: baseName(targetPath), savedContent: t.content, mtimeMs }
-          : t
+    try {
+      const { mtimeMs } = await window.api.writeFile(targetPath, tab.content)
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tab.id
+            ? { ...t, path: targetPath, title: baseName(targetPath), savedContent: t.content, mtimeMs }
+            : t
+        )
       )
-    )
-    setRefreshNonce((n) => n + 1)
-    // On mobile, where files land in a system folder, confirm where it went —
-    // sticky so the user can actually read the location before dismissing it.
-    if (isMobile) fireToast(tRef.current('save.savedTo', { name: baseName(targetPath) }), { sticky: true })
+      setRefreshNonce((n) => n + 1)
+      // On mobile, where files land in a system folder, confirm what + where —
+      // sticky so the user can read the location before dismissing it.
+      if (isMobile) {
+        const loc =
+          window.api.platform === 'ios' ? tRef.current('save.locIos') : tRef.current('save.locAndroid')
+        fireToast(tRef.current('save.savedTo', { name: baseName(targetPath), loc }), { sticky: true })
+      }
+    } catch (e) {
+      // Never fail silently — surface the real error so saving is debuggable.
+      fireToast(tRef.current('save.failed', { msg: e?.message || String(e) }), { sticky: true })
+    }
   }, [isMobile])
 
   const saveTab = useCallback(

@@ -14,10 +14,15 @@ import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { App as CapApp } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
+import { StatusBar, Style } from '@capacitor/status-bar'
 import { FilePicker } from '@capawesome/capacitor-file-picker'
 
-const DIR = Directory.Documents
-const LIB = 'HorseMD' // library root inside Documents
+// Where the library lives. iOS Documents is user-visible (Files app) AND writable.
+// Android's public Documents is NOT writable on Android 11+ (scoped storage), so
+// use the app's external files dir there — always writable, no permission, and
+// still browsable in-app (and over USB).
+const DIR = Capacitor.getPlatform() === 'ios' ? Directory.Documents : Directory.External
+const LIB = 'HorseMD' // library subfolder
 const MD_RE = /\.(md|markdown|mdx)$/i
 
 const stat = async (path) => {
@@ -235,6 +240,26 @@ const onOpenPaths = (cb) => {
 
 const platform = Capacitor.getPlatform() // 'ios' | 'android' | 'web'
 
+// Make the system status bar blend with the app: draw the web content behind a
+// transparent status bar (so the themed top bar fills the notch area, like iOS),
+// and flip the clock/icons dark↔light to stay readable as the theme changes.
+const setupStatusBar = () => {
+  if (platform !== 'android' && platform !== 'ios') return
+  StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {}) // Android: draw behind it
+  const apply = () => {
+    const dark =
+      document.body.classList.contains('dark') ||
+      document.body.classList.contains('theme-morandi-dark')
+    StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {})
+  }
+  apply()
+  // Re-apply when App swaps the theme classes on <body>.
+  new MutationObserver(apply).observe(document.body, {
+    attributes: true,
+    attributeFilter: ['class']
+  })
+}
+
 const capabilities = {
   folderWorkspace: false, // iOS sandbox; Android SAF comes later
   watch: false,
@@ -249,6 +274,7 @@ const capabilities = {
 
 export function makeCapacitorApi() {
   ensureLib()
+  setupStatusBar()
   return {
     // dialogs
     openFiles,
