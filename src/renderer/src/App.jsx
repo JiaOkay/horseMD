@@ -570,7 +570,10 @@ export default function App() {
       if (isMobile) {
         const loc =
           window.api.platform === 'ios' ? tRef.current('save.locIos') : tRef.current('save.locAndroid')
-        fireToast(tRef.current('save.savedTo', { name: baseName(targetPath), loc }), { sticky: true })
+        fireToast(tRef.current('save.savedTo', { name: baseName(targetPath), loc }), {
+          sticky: true,
+          duration: 5000
+        })
       }
     } catch (e) {
       // Never fail silently — surface the real error so saving is debuggable.
@@ -979,11 +982,13 @@ export default function App() {
       const d = e?.detail
       const msg = typeof d === 'string' ? d : d?.msg
       const sticky = typeof d === 'object' && !!d?.sticky
+      const duration = typeof d === 'object' ? d?.duration : undefined
       if (!msg) return
       setToast({ msg, key: Date.now() + Math.random(), sticky })
       clearTimeout(timer)
-      // Sticky toasts (e.g. "saved to …") stay until the user taps ✕.
-      if (!sticky) timer = setTimeout(() => setToast(null), 1600)
+      // duration wins; otherwise sticky stays until ✕, plain toasts hide quickly.
+      const ms = duration || (sticky ? 0 : 1600)
+      if (ms) timer = setTimeout(() => setToast(null), ms)
     }
     window.addEventListener(HM_TOAST_EVENT, onToast)
     return () => {
