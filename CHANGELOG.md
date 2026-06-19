@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [2.1.0] - 2026-06-19
+## [0.3.0] - 2026-06-19
 
 HorseMD goes mobile, plus a batch of editor & UI improvements and an important
 desktop crash fix.
