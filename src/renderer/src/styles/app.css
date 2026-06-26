@@ -1801,6 +1801,12 @@ body.hm-full-width .editor-skeleton {
   /* Crepe clips the toolbar (overflow:hidden); allow our submenu to escape. */
   overflow: visible !important;
 }
+/* Slash (/) command menu: contain wheel scrolling so scrolling the list (or
+   reaching its edge) never scrolls the editor body behind it. */
+.milkdown .milkdown-slash-menu,
+.milkdown .milkdown-slash-menu * {
+  overscroll-behavior: contain;
+}
 .milkdown .milkdown-toolbar .hm-heading-divider {
   height: 24px;
 }
