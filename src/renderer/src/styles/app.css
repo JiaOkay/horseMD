@@ -985,16 +985,57 @@ button:focus-visible,
 }
 
 /* ---- Mermaid live preview (rendered under a ```mermaid code block) ---- */
+/* Collapsed mermaid source: hide the CodeMirror editor + language picker (the
+   rendered diagram widget below it stays visible). The class can land on the
+   node wrapper or on the .cm-editor itself, so cover both. */
+.milkdown .hm-mermaid-collapsed .cm-editor,
+.milkdown .cm-editor.hm-mermaid-collapsed,
+.milkdown .hm-mermaid-collapsed .language-picker,
+.milkdown .language-picker.hm-mermaid-collapsed,
+.milkdown .hm-mermaid-collapsed .milkdown-code-block {
+  display: none !important;
+}
+.milkdown .hm-mermaid-collapsed {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  min-height: 0 !important;
+  background: transparent !important;
+}
+/* The preview card: a toggle bar above the centered diagram. */
 .hm-mermaid-preview {
   margin: 2px 0 16px;
-  padding: 16px 18px;
+  padding: 10px 14px 14px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
   overflow-x: auto;
   user-select: none;
+}
+.hm-mermaid-bar {
+  display: flex;
+  justify-content: flex-end;
+}
+.hm-mermaid-toggle {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+.hm-mermaid-toggle:hover {
+  color: var(--accent-strong);
+  background: var(--hover);
+}
+.hm-mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 .hm-mermaid-preview svg {
   max-width: 100%;
