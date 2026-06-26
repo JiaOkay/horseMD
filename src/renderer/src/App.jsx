@@ -1458,6 +1458,9 @@ export default function App() {
               onOpen={() => handlers.current.open()}
               onOpenFolder={openFolder}
               onOpenRecent={(p) => openPaths([p])}
+              onRemoveRecent={(p) =>
+                setRecents((prev) => prev.filter((r) => r.path !== p))
+              }
             />
           )}
         </main>

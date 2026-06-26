@@ -1802,6 +1802,54 @@ body.hm-full-width .editor-skeleton {
   justify-content: center;
   font-weight: 800;
 }
+/* Highlighter button in the selection toolbar (issue #14). */
+.milkdown .milkdown-toolbar .toolbar-item.hm-highlight-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.milkdown .milkdown-toolbar .toolbar-item.hm-highlight-item.active {
+  color: var(--accent);
+}
+.milkdown .milkdown-toolbar .toolbar-item.hm-highlight-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffd84d;
+}
+/* Color picker that drops out of the highlighter button. */
+.hm-highlight-pop {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding-top: 8px; /* transparent bridge so hover doesn't drop between gap */
+  display: none;
+  z-index: 20;
+}
+.toolbar-item.hm-highlight-item:hover .hm-highlight-pop,
+.hm-highlight-pop:hover {
+  display: flex;
+}
+.hm-hl-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  margin: 0 3px;
+  cursor: pointer;
+  padding: 0;
+}
+.hm-hl-swatch.hm-hl-yellow { background: #fff3a3; }
+.hm-hl-swatch.hm-hl-red { background: #ffc6c6; }
+.hm-hl-swatch.hm-hl-blue { background: #bcd9ff; }
 .hm-heading-pop {
   position: absolute;
   top: 100%;
@@ -2351,6 +2399,26 @@ body.hm-full-width .source-editor {
   color: var(--faint);
   white-space: nowrap;
 }
+/* Remove-from-recent ✕ — only revealed on hover/focus so the list stays calm. */
+.recent-remove {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s var(--ease-out), background 0.12s var(--ease-out);
+}
+.recent-item:hover .recent-remove,
+.recent-remove:focus-visible { opacity: 1; }
+.recent-remove:hover { background: var(--hover); color: var(--text); }
+.recent-remove:active { background: var(--active); }
 
 .welcome-hints {
   display: flex;
@@ -2744,6 +2812,27 @@ body.dark .milkdown {
 }
 .milkdown .ProseMirror em {
   font-style: italic;
+}
+
+/* ==highlight== (issue #14) — a soft marker, readable in light & dark. The
+   default (yellow) maps to `==text==`; red/blue are <mark class="hm-hl-…">. */
+.milkdown .ProseMirror mark.hm-highlight,
+.milkdown .ProseMirror mark {
+  color: inherit;
+  padding: 0.05em 0.15em;
+  border-radius: 2px;
+  -webkit-text-decoration-line: none;
+  text-decoration-line: none;
+}
+.milkdown .ProseMirror mark.hm-hl-yellow { background: #fff3a3; }
+.milkdown .ProseMirror mark.hm-hl-red { background: #ffc6c6; }
+.milkdown .ProseMirror mark.hm-hl-blue { background: #bcd9ff; }
+body.dark .milkdown .ProseMirror mark.hm-hl-yellow { background: #7a6c12; }
+body.dark .milkdown .ProseMirror mark.hm-hl-red { background: #7a3434; }
+body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
+/* Inline raw HTML rendered as real DOM (e.g. <span style>, <sub>) — inline. */
+.hm-html-inline {
+  display: inline;
 }
 
 /* Task lists */

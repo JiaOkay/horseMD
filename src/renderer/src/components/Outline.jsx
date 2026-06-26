@@ -20,9 +20,17 @@ export function parseHeadings(md) {
     }
     if (inFence) return
     const hm = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/)
-    if (hm) out.push({ level: hm[1].length, text: hm[2].trim() })
+    if (hm) out.push({ level: hm[1].length, text: unescapeMd(hm[2].trim()) })
   })
   return out
+}
+
+// Unescape Markdown backslash escapes (e.g. `\_` → `_`) so the outline shows
+// the same text the rendered heading does — otherwise a title containing `_`
+// shows a stray backslash (issue #12). We only undo escapes, never strip chars,
+// so a legitimate underscore stays (matches the body).
+function unescapeMd(s) {
+  return s.replace(/\\([\\`*{}[\]()#+\-.!_~|>])/g, '$1')
 }
 
 export default function Outline({ content, activeIndex = -1, onJump }) {

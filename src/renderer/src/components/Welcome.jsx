@@ -25,7 +25,7 @@ function relTime(ts, lang, t) {
 }
 
 // Welcome / empty-state screen: logo, version, quick actions, recent files.
-export default function Welcome({ t, lang, recents, onNew, onOpen, onOpenFolder, onOpenRecent }) {
+export default function Welcome({ t, lang, recents, onNew, onOpen, onOpenFolder, onOpenRecent, onRemoveRecent }) {
   return (
     <div className="welcome">
       <div className="welcome-card">
@@ -52,14 +52,26 @@ export default function Welcome({ t, lang, recents, onNew, onOpen, onOpenFolder,
             <div className="welcome-recents-head">{t('welcome.recent')}</div>
             <div className="welcome-recents-list">
               {recents.map((r) => (
-                <button key={r.path} className="recent-item" onClick={() => onOpenRecent(r.path)} title={r.path}>
+                <div key={r.path} className="recent-item" onClick={() => onOpenRecent(r.path)} title={r.path}>
                   <Icon name="file" size={16} className="recent-icon" />
                   <span className="recent-main">
                     <span className="recent-name">{r.name}</span>
                     <span className="recent-path">{r.dir}</span>
                   </span>
                   <span className="recent-time">{relTime(r.openedAt, lang, t)}</span>
-                </button>
+                  {onRemoveRecent && (
+                    <button
+                      className="recent-remove"
+                      title={t('welcome.removeRecent')}
+                      aria-label={t('welcome.removeRecent')}
+                      // Stop the click so removing doesn't also open the file.
+                      onClick={(e) => { e.stopPropagation(); onRemoveRecent(r.path) }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <Icon name="close" size={12} />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </div>

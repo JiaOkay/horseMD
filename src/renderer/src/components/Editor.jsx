@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Crepe, CrepeFeature } from '@milkdown/crepe'
 import {
+  commandsCtx,
   editorViewCtx,
   nodeViewCtx,
   prosePluginsCtx,
@@ -18,11 +19,12 @@ import '@milkdown/crepe/theme/common/link-tooltip.css'
 import { BLOCK_TYPES, blockById, currentBlockId } from '../blocks.js'
 import { useI18n } from '../i18n.jsx'
 import { fireToast } from '../ui.js'
-import { renderHtmlNodeView, convertBlock } from './editor-html.js'
+import { renderHtmlNodeView, convertBlock, remarkMergeInlineHtml } from './editor-html.js'
 import { dirOf, isRelativePath, resolveToFileUrl } from './editor-images.js'
 import { inlineRichStyles } from './editor-copy.js'
 import { createMermaidPlugin } from './editor-mermaid.js'
 import { tableBreakKeymap, tableCellBreakHandler, brToBreakRemarkPlugin } from './editor-tablebreak.js'
+import { highlightFeatures, highlightStringifyHandler, toggleHighlightCommand, applyHighlightInView, HIGHLIGHT_COLORS } from './editor-highlight.js'
 
 // Every mounted rich editor registers itself here. A rich-text tab stays mounted
 // after its first activation, so several editors (and several Crepe selection
@@ -52,6 +54,40 @@ function applyImageText(ctx, tt) {
     }))
   } catch {
     /* config not ready yet — the create-time call covers the initial value */
+  }
+}
+
+// Localized labels for Crepe's slash (`/`) command menu. Without this every
+// item is English regardless of the app language. Reused at editor create; a
+// live language switch picks it up on the next editor mount (Crepe bakes the
+// labels in at create time, so an in-place switch can't refresh the open menu).
+function slashCommandConfig(tt) {
+  return {
+    textGroup: {
+      label: tt('slash.text'),
+      text: { label: tt('slash.text') },
+      h1: { label: tt('block.h1') },
+      h2: { label: tt('block.h2') },
+      h3: { label: tt('block.h3') },
+      h4: { label: tt('block.h4') },
+      h5: { label: tt('block.h5') },
+      h6: { label: tt('block.h6') },
+      quote: { label: tt('slash.quote') },
+      divider: { label: tt('slash.divider') }
+    },
+    listGroup: {
+      label: tt('slash.list'),
+      bulletList: { label: tt('slash.bullet') },
+      orderedList: { label: tt('slash.ordered') },
+      taskList: { label: tt('slash.task') }
+    },
+    advancedGroup: {
+      label: tt('slash.advanced'),
+      image: { label: tt('slash.image') },
+      codeBlock: { label: tt('slash.code') },
+      table: { label: tt('slash.table') },
+      math: { label: tt('slash.math') }
+    }
   }
 }
 
@@ -209,7 +245,11 @@ export default function Editor({
         // Localize the code-block "Copy" button label. (Visual feedback on click
         // is added via a delegated handler below + CSS, since Crepe gives no
         // built-in "Copied!" state.)
-        [CrepeFeature.CodeMirror]: { copyText: t('code.copy') }
+        [CrepeFeature.CodeMirror]: { copyText: t('code.copy') },
+        // Localize the slash (`/`) command menu (otherwise always English). The
+        // slash menu is part of the BlockEdit feature (there's no SlashCommand
+        // enum member), so its config lives under [BlockEdit].
+        [CrepeFeature.BlockEdit]: slashCommandConfig(t)
       }
     })
 
@@ -241,14 +281,22 @@ export default function Editor({
         createMermaidPlugin((k) => tRef.current(k))
       ])
       // Table-cell line break — serialize a break to <br> inside a cell, and parse
-      // inline <br> back into a break (see editor-tablebreak.js).
+      // inline <br> back into a break (see editor-tablebreak.js). Also serialize
+      // the ==highlight== mark back to `==text==` (see editor-highlight.js).
       ctx.update(remarkStringifyOptionsCtx, (opts) => ({
         ...opts,
-        handlers: { ...(opts?.handlers || {}), break: tableCellBreakHandler }
+        handlers: {
+          ...(opts?.handlers || {}),
+          break: tableCellBreakHandler,
+          highlight: highlightStringifyHandler
+        }
       }))
       ctx.update(remarkPluginsCtx, (plugins) => [
         ...plugins,
-        { plugin: brToBreakRemarkPlugin, options: undefined }
+        { plugin: brToBreakRemarkPlugin, options: undefined },
+        // Merge fragmented inline HTML (<span>x</span>) into whole fragments so
+        // the html node view can render them (issue #14).
+        { plugin: remarkMergeInlineHtml, options: undefined }
       ])
     })
 
@@ -263,6 +311,10 @@ export default function Editor({
     crepe.editor.use(
       inlineCodeSchema.extendSchema((prev) => (ctx) => ({ ...prev(ctx), inclusive: false }))
     )
+    // Issue #14: ==highlight== syntax (custom mark + two-way remark plugin).
+    // Pass the array — editor.use() registers only its first arg (it wraps in
+    // [...].flat()), so spreading would drop every feature after the first.
+    crepe.editor.use(highlightFeatures)
     crepeRef.current = crepe
 
     // Convert the block the cursor sits in to a given block id (paragraph/h1…h6).
@@ -276,6 +328,26 @@ export default function Editor({
       reportActiveBlock()
       refreshLevel()
       setCtxMenu(null)
+    }
+
+    // Reflect whether the selection is highlighted onto every injected highlight
+    // toolbar button (so it shows an active state, like bold/italic do). Defined
+    // in the outer scope so onSelChange can call it.
+    const updateHighlightActive = () => {
+      const v = viewRef.current
+      let active = false
+      if (v && v.hasFocus()) {
+        const { from, $from, empty, to } = v.state.selection
+        const type = v.state.schema.marks.highlight
+        if (type) {
+          active = empty
+            ? ($from.storedMarks || []).some((m) => m.type === type)
+            : v.state.doc.rangeHasMark(from, to, type)
+        }
+      }
+      document
+        .querySelectorAll('.milkdown-toolbar .hm-highlight-item')
+        .forEach((b) => b.classList.toggle('active', active))
     }
 
     // Push the cursor's current block type up to the parent (status bar).
@@ -460,6 +532,7 @@ export default function Editor({
           if (!v || !v.hasFocus()) return
           reportActiveBlock()
           scheduleLevel()
+          updateHighlightActive()
         }
 
         if (view) {
@@ -745,6 +818,52 @@ export default function Editor({
           toolbar.appendChild(item)
         }
 
+        // A highlighter button next to the heading one: opens a small color
+        // picker (yellow / red / blue) and applies that highlight to the
+        // selection (issue #14). Routes to the focused editor like the heading
+        // button does.
+        const injectHighlightButton = (toolbar) => {
+          if (toolbar.querySelector('.hm-highlight-item')) return
+          const divider = document.createElement('div')
+          divider.className = 'divider hm-heading-divider'
+          const item = document.createElement('div')
+          item.className = 'toolbar-item hm-highlight-item'
+          item.setAttribute('role', 'button')
+          item.tabIndex = 0
+          item.title = tRef.current('tb.highlight')
+          item.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l-1 4 4-1L19 8l-3-3z"/><path d="M14 5l3 3"/><rect x="3" y="20" width="18" height="2" rx="1" fill="currentColor" stroke="none"/></svg>'
+
+          const pop = document.createElement('div')
+          pop.className = 'hm-highlight-pop'
+          for (const color of HIGHLIGHT_COLORS) {
+            const sw = document.createElement('button')
+            sw.type = 'button'
+            sw.className = 'hm-hl-swatch hm-hl-' + color
+            sw.title = tRef.current('tb.highlightColor.' + color)
+            sw.addEventListener('mousedown', (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            })
+            sw.addEventListener('click', (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              const target =
+                [...liveEditors].find((ed) => ed.getView()?.hasFocus()) ||
+                [...liveEditors].find((ed) => ed.host.contains(toolbar)) ||
+                self
+              const v = target?.getView?.()
+              if (v) applyHighlightInView(v, color)
+            })
+            pop.appendChild(sw)
+          }
+          item.appendChild(pop)
+          item.addEventListener('mousedown', (e) => e.preventDefault()) // keep selection
+          toolbar.appendChild(divider)
+          toolbar.appendChild(item)
+        }
+
+
         // Inject synchronously (no requestAnimationFrame — it's throttled when
         // the window is occluded, which would skip injection). The scan is cheap
         // and injectHeadingButton early-returns once the button is present.
@@ -771,8 +890,10 @@ export default function Editor({
         const scanToolbars = () => {
           document.querySelectorAll('.milkdown-toolbar').forEach((tb) => {
             injectHeadingButton(tb)
+            injectHighlightButton(tb)
             addToolbarTitles(tb)
           })
+          updateHighlightActive()
         }
         scanToolbars()
         // The toolbar is created on selection, so we only need to re-scan when
@@ -878,8 +999,18 @@ export default function Editor({
             return ''
           }
         }
-        apiRef.current = { setBlock, getDocHTML, getMarkdown }
-        onReady?.({ setBlock, getView: () => viewRef.current, getDocHTML, getMarkdown })
+        // Toggle ==highlight== on the selection (used by the toolbar button and
+        // the Mod-Alt-H keymap). Runs through the registered command so it stays
+        // in sync with ProseMirror's state.
+        const toggleHighlight = () => {
+          try {
+            crepe.editor.ctx.get(commandsCtx).call(toggleHighlightCommand.key)
+          } catch {
+            /* editor tearing down */
+          }
+        }
+        apiRef.current = { setBlock, getDocHTML, getMarkdown, toggleHighlight }
+        onReady?.({ setBlock, getView: () => viewRef.current, getDocHTML, getMarkdown, toggleHighlight })
 
         // Compute the initial markdown snapshot (content baseline for dirty
         // tracking / outline / word count). On a big doc serializing the whole
