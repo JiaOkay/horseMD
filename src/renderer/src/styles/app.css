@@ -2965,14 +2965,18 @@ body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
 .app.is-mobile {
   position: relative; /* anchor the slide-in drawer + scrim overlays */
   --activity-bar-w: 0; /* collapse the grid's left column so content is full width */
+  /* Real status bar height (from StatusBar.getInfo), falling back to the CSS
+     safe-area inset. env() alone is unreliable on Android (cutout only) and on
+     MIUI (overlaps the clock), so the measured height wins when available. */
+  --safe-top: var(--hm-safe-top, env(safe-area-inset-top));
   /* Grow the top/bottom bars into the safe area (notch / home indicator) rather
      than padding the whole app, which would offset the absolute drawer. */
   grid-template-rows:
-    calc(var(--topbar-h) + env(safe-area-inset-top))
+    calc(var(--topbar-h) + var(--safe-top))
     1fr
     calc(var(--status-h) + env(safe-area-inset-bottom));
 }
-.app.is-mobile .topbar { padding-top: env(safe-area-inset-top); }
+.app.is-mobile .topbar { padding-top: var(--safe-top); }
 .app.is-mobile .statusbar { padding-bottom: env(safe-area-inset-bottom); }
 
 /* Touch-friendly hit targets. */
@@ -3026,7 +3030,7 @@ body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
   bottom: 0;
   left: 0;
   width: 56px;
-  padding-top: calc(env(safe-area-inset-top) + 10px);
+  padding-top: calc(var(--safe-top) + 10px);
   padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
   transform: translateX(-100%);
   transition: transform 0.25s var(--ease-out);
@@ -3039,7 +3043,7 @@ body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
   left: 56px;
   width: min(76vw, 300px);
   max-width: min(76vw, 300px);
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--safe-top);
   padding-bottom: env(safe-area-inset-bottom);
   transform: translateX(calc(-100% - 56px));
   transition: transform 0.25s var(--ease-out);

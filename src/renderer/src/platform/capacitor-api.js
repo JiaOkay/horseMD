@@ -242,29 +242,39 @@ const onOpenPaths = (cb) => {
 const platform = Capacitor.getPlatform() // 'ios' | 'android' | 'web'
 
 // Make the system status bar blend with the app: draw the web content behind a
-// transparent status bar (so the themed top bar fills the notch area, like iOS),
-// and flip the clock/icons dark↔light to stay readable as the theme changes.
+// transparent status bar (so the themed top bar fills the notch/status area),
+// flip the clock/icons dark↔light as the theme changes, and inset the app's top
+// bar by the REAL status bar height.
+//
+// On Android, env(safe-area-inset-top) only reflects a display cutout, NOT the
+// status bar height — and MIUI ignores setOverlaysWebView(false), so the top bar
+// collided with the clock/battery (Xiaomi). Instead we overlay on BOTH platforms
+// (like iOS) and inset by the measured StatusBar height, which is reliable on
+// every device (MIUI / Huawei / tablets). The themed top bar shows through the
+// transparent status bar.
 const setupStatusBar = () => {
   if (platform !== 'android' && platform !== 'ios') return
-  // Android: do NOT overlay the web view. env(safe-area-inset-top) on Android
-  // only reflects a display cutout, not the status bar height — so on a tablet
-  // with no notch the top bar would collide with the clock/battery. Instead let
-  // the system reserve the status bar and tint it to match the top bar, which
-  // blends seamlessly on every device. iOS keeps its native overlay (env works).
-  if (platform === 'android') StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {})
+  if (platform === 'android') StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {})
+  const applyInset = () => {
+    StatusBar.getInfo()
+      .then((info) => {
+        if (info && info.height > 0) {
+          document.documentElement.style.setProperty('--hm-safe-top', info.height + 'px')
+        }
+      })
+      .catch(() => {
+        /* CSS falls back to env(safe-area-inset-top), which works on iOS */
+      })
+  }
   const apply = () => {
     const dark =
       document.body.classList.contains('dark') ||
       document.body.classList.contains('theme-morandi-dark')
     StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {})
-    if (platform === 'android') {
-      // Match the status bar to the top bar's background (theme-aware, incl. custom).
-      const bg = getComputedStyle(document.body).getPropertyValue('--bg-elevated').trim()
-      if (bg) StatusBar.setBackgroundColor({ color: bg }).catch(() => {})
-    }
+    applyInset()
   }
   apply()
-  // Re-apply when App swaps the theme classes on <body>.
+  // Re-apply the icon style when App swaps the theme classes on <body>.
   new MutationObserver(apply).observe(document.body, {
     attributes: true,
     attributeFilter: ['class']
