@@ -40,9 +40,12 @@ src/renderer/src/
   App.jsx              shell: tabs, state, session, split, theme, lang, editor routing
   components/Editor.jsx  Crepe wrapper + block controls + enhancements
   components/{Sidebar,Tabs,Outline,CommandPalette,StatusBar,icons}.jsx
+  components/LayoutControl.jsx  the "排版" popover (font size · line height · paragraph spacing · page width)
+  components/SaveFab.jsx       floating Save button (shown only while the active tab is dirty)
   components/{Welcome,WindowControls,UpdateToast,RenameModal,ImageHostButton}.jsx  leaf views split out of App
-  components/editor-{html,images,copy,mermaid,tablebreak}.js  Editor helpers: HTML node view · img paths · rich-copy · mermaid widget · table-cell <br>
-  {paths,find,ui,settings,customThemes}.js  pure helpers: session · find · toast · prefs (page width / image host) · custom-theme injection
+  components/editor-{html,images,copy,highlight,mermaid,tablebreak}.js  Editor helpers: HTML node view · img paths · rich-copy · ==highlight== mark · mermaid preview · table-cell <br>
+  hooks/usePopover.js   shared button→popover hook (closes on outside click / Esc)
+  {paths,find,ui,settings,customThemes}.js  pure helpers: session · find · toast · prefs (page width / font / line height / paragraph spacing / image host) · custom-theme injection
   {blocks,themes,i18n,onboarding}.{js,jsx}
   styles/app.css       all styles + theme variables
 build/                 icon.ico (Windows) + icon.icns (macOS) + installer.nsh (NSIS uninstall: keep user files)
@@ -117,10 +120,42 @@ docs/                  architecture / features / implementation-notes / developm
   theme is active (`body.hm-has-custom-theme`) app.css yields the writing area's
   background/width AND sets content text `color: inherit` so the theme's colors win;
   the app chrome keeps its own styling. `applyTheme` preserves `hm-*` body classes.
-- **Mermaid** (`editor-mermaid.js`): rendered via a ProseMirror **widget
-  decoration** after each ` ```mermaid ` code block — NOT a node view (don't fight
-  Crepe's CodeMirror). Mermaid is `import()`-ed lazily; the decoration key includes
-  the render status so the finished SVG replaces the "rendering…" placeholder.
+- **Mermaid** (`editor-mermaid.js`): rendered through Crepe's **built-in code-block
+  "preview" mechanism** (the same one LaTeX-style blocks would use), via
+  `codeBlockConfig.renderPreview` + `previewOnlyByDefault`. A ` ```mermaid ` block
+  shows only the diagram by default; the code block's own toolbar gets a Hide/Edit
+  toggle next to Copy. Mermaid is `import()`-ed lazily; `ensureRender` retries once
+  on a flaky first render (the lazy import can race with Mermaid's init). Do NOT
+  use a custom widget decoration for this — `previewToggleText` must be set on the
+  **feature** config (`featureConfigs[CrepeFeature.CodeMirror]`), not
+  `codeBlockConfig`, because the feature reads it to build the toggle button.
+- **Highlight** (`editor-highlight.js`): `==text==` is a custom Milkdown mark
+  (yellow), plus red/blue via toolbar color picker (round-trips as
+  `<mark class="hm-hl-…">`). Built as `$markSchema` + a two-way remark plugin
+  (`mdast-util-find-and-replace` on parse; a `highlight` stringify handler). A
+  selection-toolbar color button applies it (`applyHighlightInView`); `Mod-Alt-H`
+  toggles yellow. Register via `crepe.editor.use(highlightFeatures)` — the **array**
+  form (editor.use keeps only its first arg), and `highlightAttr` /
+  `toggleHighlightCommand` MUST be in that array or Crepe init throws
+  ("Context … not found"). The inline-code `inclusive:false` fix uses the same
+  `extendSchema` pattern; a belt-and-suspenders post-create override is applied too.
+- **Inline HTML** (`editor-html.js`): Milkdown splits `<span>x</span>` into
+  open/text/close atom nodes; `remarkMergeInlineHtml` coalesces a balanced
+  open…close run into one html node so the node view can render it. Block tags →
+  `hm-html-block`, safe inline tags → `hm-html-inline`, everything else → escaped
+  text. Sanitized (scripts/styles/on* handlers stripped).
+- **Layout settings** (`settings.js` + `LayoutControl.jsx`): font size, line
+  height, paragraph spacing, and page width are CSS variables
+  (`--editor-font-size` / `--editor-line-height` / `--editor-para-spacing` /
+  `--editor-max-width`) applied live. The slider writes the var DIRECTLY during a
+  drag (no React round-trip) and commits once on pointer-up, so reflowing the whole
+  editor per tick stays smooth.
+- **Save**: a floating FAB (`SaveFab.jsx`) appears at the bottom-right only while
+  the active tab is dirty. `usePopover` (hooks/) is the shared close-on-outside
+  hook for all popovers — don't hand-roll a per-component copy (a previous one
+  missed the outside-click close).
+- **Slash (`/`) menu** is localized through the **BlockEdit** feature config
+  (`slashCommandConfig`), not a `SlashCommand` key (there is no such enum member).
 - **Math**: enable `CrepeFeature.Latex` (off by default). Block math needs `$$` on
   their own lines. Long display math scrolls (`.katex-display { overflow-x:auto }`).
 - **Table-cell line breaks** (`editor-tablebreak.js`): GFM cells are single-line,

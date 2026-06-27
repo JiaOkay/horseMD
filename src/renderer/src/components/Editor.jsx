@@ -1005,7 +1005,7 @@ export default function Editor({
                 '.tools-button-group, .button-group, .cm-panel, .cm-tooltip, ' +
                 '.preview-panel, .cell-handle, .line-handle, .handle, .add-button, ' +
                 '.operation, .operation-item, .drag-preview, .milkdown-block-handle, ' +
-                '.milkdown-toolbar, .image-resize-handle, .label-wrapper, .hm-mermaid-preview'
+                '.milkdown-toolbar, .image-resize-handle, .label-wrapper'
             )
             .forEach((el) => el.remove())
           // Flatten CodeMirror editors to plain <pre><code>.
