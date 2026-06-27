@@ -6,6 +6,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-28
+
+A big editor polish release: syntax highlighting, smart paste, YAML front
+matter, outline improvements, and a batch of community-reported bug fixes.
+
+### Added
+- **`==highlight==` syntax** with a **3-color picker** (yellow / red / blue) in
+  the selection toolbar. Round-trips as `==text==` (yellow) or
+  `<mark class="hm-hl-…">` (red/blue) (#14).
+- **Inline HTML rendering** — `<span style>`, `<sub>`, `<kbd>`, `<mark>`, etc.
+  render as real DOM instead of escaped text. A remark plugin coalesces fragmented
+  open/text/close html nodes into renderable fragments.
+- **YAML front matter** — the `---` block at the top (or anywhere) of a document
+  renders as a structured key/value card instead of a horizontal rule + headings.
+  Round-trips cleanly (#8, #15).
+- **Smart Markdown paste** — pasting a Markdown document (headings, tables, math,
+  code blocks, front matter, mermaid) into the editor now parses and renders it
+  with full fidelity, instead of landing as flat text.
+- **Adjustable font size, line height, and paragraph spacing** — in the status
+  bar's "排版" (Layout) popover, alongside the existing page-width control. Sliders
+  apply live (no lag) via direct CSS-variable writes.
+- **Collapsible Mermaid source** — Mermaid blocks now use the built-in code-block
+  preview mechanism (like LaTeX): the diagram shows by default with a Hide/Edit
+  toggle in the toolbar (next to Copy). "Mermaid" is also selectable in the
+  language picker.
+- **Floating Save button** — appears at the bottom-right only when the active tab
+  has unsaved changes; expands on hover to reveal the label.
+- **Document stats popover** — word / character / character-without-spaces /
+  reading-time in one status-bar button.
+- **Outline follows rendered headings** — the outline now lists every heading the
+  editor renders (ATX `#`, Setext, HTML `<h1>`), not just ATX, and highlights the
+  one you're currently viewing.
+- **Removable recent files** — hover a recent-file row on the welcome screen and
+  click ✕ to remove it.
+- **Slash (`/`) menu localized** — follows the app language (中文 / English),
+  including all item labels and group headers.
+- **`remark-frontmatter`** dependency for YAML front-matter parsing.
+
+### Changed
+- **Code blocks have a dark surface** so syntax-highlighted code reads clearly
+  (~6.9:1 contrast, WCAG AAA). Plain tinted code blocks are unchanged.
+- **Status bar redesigned** — block-type switcher removed (still via badge /
+  toolbar / right-click / shortcuts); font + width merged into one "排版" button;
+  word/char/read merged into a stats button.
+- **Welcome document** rewritten to showcase highlights, code, Mermaid, and math.
+- **Xiaomi / MIUI status bar** — switched Android to overlay:true + real
+  StatusBar height inset, fixing the clock/battery overlap on Xiaomi (and
+  unifying the approach with iOS).
+- **Toolbar injection deduplicated** — shared `editorForToolbar` +
+  `appendToolbarItem` helpers; `usePopover` extracted to a shared hook.
+
+### Fixed
+- **Inline code "wouldn't stop"** (#10) — text after a closing backtick kept the
+  inline-code style; the mark is now non-inclusive.
+- **File tree follows the open file** (#11) — auto-expands parent folders and
+  highlights / scrolls to the current file.
+- **Outline escaped backslashes** (#12) — heading text with `_` no longer shows
+  a stray `\`.
+- **Desktop white-screen crash** — `capabilities` exposed from preload, not
+  assigned onto the frozen contextBridge `window.api`.
+- **Mermaid multi-paste** — pasting a second diagram into a mermaid block
+  auto-splits into separate blocks; flaky first-render retried once.
+- **Pasted images persist** — saved docs write images to `./assets/`; unsaved
+  drafts use a global paste folder, relocated on first save.
+- **Save slider jank** — layout sliders write CSS variables directly during drag.
+- **Slash menu scroll** — `overscroll-behavior: contain` prevents body scroll.
+- **Layout popover** — closes on outside click / Escape (shared `usePopover`).
+
 ## [0.3.0] - 2026-06-19
 
 HorseMD goes mobile, plus a batch of editor & UI improvements and an important
