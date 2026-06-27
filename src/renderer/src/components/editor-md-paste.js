@@ -9,6 +9,7 @@
 // hijacking ordinary text that merely mentions a backtick fence.
 import { Plugin, PluginKey } from '@milkdown/prose/state'
 import { Slice, Fragment } from '@milkdown/prose/model'
+import { startsAsMermaid } from './editor-mermaid.js'
 
 const FENCE_OPEN = /^```([\w+#.-]*)\s*$/
 const FENCE_CLOSE = /^```\s*$/
@@ -71,13 +72,31 @@ export function createMdPastePlugin() {
     props: {
       handlePaste(view, event) {
         // Pasting INTO a code block should append code, not split into nodes.
+        // (The mermaid "two diagrams in one block" mashup is handled separately
+        // by the split plugin.)
         if (view.state.selection.$from.parent.type.name === 'code_block') return false
         const text = event.clipboardData?.getData('text/plain') || ''
-        // Only take over for a complete fence (≥2 ``` lines) — leave normal text
-        // and HTML paste to Milkdown.
+        const schema = view.state.schema
+
+        // (1) Pasted raw mermaid code (starts with a diagram header, e.g.
+        // `flowchart TD` / `sequenceDiagram`) → a mermaid code_block, so it
+        // renders instead of becoming plain text.
+        if (startsAsMermaid(text)) {
+          const body = text.replace(/\s+$/, '')
+          const node = schema.nodes.code_block.create(
+            { language: 'mermaid' },
+            body ? schema.text(body) : null
+          )
+          const tr = view.state.tr.replaceSelection(new Slice(Fragment.from(node), 0, 0))
+          tr.scrollIntoView()
+          view.dispatch(tr)
+          return true
+        }
+
+        // (2) A complete ```…``` fence on the clipboard → code_block nodes.
         const fenceLines = text.split('\n').filter((l) => FENCE_OPEN.test(l) || FENCE_CLOSE.test(l)).length
         if (fenceLines < 2) return false
-        const nodes = buildNodes(text, view.state.schema)
+        const nodes = buildNodes(text, schema)
         if (!nodes.length) return false
         const tr = view.state.tr.replaceSelection(new Slice(Fragment.from(nodes), 0, 0))
         tr.scrollIntoView()

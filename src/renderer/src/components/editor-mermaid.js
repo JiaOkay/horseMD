@@ -108,37 +108,46 @@ export function createMermaidPreviewRenderer(getT) {
   }
 }
 
-// Mermaid diagram-type keywords that START a new diagram. Used to split a block
-// that accidentally holds two diagrams (e.g. pasting a 2nd diagram into a
-// non-empty mermaid block appends it, mashing both into one parse error).
+// Mermaid diagram-type keywords that START a new diagram. Used to (a) split a
+// block that accidentally holds two diagrams, and (b) recognize pasted raw
+// mermaid code so it becomes a block instead of plain text. A diagram header =
+// a directional keyword + direction (`flowchart TD` / `graph LR`) OR a
+// standalone keyword (`sequenceDiagram`, `erDiagram`, …). The direction
+// requirement avoids matching common words (`graph`, `pie`) inside labels/text.
 import { Plugin, PluginKey } from '@milkdown/prose/state'
-const DIAGRAM_TYPES = [
-  'flowchart', 'graph', 'sequenceDiagram', 'classDiagram', 'stateDiagram',
-  'stateDiagram-v2', 'erDiagram', 'gantt', 'pie', 'journey', 'gitGraph',
-  'mindmap', 'timeline', 'quadrantChart', 'requirementDiagram', 'C4Context',
-  'sankey-beta', 'block-beta', 'architecture-beta', 'packet-beta'
-]
-const DIAGRAM_START = new RegExp('^(?:' + DIAGRAM_TYPES.join('|') + ')\\b', 'i')
+const DIRECTIONS = '(?:TB|TD|BT|RL|LR)'
+const DIAGRAM_HEADER = new RegExp(
+  '(?:flowchart|graph)\\s+' + DIRECTIONS + '\\b' +
+    '|(?:sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|gantt|journey|gitGraph|mindmap|timeline|quadrantChart|requirementDiagram|C4Context)(?=\\s|$)',
+  'gi'
+)
 
-// Split mermaid source into one chunk per diagram (each begins with a diagram
-// keyword). Returns [] for a single/empty diagram.
+// Does `text` begin with a mermaid diagram header? (Used by the paste handler to
+// turn pasted raw mermaid into a block instead of plain text.)
+export function startsAsMermaid(text) {
+  const t = String(text || '').trim()
+  if (!t) return false
+  DIAGRAM_HEADER.lastIndex = 0
+  const m = DIAGRAM_HEADER.exec(t)
+  return !!m && m.index === 0
+}
+
+// Split mermaid source into one chunk per diagram, by finding every diagram
+// header ANYWHERE (a 2nd paste often concatenates mid-line: `…Car]flowchart TD`,
+// so a line-start check misses it). Returns [] for a single/empty diagram.
 function splitDiagrams(text) {
-  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n')
+  const t = String(text || '').replace(/\r\n?/g, '\n')
+  DIAGRAM_HEADER.lastIndex = 0
+  const idx = []
+  let m
+  while ((m = DIAGRAM_HEADER.exec(t))) idx.push(m.index)
+  if (idx.length <= 1) return []
   const segs = []
-  let cur = null
-  for (const line of lines) {
-    if (DIAGRAM_START.test(line.trim())) {
-      if (cur) segs.push(cur)
-      cur = [line]
-    } else {
-      if (!cur) cur = []
-      cur.push(line)
-    }
+  for (let i = 0; i < idx.length; i++) {
+    const seg = t.slice(idx[i], idx[i + 1] ?? t.length).replace(/^\s+|\s+$/g, '')
+    if (seg) segs.push(seg)
   }
-  if (cur) segs.push(cur)
   return segs
-    .map((s) => s.join('\n').replace(/^\n+/, '').replace(/\s+$/, ''))
-    .filter((s) => s.trim())
 }
 
 // appendTransaction plugin: when a mermaid block ends up holding 2+ diagrams,
