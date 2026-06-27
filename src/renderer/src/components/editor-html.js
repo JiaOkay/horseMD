@@ -1,11 +1,18 @@
 // Raw-HTML rendering for Milkdown's `html` node + block-type conversion.
 
-// Block-level tags whose HTML we render visually (rather than show as source).
-// Targeted at the common case — HTML tables pasted into Markdown — plus a few
-// other safe block containers. Inline fragments (a stray <b>, <span>) fall back
-// to the default escaped-text rendering so unbalanced bits can't break layout.
-const RENDER_HTML_RE =
-  /^\s*<(table|thead|tbody|tfoot|tr|td|th|div|details|summary|figure|figcaption|section|article|dl|center|sub|sup|kbd|mark|abbr|u|ins|del)[\s/>]/i
+// Tags we render as real DOM instead of escaped source. Split into block vs
+// inline so the node view returns the right wrapper element (a block <div> or an
+// inline <span>) — Milkdown's `html` node is an inline atom, so an inline
+// fragment must render inline to sit inside a paragraph (issue #14).
+const BLOCK_TAGS =
+  'table|thead|tbody|tfoot|tr|td|th|div|details|summary|figure|figcaption|section|article|dl|center|blockquote|pre|hr|ul|ol|li|h1|h2|h3|h4|h5|h6|p|form|fieldset|nav|header|footer|main|aside'
+// Safe inline tags (formatting/semantic). Anything not here (iframe/object/embed,
+// unknown tags, …) falls back to escaped-text so it can't run or break layout.
+const INLINE_TAGS =
+  'span|mark|sub|sup|kbd|u|ins|del|abbr|small|font|cite|q|samp|var|time|b|i|strong|em|a|bdo|bdi|ruby|rt|rp|label|dfn|big|tt|s|strike'
+
+const BLOCK_RE = new RegExp(`^\\s*<(${BLOCK_TAGS})[\\s/>]`, 'i')
+const INLINE_RE = new RegExp(`^\\s*<(${INLINE_TAGS})[\\s/>]`, 'i')
 
 // Strip <script>/<style> and inline event handlers so rendering local HTML can't
 // run code. Tables/fragments parse correctly inside a <template>.
@@ -24,25 +31,113 @@ function sanitizeHtml(html) {
   return tpl.innerHTML
 }
 
-// ProseMirror node view for Milkdown's `html` node. Renders recognized block
-// HTML as real DOM; leaves other html nodes to their default text rendering.
+// ProseMirror node view for Milkdown's `html` node. Renders recognized HTML as
+// real DOM (block tags → a block <div>, inline tags → an inline <span>); leaves
+// unsafe/unknown html nodes to the default escaped-text rendering. The node is
+// an atom (no editable content), so we ignore inner DOM mutations — the original
+// HTML round-trips through attrs.value when saving.
 export function renderHtmlNodeView(node) {
   const value = node.attrs?.value || ''
-  if (!RENDER_HTML_RE.test(value)) {
+  const isBlock = BLOCK_RE.test(value)
+  const isInline = !isBlock && INLINE_RE.test(value)
+  if (!isBlock && !isInline) {
     // Not something we render — mimic the default: escaped text in a span.
     const span = document.createElement('span')
     span.setAttribute('data-type', 'html')
     span.textContent = value
     return { dom: span, ignoreMutation: () => true }
   }
-  const dom = document.createElement('div')
-  dom.className = 'hm-html-block'
+  const dom = document.createElement(isBlock ? 'div' : 'span')
+  dom.className = isBlock ? 'hm-html-block' : 'hm-html-inline'
   dom.setAttribute('data-type', 'html')
   dom.contentEditable = 'false'
   dom.innerHTML = sanitizeHtml(value)
-  // The node is an atom with no editable content; ignore inner DOM mutations so
-  // ProseMirror doesn't try to reconcile the rendered HTML.
   return { dom, ignoreMutation: () => true, stopEvent: () => false }
+}
+
+// HTML void elements (no closing tag) — don't push them on the balance stack.
+const VOID_TAGS = new Set([
+  'br', 'img', 'hr', 'input', 'wbr', 'meta', 'link', 'area', 'base',
+  'col', 'embed', 'source', 'track', 'param'
+])
+
+// Does a raw HTML fragment have all its tags closed? Used to decide when a run of
+// inline-HTML nodes forms one complete, renderable fragment (so `<span>红字</span>`
+// becomes a single node instead of open / text / close).
+function isBalancedFragment(s) {
+  const re = /<\/?([a-zA-Z][\w-]*)([^>]*)>/g
+  const stack = []
+  let m
+  while ((m = re.exec(s)) !== null) {
+    const tag = m[1].toLowerCase()
+    const closing = m[0].charAt(1) === '/'
+    const selfClosing = /\/\s*$/.test(m[2])
+    if (closing) {
+      if (stack[stack.length - 1] !== tag) return false
+      stack.pop()
+    } else if (selfClosing || VOID_TAGS.has(tag)) {
+      /* void / self-closed: nothing to close */
+    } else {
+      stack.push(tag)
+    }
+  }
+  return stack.length === 0
+}
+
+// An inline `html` node that opens a tag (not a closer, comment, or void tag),
+// i.e. the likely start of a `<tag>…</tag>` fragment worth merging.
+function isOpeningInlineTag(s) {
+  return typeof s === 'string' && /^<[a-zA-Z][\w-]*\b[^>]*>$/.test(s) && !/^<\//.test(s) && !/^<!--/.test(s)
+}
+
+// Merge consecutive `html` + `text` mdast siblings that form a balanced inline
+// HTML fragment into a single `html` node. Commonmark parses `<span>x</span>`
+// as three nodes (open tag / text / close tag); Milkdown turns each into an
+// inline atom, so without merging the per-node renderer can't reconstruct the
+// span around its text. We only coalesce runs of plain html+text — if markdown
+// marks (emphasis, links…) sit inside the HTML we leave it alone (rare, and
+// merging would drop their formatting).
+function coalesceChildren(node) {
+  if (!Array.isArray(node.children)) return
+  for (const c of node.children) coalesceChildren(c)
+  const kids = node.children
+  const next = []
+  let i = 0
+  while (i < kids.length) {
+    const c = kids[i]
+    if (c.type === 'html' && isOpeningInlineTag(c.value)) {
+      let raw = ''
+      let j = i
+      let balanced = false
+      while (j < kids.length) {
+        const k = kids[j]
+        if (k.type !== 'html' && k.type !== 'text') break
+        raw += k.value
+        j += 1
+        if (isBalancedFragment(raw)) {
+          balanced = true
+          break
+        }
+      }
+      if (balanced && j > i + 1) {
+        next.push({ type: 'html', value: raw })
+        i = j
+        continue
+      }
+    }
+    next.push(c)
+    i += 1
+  }
+  node.children = next
+}
+
+// A remark plugin (parse side) that merges fragmented inline HTML into whole
+// fragments so the node view can render them. Registered in Editor.jsx.
+export function remarkMergeInlineHtml() {
+  return (tree) => {
+    coalesceChildren(tree)
+    return tree
+  }
 }
 
 // Convert the block containing the cursor to a different type. Operates on the

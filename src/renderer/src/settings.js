@@ -33,9 +33,35 @@ export const FONT_SIZE_PRESETS = [
   { id: 'xlarge', size: 20 }
 ]
 
+// Editor body line-height (unitless). Default matches the built-in stylesheet.
+export const LINE_HEIGHT_MIN = 1.4
+export const LINE_HEIGHT_MAX = 2.4
+export const DEFAULT_LINE_HEIGHT = 1.85
+export const LINE_HEIGHT_PRESETS = [
+  { id: 'compact', value: 1.6 },
+  { id: 'standard', value: 1.85 },
+  { id: 'relaxed', value: 2.0 },
+  { id: 'loose', value: 2.2 }
+]
+
+// Space between paragraphs (em). 0 = paragraphs sit flush.
+export const PARA_SPACING_MIN = 0
+export const PARA_SPACING_MAX = 2
+export const DEFAULT_PARA_SPACING = 0.8
+export const PARA_SPACING_PRESETS = [
+  { id: 'tight', value: 0.4 },
+  { id: 'standard', value: 0.8 },
+  { id: 'relaxed', value: 1.2 },
+  { id: 'loose', value: 1.6 }
+]
+
+const round1 = (n) => Math.round(n * 10) / 10
+
 export const DEFAULT_SETTINGS = {
   pageWidth: DEFAULT_PAGE_WIDTH,
   fontSize: DEFAULT_FONT_SIZE,
+  lineHeight: DEFAULT_LINE_HEIGHT,
+  paragraphSpacing: DEFAULT_PARA_SPACING,
   // Empty = no image host: pasted/uploaded images keep the default behavior
   // (a local object URL). When set, it's run like Typora's "custom command":
   // the image file path is appended as an argument and the command prints the
@@ -56,12 +82,25 @@ function normalizeFontSize(s) {
   return Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, Math.round(n)))
 }
 
+function normalizeInRange(v, min, max, def) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return def
+  return Math.min(max, Math.max(min, round1(n)))
+}
+
 export function loadSettings() {
   try {
     const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')
     return {
       pageWidth: normalizeWidth(raw.pageWidth ?? DEFAULT_PAGE_WIDTH),
       fontSize: normalizeFontSize(raw.fontSize ?? DEFAULT_FONT_SIZE),
+      lineHeight: normalizeInRange(raw.lineHeight, LINE_HEIGHT_MIN, LINE_HEIGHT_MAX, DEFAULT_LINE_HEIGHT),
+      paragraphSpacing: normalizeInRange(
+        raw.paragraphSpacing,
+        PARA_SPACING_MIN,
+        PARA_SPACING_MAX,
+        DEFAULT_PARA_SPACING
+      ),
       imageUploadCommand:
         typeof raw.imageUploadCommand === 'string' ? raw.imageUploadCommand : ''
     }
@@ -99,5 +138,21 @@ export function applyFontSize(size) {
   document.documentElement.style.setProperty(
     '--editor-font-size',
     normalizeFontSize(size) + 'px'
+  )
+}
+
+// Body line-height (unitless) and paragraph top/bottom spacing (em), exposed as
+// CSS variables the editor content reads.
+export function applyLineHeight(value) {
+  document.documentElement.style.setProperty(
+    '--editor-line-height',
+    String(normalizeInRange(value, LINE_HEIGHT_MIN, LINE_HEIGHT_MAX, DEFAULT_LINE_HEIGHT))
+  )
+}
+
+export function applyParagraphSpacing(value) {
+  document.documentElement.style.setProperty(
+    '--editor-para-spacing',
+    normalizeInRange(value, PARA_SPACING_MIN, PARA_SPACING_MAX, DEFAULT_PARA_SPACING) + 'em'
   )
 }

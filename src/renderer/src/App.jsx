@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar.jsx'
 import Tabs from './components/Tabs.jsx'
 import Outline from './components/Outline.jsx'
 import StatusBar from './components/StatusBar.jsx'
+import SaveFab from './components/SaveFab.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import { Icon } from './components/icons.jsx'
 import { THEMES, DEFAULT_THEME, applyTheme } from './themes.js'
@@ -14,7 +15,14 @@ import WindowControls from './components/WindowControls.jsx'
 import UpdateToast from './components/UpdateToast.jsx'
 import RenameModal from './components/RenameModal.jsx'
 import ImageHostButton from './components/ImageHostButton.jsx'
-import { loadSettings, saveSettings, applyPageWidth, applyFontSize } from './settings.js'
+import {
+  loadSettings,
+  saveSettings,
+  applyPageWidth,
+  applyFontSize,
+  applyLineHeight,
+  applyParagraphSpacing
+} from './settings.js'
 import { applyCustomTheme } from './customThemes.js'
 import { fireToast, HM_TOAST_EVENT } from './ui.js'
 import logoUrl from './assets/logo.png'
@@ -207,6 +215,12 @@ export default function App() {
   useEffect(() => {
     applyFontSize(settings.fontSize)
   }, [settings.fontSize])
+  useEffect(() => {
+    applyLineHeight(settings.lineHeight)
+  }, [settings.lineHeight])
+  useEffect(() => {
+    applyParagraphSpacing(settings.paragraphSpacing)
+  }, [settings.paragraphSpacing])
   useEffect(() => {
     saveSettings(settings)
   }, [settings])
@@ -822,6 +836,35 @@ export default function App() {
     }
   }, [home, sidebarOpen, sidebarMode, sourceMode, activeId])
 
+  // Outline heading list, taken from the RENDERED document (the editor's actual
+  // h1…h6 elements) — not regex'd from the markdown string. This matches how
+  // jumpToHeading finds them, so the two stay in sync, and it recognizes every
+  // heading the editor renders (ATX `#`, Setext, and HTML <h1>) regardless of
+  // how the source wrote it.
+  const [outlineHeadings, setOutlineHeadings] = useState([])
+  useEffect(() => {
+    if (home) {
+      setOutlineHeadings([])
+      return
+    }
+    let raf = 0
+    const read = () => {
+      raf = 0
+      // Scope to the ProseMirror content so the slash menu (whose group labels
+      // are <h6> and floats inside the editor host) doesn't leak into the outline.
+      const pm = editorHostRef.current?.querySelector('.ProseMirror')
+      if (!pm) return
+      const els = pm.querySelectorAll('h1, h2, h3, h4, h5, h6')
+      setOutlineHeadings(
+        [...els].map((h) => ({ level: Number(h.tagName[1]), text: (h.textContent || '').trim() }))
+      )
+    }
+    raf = requestAnimationFrame(read)
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [home, activeId, activeTab?.content, sourceMode])
+
   // ------------------------- menu / shortcuts ----------------------
   // In split view, target the pane you're actually editing (last focused), as
   // long as it's one of the two visible panes; otherwise the active (left) tab.
@@ -1297,7 +1340,7 @@ export default function App() {
                 refreshNonce={refreshNonce}
               />
             ) : (
-              <Outline content={activeTab?.content || ''} activeIndex={activeHeading} onJump={jumpToHeading} />
+              <Outline headings={outlineHeadings} activeIndex={activeHeading} onJump={jumpToHeading} />
             )
           )}
         </aside>
@@ -1458,6 +1501,9 @@ export default function App() {
               onOpen={() => handlers.current.open()}
               onOpenFolder={openFolder}
               onOpenRecent={(p) => openPaths([p])}
+              onRemoveRecent={(p) =>
+                setRecents((prev) => prev.filter((r) => r.path !== p))
+              }
             />
           )}
         </main>
@@ -1494,6 +1540,15 @@ export default function App() {
         onSetPageWidth={(w) => updateSettings({ pageWidth: w })}
         fontSize={settings.fontSize}
         onSetFontSize={(s) => updateSettings({ fontSize: s })}
+        lineHeight={settings.lineHeight}
+        onSetLineHeight={(v) => updateSettings({ lineHeight: v })}
+        paragraphSpacing={settings.paragraphSpacing}
+        onSetParagraphSpacing={(v) => updateSettings({ paragraphSpacing: v })}
+      />
+
+      <SaveFab
+        visible={!home && !!activeTab && activeTab.content !== activeTab.savedContent}
+        onSave={() => handlers.current.save()}
       />
 
       <CommandPalette

@@ -3,14 +3,9 @@ import { Icon } from './icons.jsx'
 import { useI18n } from '../i18n.jsx'
 import { THEMES, themeById } from '../themes.js'
 import { LANGS } from '../i18n.jsx'
-import {
-  PAGE_WIDTH_PRESETS,
-  PAGE_WIDTH_MIN,
-  PAGE_WIDTH_MAX,
-  FONT_SIZE_PRESETS,
-  FONT_SIZE_MIN,
-  FONT_SIZE_MAX
-} from '../settings.js'
+import { FONT_SIZE_MIN, FONT_SIZE_MAX } from '../settings.js'
+import LayoutControl from './LayoutControl.jsx'
+import { usePopover } from '../hooks/usePopover.js'
 
 function stats(md) {
   const text = (md || '')
@@ -25,128 +20,8 @@ function stats(md) {
 }
 
 // Small popover that closes on outside click.
-function usePopover() {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
-    }
-    window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
-  }, [open])
-  return { open, setOpen, ref }
-}
+// usePopover is imported from ../hooks (shared with LayoutControl).
 
-// One small reusable "presets + fine-tune slider" block, used for both font size
-// and editor width inside the combined Layout popover.
-function AdjustGroup({ title, valueLabel, presets, activeIndex, onPick, pct, fromX, onSet }) {
-  const { t } = useI18n()
-  const trackRef = useRef(null)
-  const [dragging, setDragging] = useState(false)
-  const startDrag = (e) => {
-    e.preventDefault()
-    setDragging(true)
-    onSet(fromX(trackRef.current, e.clientX))
-    const onMove = (ev) => onSet(fromX(trackRef.current, ev.clientX))
-    const onUp = () => {
-      setDragging(false)
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
-  return (
-    <div className="hm-adjust-group">
-      <div className="hm-pop-head">
-        <span className="hm-pop-title">{title}</span>
-        <span className="hm-pop-value">{valueLabel}</span>
-      </div>
-      <div className="hm-seg" style={{ '--seg-count': presets.length, '--seg-index': activeIndex }}>
-        {activeIndex >= 0 && <span className="hm-seg-pill" aria-hidden="true" />}
-        {presets.map((p, i) => (
-          <button
-            key={p.id}
-            className={`hm-seg-item${i === activeIndex ? ' active' : ''}`}
-            onClick={() => onPick(p)}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <div className={`hm-fine${dragging ? ' dragging' : ''}`}>
-        <span className="hm-fine-label">{t('settings.fineTune')}</span>
-        <div className="hm-ftrack" ref={trackRef} onPointerDown={startDrag}>
-          <div className="hm-ffill" style={{ width: pct * 100 + '%' }} />
-          <div className="hm-fthumb" style={{ left: pct * 100 + '%' }} />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Combined "layout" control: ONE secondary status-bar button → a popover that
-// holds both the font-size and editor-width adjusters. Replaces the two separate
-// status-bar buttons so the bar stays uncluttered. `hm-pagewidth` lets mobile
-// hide it via CSS (mobile sets size in the "more" sheet and forces full width).
-function LayoutControl({ fontSize, onSetFontSize, pageWidth, onSetPageWidth }) {
-  const { t } = useI18n()
-  const { open, setOpen, ref } = usePopover()
-
-  const fontPct = (fontSize - FONT_SIZE_MIN) / (FONT_SIZE_MAX - FONT_SIZE_MIN)
-  const fontIdx = FONT_SIZE_PRESETS.findIndex((p) => p.size === fontSize)
-  const fontFromX = (track, clientX) => {
-    const r = track.getBoundingClientRect()
-    const p = Math.min(1, Math.max(0, (clientX - r.left) / r.width))
-    return Math.round(FONT_SIZE_MIN + p * (FONT_SIZE_MAX - FONT_SIZE_MIN))
-  }
-
-  const isFull = pageWidth === 'full'
-  const widthPct = isFull ? 1 : (pageWidth - PAGE_WIDTH_MIN) / (PAGE_WIDTH_MAX - PAGE_WIDTH_MIN)
-  const widthIdx = PAGE_WIDTH_PRESETS.findIndex((p) =>
-    p.width === 'full' ? isFull : !isFull && pageWidth === p.width
-  )
-  const widthFromX = (track, clientX) => {
-    const r = track.getBoundingClientRect()
-    const p = Math.min(1, Math.max(0, (clientX - r.left) / r.width))
-    return Math.round((PAGE_WIDTH_MIN + p * (PAGE_WIDTH_MAX - PAGE_WIDTH_MIN)) / 10) * 10
-  }
-
-  return (
-    <div className="block-switch hm-pagewidth hm-layout" ref={ref}>
-      <button className="status-btn" onClick={() => setOpen((v) => !v)} title={t('settings.layout')}>
-        <Icon name="settings" size={14} /> {t('settings.layoutLabel')}
-      </button>
-      {open && (
-        <div className="hm-pop hm-width-pop hm-layout-pop">
-          <AdjustGroup
-            title={t('settings.fontSize')}
-            valueLabel={fontSize + ' px'}
-            presets={FONT_SIZE_PRESETS.map((p) => ({ ...p, label: t('settings.font.' + p.id) }))}
-            activeIndex={fontIdx}
-            onPick={(p) => onSetFontSize(p.size)}
-            pct={fontPct}
-            fromX={fontFromX}
-            onSet={onSetFontSize}
-          />
-          <div className="hm-pop-sep" />
-          <AdjustGroup
-            title={t('settings.pageWidth')}
-            valueLabel={isFull ? t('settings.width.full') : pageWidth + ' px'}
-            presets={PAGE_WIDTH_PRESETS.map((p) => ({ ...p, label: t('settings.width.' + p.id) }))}
-            activeIndex={widthIdx}
-            onPick={(p) => onSetPageWidth(p.width)}
-            pct={widthPct}
-            fromX={widthFromX}
-            onSet={onSetPageWidth}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
 
 // Document stats: one status-bar button showing the character count → popover
 // with the full breakdown (words, characters, characters w/o spaces, read time).
@@ -448,6 +323,10 @@ export default function StatusBar({
   onSetPageWidth,
   fontSize,
   onSetFontSize,
+  lineHeight,
+  onSetLineHeight,
+  paragraphSpacing,
+  onSetParagraphSpacing,
   customThemes,
   customTheme,
   onPickCustom,
@@ -475,6 +354,9 @@ export default function StatusBar({
               <span className="status-path" title={tab.path || t('status.unsaved')}>
                 {tab.path || t('status.unsaved')}
               </span>
+              {/* Static dirty/saved indicator; the Save action is a floating
+                  button (see App.jsx) so its position doesn't shift with the
+                  path length. */}
               <span className={`status-dot ${dirty ? 'mod' : 'ok'}`}>
                 {dirty ? '● ' + t('status.modified') : '✓ ' + t('status.saved')}
               </span>
@@ -521,6 +403,10 @@ export default function StatusBar({
             <LayoutControl
               fontSize={fontSize}
               onSetFontSize={onSetFontSize}
+              lineHeight={lineHeight}
+              onSetLineHeight={onSetLineHeight}
+              paragraphSpacing={paragraphSpacing}
+              onSetParagraphSpacing={onSetParagraphSpacing}
               pageWidth={pageWidth}
               onSetPageWidth={onSetPageWidth}
             />
