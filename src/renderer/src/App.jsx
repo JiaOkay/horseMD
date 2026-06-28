@@ -104,6 +104,7 @@ export default function App() {
   const editorHostRef = useRef(null) // active rich editor's scroll container
   const editorAreaRef = useRef(null) // flex row holding the editor panes (for split-drag math)
   const sourceRef = useRef(null) // active source-mode <textarea>
+  const sourceTextareas = useRef({}) // textarea-backed editors by tab id
   const scrollRatioRef = useRef(null) // pending scroll position to restore across a mode switch
   const findInputRef = useRef(null)
   // Registry of each tab's editor API (by tab id). Several markdown editors can
@@ -160,6 +161,9 @@ export default function App() {
     const live = new Set(tabs.map((t) => t.id))
     for (const id of Object.keys(editorApis.current)) {
       if (!live.has(id)) delete editorApis.current[id]
+    }
+    for (const id of Object.keys(sourceTextareas.current)) {
+      if (!live.has(id)) delete sourceTextareas.current[id]
     }
     // Forget mount records for closed tabs (so the Set doesn't grow unbounded).
     setMountedIds((prev) => {
@@ -885,11 +889,6 @@ export default function App() {
     return tabsRef.current.find((tab) => tab.id === id) || null
   }
 
-  const usesActiveSourceTextarea = (tab) =>
-    tab?.id === activeIdRef.current &&
-    sourceRef.current &&
-    (sourceModeRef.current || isPlainTextDoc(tab) || (tab.heavy && !richForced.has(tab.id)))
-
   const applyReviewMarkupToActive = (kind) => {
     const tab = getEditableTab()
     if (!tab) {
@@ -898,19 +897,19 @@ export default function App() {
     }
 
     setHome(false)
-    if (usesActiveSourceTextarea(tab)) {
-      const el = sourceRef.current
-      const result = wrapReviewSelection(tab.content, el.selectionStart, el.selectionEnd, kind)
+    const sourceEl = sourceTextareas.current[tab.id]
+    if (sourceEl) {
+      const result = wrapReviewSelection(tab.content, sourceEl.selectionStart, sourceEl.selectionEnd, kind)
       if (result.error === 'multiline') {
         fireToast(tRef.current('review.inlineOnly'))
         return
       }
+      const editedEl = sourceEl
       updateContent(tab.id, result.text, false)
       requestAnimationFrame(() => {
-        const nextEl = sourceRef.current
-        if (nextEl && pickEditableId() === tab.id) {
-          nextEl.focus()
-          nextEl.setSelectionRange(result.selectionStart, result.selectionEnd)
+        if (sourceTextareas.current[tab.id] === editedEl) {
+          editedEl.focus()
+          editedEl.setSelectionRange(result.selectionStart, result.selectionEnd)
         }
       })
       return
@@ -1518,10 +1517,20 @@ export default function App() {
               const usesTextarea = isPlainTextDoc(tab) || heavyAsSource || (sourceMode && isLeft)
               if (usesTextarea) {
                 if (!inView) return null
+                const setSourceTextareaRef = (el) => {
+                  if (el) {
+                    sourceTextareas.current[tab.id] = el
+                    if (isLeft) sourceRef.current = el
+                    return
+                  }
+                  const existing = sourceTextareas.current[tab.id]
+                  delete sourceTextareas.current[tab.id]
+                  if (isLeft && (!existing || sourceRef.current === existing)) sourceRef.current = null
+                }
                 return (
                   <textarea
                     key={tab.id}
-                    ref={isLeft ? sourceRef : undefined}
+                    ref={setSourceTextareaRef}
                     className={`source-editor${paneClass}`}
                     value={tab.content}
                     spellCheck={false}
