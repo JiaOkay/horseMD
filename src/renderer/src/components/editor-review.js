@@ -47,6 +47,18 @@ export function applyReviewMarkupInView(view, kind) {
   if (!view) return { ok: false, reason: 'no-view' }
 
   const { from, to } = view.state.selection
+  if (kind === REVIEW_KINDS.comment) {
+    const result = wrapReviewSelection('', 0, 0, kind)
+    if (result.error) return { ok: false, reason: result.error }
+
+    let tr = view.state.tr.insertText(result.text, from, from)
+    const cursor = from + result.selectionStart
+    tr = tr.setSelection(TextSelection.create(tr.doc, cursor, cursor))
+    view.dispatch(tr.scrollIntoView())
+    view.focus()
+    return { ok: true }
+  }
+
   const selected = view.state.doc.textBetween(from, to, '\n')
   const result = wrapReviewSelection(selected, 0, selected.length, kind)
   if (result.error) return { ok: false, reason: result.error }

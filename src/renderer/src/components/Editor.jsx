@@ -943,18 +943,22 @@ export default function Editor({
           item.appendChild(pop)
         }
 
+        const reviewLabel = (key, fallback) => {
+          const value = tRef.current(key)
+          return !value || value === key ? fallback : value
+        }
         const REVIEW_ACTIONS = [
-          [REVIEW_KINDS.addition, 'review.add'],
-          [REVIEW_KINDS.deletion, 'review.delete'],
-          [REVIEW_KINDS.substitution, 'review.substitute'],
-          [REVIEW_KINDS.comment, 'review.comment'],
-          [REVIEW_KINDS.highlight, 'review.highlight']
+          [REVIEW_KINDS.addition, 'review.add', 'Addition'],
+          [REVIEW_KINDS.deletion, 'review.delete', 'Deletion'],
+          [REVIEW_KINDS.substitution, 'review.substitute', 'Substitution'],
+          [REVIEW_KINDS.comment, 'review.comment', 'Comment'],
+          [REVIEW_KINDS.highlight, 'review.highlight', 'Highlight + comment']
         ]
         const injectReviewButton = (toolbar) => {
           const item = appendToolbarItem(
             toolbar,
             'hm-review-item',
-            'Review markup',
+            reviewLabel('review.toolbar', 'Review markup'),
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10"/><path d="M4 12h9"/><path d="M4 18h7"/><path d="M17 9l3 3-3 3"/><path d="M14 12h6"/></svg>'
           )
           if (!item) return
@@ -962,11 +966,11 @@ export default function Editor({
           pop.className = 'hm-review-pop'
           const inner = document.createElement('div')
           inner.className = 'hm-review-pop-inner'
-          for (const [kind, labelKey] of REVIEW_ACTIONS) {
+          for (const [kind, labelKey, fallback] of REVIEW_ACTIONS) {
             const b = document.createElement('button')
             b.type = 'button'
             b.className = 'hm-review-action hm-review-action-' + kind
-            b.textContent = tRef.current(labelKey)
+            b.textContent = reviewLabel(labelKey, fallback)
             b.title = b.textContent
             b.addEventListener('mousedown', (e) => {
               e.preventDefault()
