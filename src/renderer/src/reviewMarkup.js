@@ -126,7 +126,13 @@ export function getReviewMarkupDisplayParts(markdown, options = {}) {
     }
 
     if (marker.kind === REVIEW_KINDS.substitution) {
-      if (!marker.content.oldText || !marker.content.newText) continue
+      // Allow an EMPTY new text: the review command inserts `{~~selected~>~~}`
+      // (cursor after ~>), so the substitution must render immediately (showing
+      // "selected -> ") for the user to type the new text into. Rejecting empty
+      // new left the just-inserted marker invisible, which led users to type the
+      // closing `~~` themselves — triggering the strikethrough input rule and
+      // garbling the marker (the `~~>` corruption only substitution suffers).
+      if (!marker.content.oldText) continue
 
       const oldStart = marker.start + 3
       const oldEnd = oldStart + marker.content.oldText.length

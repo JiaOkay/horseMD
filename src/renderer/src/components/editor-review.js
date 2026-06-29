@@ -859,7 +859,7 @@ function addParsedSubstitutionParts(entries, index, state, decorations, widgetPa
   if (
     openIndex !== openEntry.text.length - 1 ||
     separator <= 0 ||
-    separator + 2 >= strikeEntry.text.length ||
+    separator + 2 > strikeEntry.text.length ||
     !closeEntry.text.startsWith('}')
   ) {
     return 0
