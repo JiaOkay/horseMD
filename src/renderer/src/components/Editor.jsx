@@ -81,6 +81,55 @@ function splitMarkdown(md, target) {
   return chunks
 }
 
+// Reconstruct `{~~old~>new~~}` substitution markers that GFM strikethrough
+// consumed during parse. remark turns `{~~old~>new~~}` into three mdast nodes:
+// text("{") + <delete>old~>new</delete> + text("}"). The decoration plugin's
+// strike-mark path (addParsedSubstitutionParts) then has to re-detect that
+// 3-entry structure to render it — and that detection is fragile (it silently
+// failed in several cases, so substitution didn't render while {++}/{--} did,
+// because those scan literal text). This remark plugin merges the three nodes
+// back into ONE literal text node `{~~old~>new~~}`, so substitution renders via
+// the same robust text-scan path as addition/deletion. Normal strikethrough
+// `~~struck~~` (no surrounding braces) is left untouched — only `{` + delete
+// (containing `~>`) + `}` is reconstructed.
+function remarkReconstructSubstitution() {
+  const textOf = (node) => {
+    if (!node) return ''
+    if (node.value != null) return String(node.value)
+    if (node.children) return node.children.map(textOf).join('')
+    return ''
+  }
+  return (tree) => {
+    const walk = (node) => {
+      if (!node.children) return
+      for (const c of node.children) walk(c)
+      const kids = node.children
+      const out = []
+      for (let i = 0; i < kids.length; i++) {
+        const a = kids[i]
+        const b = kids[i + 1]
+        const c = kids[i + 2]
+        if (
+          a && b && c &&
+          a.type === 'text' && b.type === 'delete' && c.type === 'text' &&
+          /\{$/.test(a.value) && /^\}/.test(c.value) &&
+          textOf(b).includes('~>')
+        ) {
+          // a ends with `{`, b is a strikethrough containing `~>`, c starts with `}`
+          // → merge into one literal `{~~old~>new~~}` text node.
+          out.push({ type: 'text', value: `${a.value.slice(0, -1)}{~~${textOf(b)}~~}${c.value.slice(1)}` })
+          i += 2
+          continue
+        }
+        out.push(a)
+      }
+      node.children = out
+    }
+    walk(tree)
+    return tree
+  }
+}
+
 // Every mounted rich editor registers itself here. A rich-text tab stays mounted
 // after its first activation, so several editors (and several Crepe selection
 // toolbars) can coexist. The heading button injected into a toolbar resolves its
@@ -414,7 +463,11 @@ export default function Editor({
         { plugin: brToBreakRemarkPlugin, options: undefined },
         // Merge fragmented inline HTML (<span>x</span>) into whole fragments so
         // the html node view can render them (issue #14).
-        { plugin: remarkMergeInlineHtml, options: undefined }
+        { plugin: remarkMergeInlineHtml, options: undefined },
+        // Reconstruct `{~~old~>new~~}` from the `{`+<del>+`}` GFM strikethrough
+        // consumed it into, so substitution renders via text-scan (robust) not
+        // the fragile strike-mark path.
+        { plugin: remarkReconstructSubstitution, options: undefined }
       ])
     })
 
