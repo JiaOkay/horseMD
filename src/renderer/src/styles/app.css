@@ -3064,7 +3064,10 @@ body.dark .milkdown .ProseMirror mark.hm-hl-yellow { background: #7a6c12; }
 body.dark .milkdown .ProseMirror mark.hm-hl-red { background: #7a3434; }
 body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
 
-/* Source-readable review markers stay raw text, with kind-specific decoration. */
+/* Rich mode parses source-readable review markers while the document stays raw Markdown. */
+.milkdown .ProseMirror .hm-review-syntax {
+  display: none;
+}
 .milkdown .ProseMirror .hm-review-mark {
   color: inherit;
   padding: 0.03em 0.18em;
@@ -3086,17 +3089,40 @@ body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
   text-decoration-color: #d13b3b;
   text-decoration-thickness: 1.5px;
 }
-.milkdown .ProseMirror .hm-review-sub {
-  background: #fff0c2;
-  border-bottom: 2px solid #c38313;
-}
-.milkdown .ProseMirror .hm-review-comment {
-  background: #eeeaf7;
-  border-bottom: 2px solid #8475aa;
-}
 .milkdown .ProseMirror .hm-review-highlight {
   background: #e0f0ff;
   border-bottom: 2px solid #4d8fd6;
+}
+.milkdown .ProseMirror .hm-review-widget {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  vertical-align: 0.05em;
+  margin: 0 0.12em;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.milkdown .ProseMirror .hm-review-comment-widget {
+  width: 1.35em;
+  height: 1.35em;
+  border-radius: 999px;
+  border: 1px solid #9c89c5;
+  background: #eeeaf7;
+  color: #44375d;
+  font-size: 0.72em;
+  line-height: 1;
+}
+.milkdown .ProseMirror .hm-review-sub-arrow {
+  min-width: 1.55em;
+  height: 1.25em;
+  padding: 0 0.28em;
+  border-radius: 999px;
+  border: 1px solid #c38313;
+  background: #fff0c2;
+  color: #7b4f04;
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1;
 }
 body.dark .milkdown .ProseMirror .hm-review-add {
   background: #1d4630;
@@ -3107,13 +3133,15 @@ body.dark .milkdown .ProseMirror .hm-review-del {
   background: #562828;
   text-decoration-color: #ff7979;
 }
-body.dark .milkdown .ProseMirror .hm-review-sub {
-  background: #574313;
-  border-bottom-color: #e3b34a;
-}
-body.dark .milkdown .ProseMirror .hm-review-comment {
+body.dark .milkdown .ProseMirror .hm-review-comment-widget {
   background: #34303f;
-  border-bottom-color: #aa9ccc;
+  border-color: #aa9ccc;
+  color: #e3dcff;
+}
+body.dark .milkdown .ProseMirror .hm-review-sub-arrow {
+  background: #574313;
+  border-color: #e3b34a;
+  color: #ffe0a3;
 }
 body.dark .milkdown .ProseMirror .hm-review-highlight {
   background: #223e5c;

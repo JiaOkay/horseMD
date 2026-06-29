@@ -77,6 +77,100 @@ export function scanReviewMarkup(markdown) {
   return markers
 }
 
+function pushDisplayRange(parts, type, role, start, end) {
+  if (end <= start) return
+  parts.push({ type, role, start, end })
+}
+
+function pushSyntaxPart(parts, start, end) {
+  pushDisplayRange(parts, 'syntax', 'syntax', start, end)
+}
+
+function pushContentPart(parts, role, start, end) {
+  pushDisplayRange(parts, 'content', role, start, end)
+}
+
+function pushWidgetPart(parts, role, pos, label, title) {
+  parts.push({ type: 'widget', role, pos, label, title })
+}
+
+function shouldRevealMarker(marker, revealRange) {
+  if (!revealRange) return false
+
+  if (revealRange.start === revealRange.end) {
+    return marker.start < revealRange.start && revealRange.start < marker.end
+  }
+
+  return marker.start < revealRange.end && revealRange.start < marker.end
+}
+
+export function getReviewMarkupDisplayParts(markdown, options = {}) {
+  const parts = []
+
+  for (const marker of scanReviewMarkup(markdown)) {
+    if (shouldRevealMarker(marker, options.revealRange)) continue
+
+    if (
+      marker.kind === REVIEW_KINDS.addition ||
+      marker.kind === REVIEW_KINDS.deletion
+    ) {
+      if (!marker.content.text) continue
+
+      const openerEnd = marker.start + 3
+      const closerStart = marker.end - 3
+
+      pushSyntaxPart(parts, marker.start, openerEnd)
+      pushContentPart(parts, marker.kind, openerEnd, closerStart)
+      pushSyntaxPart(parts, closerStart, marker.end)
+      continue
+    }
+
+    if (marker.kind === REVIEW_KINDS.substitution) {
+      if (!marker.content.oldText || !marker.content.newText) continue
+
+      const oldStart = marker.start + 3
+      const oldEnd = oldStart + marker.content.oldText.length
+      const newStart = oldEnd + 2
+      const newEnd = newStart + marker.content.newText.length
+
+      pushSyntaxPart(parts, marker.start, oldStart)
+      pushContentPart(parts, 'substitution-old', oldStart, oldEnd)
+      pushSyntaxPart(parts, oldEnd, newStart)
+      pushWidgetPart(parts, 'substitution-arrow', newStart, '->')
+      pushContentPart(parts, 'substitution-new', newStart, newEnd)
+      pushSyntaxPart(parts, newEnd, marker.end)
+      continue
+    }
+
+    if (marker.kind === REVIEW_KINDS.comment) {
+      if (!marker.content.text) continue
+
+      const commentStart = marker.start + 3
+
+      pushSyntaxPart(parts, marker.start, commentStart)
+      pushWidgetPart(parts, 'comment', commentStart, 'comment', marker.content.text)
+      pushSyntaxPart(parts, commentStart, marker.end)
+      continue
+    }
+
+    if (marker.kind === REVIEW_KINDS.highlight) {
+      if (!marker.content.text || !marker.content.comment) continue
+
+      const textStart = marker.start + 3
+      const textEnd = textStart + marker.content.text.length
+      const commentStart = textEnd + '==}{>>'.length
+
+      pushSyntaxPart(parts, marker.start, textStart)
+      pushContentPart(parts, 'highlight', textStart, textEnd)
+      pushSyntaxPart(parts, textEnd, commentStart)
+      pushWidgetPart(parts, 'comment', commentStart, 'comment', marker.content.comment)
+      pushSyntaxPart(parts, commentStart, marker.end)
+    }
+  }
+
+  return parts
+}
+
 function spliceText(text, start, end, replacement) {
   return `${text.slice(0, start)}${replacement}${text.slice(end)}`
 }

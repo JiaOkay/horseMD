@@ -4,6 +4,7 @@ import {
   REVIEW_KINDS,
   applyReviewDecision,
   buildReviewAiPrompt,
+  getReviewMarkupDisplayParts,
   scanReviewMarkup,
   wrapReviewSelection
 } from '../src/renderer/src/reviewMarkup.js'
@@ -101,9 +102,69 @@ function testPrompt() {
   assert.ok(prompt.includes(sample))
 }
 
+function simplifyDisplayParts(text, options) {
+  return getReviewMarkupDisplayParts(text, options).map((part) => ({
+    type: part.type,
+    role: part.role,
+    start: part.start,
+    end: part.end,
+    pos: part.pos,
+    label: part.label,
+    title: part.title
+  }))
+}
+
+function testDisplayParts() {
+  assert.deepEqual(simplifyDisplayParts('{++new++}'), [
+    { type: 'syntax', role: 'syntax', start: 0, end: 3, pos: undefined, label: undefined, title: undefined },
+    { type: 'content', role: 'addition', start: 3, end: 6, pos: undefined, label: undefined, title: undefined },
+    { type: 'syntax', role: 'syntax', start: 6, end: 9, pos: undefined, label: undefined, title: undefined }
+  ])
+
+  assert.deepEqual(simplifyDisplayParts('{--old--}'), [
+    { type: 'syntax', role: 'syntax', start: 0, end: 3, pos: undefined, label: undefined, title: undefined },
+    { type: 'content', role: 'deletion', start: 3, end: 6, pos: undefined, label: undefined, title: undefined },
+    { type: 'syntax', role: 'syntax', start: 6, end: 9, pos: undefined, label: undefined, title: undefined }
+  ])
+
+  assert.deepEqual(simplifyDisplayParts('{~~old~>new~~}'), [
+    { type: 'syntax', role: 'syntax', start: 0, end: 3, pos: undefined, label: undefined, title: undefined },
+    { type: 'content', role: 'substitution-old', start: 3, end: 6, pos: undefined, label: undefined, title: undefined },
+    { type: 'syntax', role: 'syntax', start: 6, end: 8, pos: undefined, label: undefined, title: undefined },
+    { type: 'widget', role: 'substitution-arrow', start: undefined, end: undefined, pos: 8, label: '->', title: undefined },
+    { type: 'content', role: 'substitution-new', start: 8, end: 11, pos: undefined, label: undefined, title: undefined },
+    { type: 'syntax', role: 'syntax', start: 11, end: 14, pos: undefined, label: undefined, title: undefined }
+  ])
+
+  assert.deepEqual(simplifyDisplayParts('{==focus==}{>>why<<}'), [
+    { type: 'syntax', role: 'syntax', start: 0, end: 3, pos: undefined, label: undefined, title: undefined },
+    { type: 'content', role: 'highlight', start: 3, end: 8, pos: undefined, label: undefined, title: undefined },
+    { type: 'syntax', role: 'syntax', start: 8, end: 14, pos: undefined, label: undefined, title: undefined },
+    { type: 'widget', role: 'comment', start: undefined, end: undefined, pos: 14, label: 'comment', title: 'why' },
+    { type: 'syntax', role: 'syntax', start: 14, end: 20, pos: undefined, label: undefined, title: undefined }
+  ])
+
+  assert.deepEqual(simplifyDisplayParts('{>>note<<}'), [
+    { type: 'syntax', role: 'syntax', start: 0, end: 3, pos: undefined, label: undefined, title: undefined },
+    { type: 'widget', role: 'comment', start: undefined, end: undefined, pos: 3, label: 'comment', title: 'note' },
+    { type: 'syntax', role: 'syntax', start: 3, end: 10, pos: undefined, label: undefined, title: undefined }
+  ])
+
+  assert.deepEqual(simplifyDisplayParts('{>><<}'), [])
+  assert.deepEqual(simplifyDisplayParts('{~~old~>~~}'), [])
+  assert.deepEqual(simplifyDisplayParts('{==focus==}{>><<}'), [])
+
+  assert.deepEqual(simplifyDisplayParts('{>>note<<}', { revealRange: { start: 4, end: 4 } }), [])
+  assert.equal(
+    simplifyDisplayParts('{>>note<<}', { revealRange: { start: 10, end: 10 } }).length,
+    3
+  )
+}
+
 testScanning()
 testWrapping()
 testDecisions()
 testPrompt()
+testDisplayParts()
 
 console.log('review-markup tests passed')

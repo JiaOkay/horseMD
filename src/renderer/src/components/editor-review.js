@@ -1,17 +1,55 @@
 import { Plugin, PluginKey, TextSelection } from '@milkdown/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/prose/view'
-import { REVIEW_KINDS, scanReviewMarkup, wrapReviewSelection } from '../reviewMarkup.js'
+import {
+  REVIEW_KINDS,
+  getReviewMarkupDisplayParts,
+  wrapReviewSelection
+} from '../reviewMarkup.js'
 
 export { REVIEW_KINDS }
 
 const REVIEW_PLUGIN_KEY = new PluginKey('hm-review-markup')
 
-const REVIEW_CLASS_BY_KIND = {
+const REVIEW_CLASS_BY_ROLE = {
+  syntax: 'hm-review-syntax',
   [REVIEW_KINDS.addition]: 'hm-review-mark hm-review-add',
   [REVIEW_KINDS.deletion]: 'hm-review-mark hm-review-del',
-  [REVIEW_KINDS.substitution]: 'hm-review-mark hm-review-sub',
-  [REVIEW_KINDS.comment]: 'hm-review-mark hm-review-comment',
+  'substitution-old': 'hm-review-mark hm-review-del hm-review-sub-old',
+  'substitution-new': 'hm-review-mark hm-review-add hm-review-sub-new',
   [REVIEW_KINDS.highlight]: 'hm-review-mark hm-review-highlight'
+}
+
+function createReviewWidget(part) {
+  const widget = document.createElement('span')
+  widget.contentEditable = 'false'
+
+  if (part.role === 'comment') {
+    widget.className = 'hm-review-widget hm-review-comment-widget'
+    widget.textContent = '💬'
+    widget.title = part.title || ''
+    widget.setAttribute(
+      'aria-label',
+      part.title ? `Review comment: ${part.title}` : 'Review comment'
+    )
+    return widget
+  }
+
+  widget.className = 'hm-review-widget hm-review-sub-arrow'
+  widget.textContent = part.label || '->'
+  widget.setAttribute('aria-hidden', 'true')
+  return widget
+}
+
+function getRevealRange(state, pos, textLength) {
+  const nodeStart = pos
+  const nodeEnd = pos + textLength
+  const { from, to } = state.selection
+
+  if (to < nodeStart || from > nodeEnd) return undefined
+
+  const start = Math.max(0, Math.min(textLength, from - nodeStart))
+  const end = Math.max(start, Math.min(textLength, to - nodeStart))
+  return { start, end }
 }
 
 export function createReviewDecorationPlugin() {
@@ -24,11 +62,23 @@ export function createReviewDecorationPlugin() {
         state.doc.descendants((node, pos) => {
           if (!node.isText || !node.text) return true
 
-          for (const match of scanReviewMarkup(node.text)) {
-            const className = REVIEW_CLASS_BY_KIND[match.kind]
-            if (!className || match.end <= match.start) continue
+          const revealRange = getRevealRange(state, pos, node.text.length)
+
+          for (const part of getReviewMarkupDisplayParts(node.text, { revealRange })) {
+            if (part.type === 'widget') {
+              decorations.push(
+                Decoration.widget(pos + part.pos, () => createReviewWidget(part), {
+                  key: `${part.role}:${pos + part.pos}:${part.title || part.label || ''}`,
+                  side: -1
+                })
+              )
+              continue
+            }
+
+            const className = REVIEW_CLASS_BY_ROLE[part.role]
+            if (!className || part.end <= part.start) continue
             decorations.push(
-              Decoration.inline(pos + match.start, pos + match.end, {
+              Decoration.inline(pos + part.start, pos + part.end, {
                 class: className
               })
             )
