@@ -22,7 +22,7 @@ import '@milkdown/crepe/theme/frame.css'
 import '@milkdown/crepe/theme/common/link-tooltip.css'
 import { BLOCK_TYPES, blockById, currentBlockId } from '../blocks.js'
 import { useI18n } from '../i18n.jsx'
-import { fireToast } from '../ui.js'
+import { copyToClipboard, fireToast } from '../ui.js'
 import { renderHtmlNodeView, convertBlock, remarkMergeInlineHtml } from './editor-html.js'
 import { dirOf, isRelativePath, resolveToFileUrl } from './editor-images.js'
 import { inlineRichStyles } from './editor-copy.js'
@@ -330,7 +330,15 @@ export default function Editor({
         tableBreakKeymap(),
         // Rich mode parses source-readable review markers, including right-margin
         // notes for highlighted comments, while the Markdown source stays raw.
-        createReviewDecorationPlugin(),
+        createReviewDecorationPlugin({
+          getT: (key, fallback) => {
+            const value = tRef.current(key)
+            return !value || value === key ? fallback : value
+          },
+          notify: (key, fallback) => fireToast(tRef.current(key) || fallback),
+          copyText: (text, doneKey, doneFallback) =>
+            copyToClipboard(text, tRef.current(doneKey) || doneFallback)
+        }),
         // Split a mermaid block that holds 2+ diagrams (e.g. a 2nd paste appended
         // into the same block) back into one block per diagram.
         createMermaidSplitPlugin()
@@ -1094,7 +1102,8 @@ export default function Editor({
                 '.tools-button-group, .button-group, .cm-panel, .cm-tooltip, ' +
                 '.preview-panel, .cell-handle, .line-handle, .handle, .add-button, ' +
                 '.operation, .operation-item, .drag-preview, .milkdown-block-handle, ' +
-                '.milkdown-toolbar, .image-resize-handle, .label-wrapper, .hm-frontmatter-wrap'
+                '.milkdown-toolbar, .image-resize-handle, .label-wrapper, .hm-frontmatter-wrap, ' +
+                '.hm-review-widget, .hm-review-card'
             )
             .forEach((el) => el.remove())
           // Flatten CodeMirror editors to plain <pre><code>.
