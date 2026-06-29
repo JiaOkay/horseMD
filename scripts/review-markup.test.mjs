@@ -4,8 +4,12 @@ import {
   REVIEW_KINDS,
   applyReviewDecision,
   buildReviewAiPrompt,
+  buildReviewAiPromptForSnippet,
   getReviewMarkupDisplayParts,
+  makeHighlightCommentMarkup,
   normalizeReviewMarkupMarkdown,
+  removeReviewMarker,
+  replaceReviewMarker,
   scanReviewMarkup,
   wrapReviewSelection
 } from '../src/renderer/src/reviewMarkup.js'
@@ -98,6 +102,108 @@ function testPrompt() {
   assert.ok(prompt.includes(sample))
 }
 
+function testMakeHighlightCommentMarkup() {
+  assert.equal(
+    makeHighlightCommentMarkup('important text', 'explain why'),
+    '{==important text==}{>>explain why<<}'
+  )
+
+  assert.throws(
+    () => makeHighlightCommentMarkup('important text', 'unsafe <<} comment'),
+    /Unsafe highlight-comment field/
+  )
+  assert.throws(
+    () => makeHighlightCommentMarkup('unsafe ==}{>> text', 'explain why'),
+    /Unsafe highlight-comment field/
+  )
+  assert.throws(
+    () => makeHighlightCommentMarkup('first line\nsecond line', 'explain why'),
+    /Unsafe highlight-comment field/
+  )
+  assert.throws(
+    () => makeHighlightCommentMarkup('important text', 'first line\nsecond line'),
+    /Unsafe highlight-comment field/
+  )
+}
+
+function testReplaceReviewMarker() {
+  const markdown = 'A {++new++} B {==focus==}{>>why<<} C'
+  const markers = scanReviewMarkup(markdown)
+  const addition = markers.find((marker) => marker.kind === REVIEW_KINDS.addition)
+  const highlight = markers.find((marker) => marker.kind === REVIEW_KINDS.highlight)
+
+  assert.equal(
+    replaceReviewMarker(markdown, highlight, { text: 'scope', comment: 'because' }),
+    'A {++new++} B {==scope==}{>>because<<} C'
+  )
+  assert.equal(replaceReviewMarker(markdown, addition, { text: 'ignored' }), markdown)
+
+  assert.equal(
+    replaceReviewMarker(`prefix ${markdown}`, highlight, { text: 'scope', comment: 'because' }),
+    `prefix ${markdown}`
+  )
+}
+
+function testRemoveReviewMarker() {
+  const markdown = 'A {++new++} B {--old--} C {~~bad~>good~~} D {>>note<<} E {==focus==}{>>why<<} F'
+  const markers = scanReviewMarkup(markdown)
+
+  assert.equal(
+    removeReviewMarker(
+      markdown,
+      markers.find((marker) => marker.kind === REVIEW_KINDS.highlight)
+    ),
+    'A {++new++} B {--old--} C {~~bad~>good~~} D {>>note<<} E focus F'
+  )
+  assert.equal(
+    removeReviewMarker(
+      markdown,
+      markers.find((marker) => marker.kind === REVIEW_KINDS.addition)
+    ),
+    'A new B {--old--} C {~~bad~>good~~} D {>>note<<} E {==focus==}{>>why<<} F'
+  )
+  assert.equal(
+    removeReviewMarker(
+      markdown,
+      markers.find((marker) => marker.kind === REVIEW_KINDS.deletion)
+    ),
+    'A {++new++} B  C {~~bad~>good~~} D {>>note<<} E {==focus==}{>>why<<} F'
+  )
+  assert.equal(
+    removeReviewMarker(
+      markdown,
+      markers.find((marker) => marker.kind === REVIEW_KINDS.substitution)
+    ),
+    'A {++new++} B {--old--} C good D {>>note<<} E {==focus==}{>>why<<} F'
+  )
+  assert.equal(
+    removeReviewMarker(
+      markdown,
+      markers.find((marker) => marker.kind === REVIEW_KINDS.comment)
+    ),
+    'A {++new++} B {--old--} C {~~bad~>good~~} D  E {==focus==}{>>why<<} F'
+  )
+
+  assert.equal(
+    removeReviewMarker(
+      `prefix ${markdown}`,
+      markers.find((marker) => marker.kind === REVIEW_KINDS.highlight)
+    ),
+    `prefix ${markdown}`
+  )
+}
+
+function testSnippetPrompt() {
+  const snippet = 'E {==focus==}{>>why<<}'
+  const prompt = buildReviewAiPromptForSnippet(snippet, 'paragraph')
+
+  assert.match(prompt, /Review marker meanings:/)
+  assert.match(prompt, /\{\+\+new text\+\+\}.*addition/i)
+  assert.doesNotMatch(prompt, /\{>>comment<<\}: reviewer comment/i)
+  assert.match(prompt, /--- Scoped Snippet \(paragraph\) ---/)
+  assert.ok(prompt.includes(snippet))
+}
+
 function testNormalize() {
   assert.equal(
     normalizeReviewMarkupMarkdown('A {~~bad\\~>good~~} edit'),
@@ -168,6 +274,10 @@ testScanning()
 testWrapping()
 testDecisions()
 testPrompt()
+testMakeHighlightCommentMarkup()
+testReplaceReviewMarker()
+testRemoveReviewMarker()
+testSnippetPrompt()
 testNormalize()
 testDisplayParts()
 

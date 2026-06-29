@@ -168,6 +168,27 @@ function hasLineBreak(text) {
   return /[\r\n]/.test(text)
 }
 
+function assertSafeHighlightCommentField(name, value) {
+  const stringValue = String(value)
+
+  if (
+    hasLineBreak(stringValue) ||
+    (name === 'text' && stringValue.includes('==}{>>')) ||
+    (name === 'comment' && stringValue.includes('<<}'))
+  ) {
+    throw new Error(`Unsafe highlight-comment field: ${name}`)
+  }
+
+  return stringValue
+}
+
+export function makeHighlightCommentMarkup(text, comment) {
+  const safeText = assertSafeHighlightCommentField('text', text)
+  const safeComment = assertSafeHighlightCommentField('comment', comment)
+
+  return `{==${safeText}==}{>>${safeComment}<<}`
+}
+
 export function wrapReviewSelection(text, start, end, kind) {
   const selected = text.slice(start, end)
 
@@ -267,20 +288,62 @@ export function applyReviewDecision(markdown, decision) {
   return resolved + markdown.slice(cursor)
 }
 
+function markerMatchesMarkdown(markdown, marker) {
+  return Boolean(marker?.raw && markdown.slice(marker.start, marker.end) === marker.raw)
+}
+
+export function replaceReviewMarker(markdown, marker, replacement) {
+  if (marker?.kind !== REVIEW_KINDS.highlight) return markdown
+  if (!markerMatchesMarkdown(markdown, marker)) return markdown
+
+  return spliceText(
+    markdown,
+    marker.start,
+    marker.end,
+    makeHighlightCommentMarkup(replacement.text, replacement.comment)
+  )
+}
+
+export function removeReviewMarker(markdown, marker) {
+  if (!marker) return markdown
+  if (!markerMatchesMarkdown(markdown, marker)) return markdown
+
+  const replacement =
+    marker.kind === REVIEW_KINDS.highlight
+      ? marker.content.text
+      : replacementForMarker(marker, 'accept')
+
+  return spliceText(markdown, marker.start, marker.end, replacement)
+}
+
 export function normalizeReviewMarkupMarkdown(markdown) {
   return markdown.replace(/\{~~([\s\S]*?)\\~>([\s\S]*?)~~\}/g, '{~~$1~>$2~~}')
 }
 
+const REVIEW_AI_PROMPT_LEGEND = [
+  'Review marker meanings:',
+  '- {++new text++}: addition proposed by the reviewer.',
+  '- {--old text--}: deletion proposed by the reviewer.',
+  '- {~~old text~>new text~~}: substitution from old text to new text.',
+  '- {==highlighted text==}{>>comment<<}: highlighted text with a reviewer comment.',
+]
+
 export function buildReviewAiPrompt(markdown) {
   return [
     'You are reviewing Markdown that uses source-readable review markers.',
-    'Review marker meanings:',
-    '- {++new text++}: addition proposed by the reviewer.',
-    '- {--old text--}: deletion proposed by the reviewer.',
-    '- {~~old text~>new text~~}: substitution from old text to new text.',
-    '- {==highlighted text==}{>>comment<<}: highlighted text with a reviewer comment.',
+    ...REVIEW_AI_PROMPT_LEGEND,
     'Read the annotated Markdown and respond using these marker meanings.',
     '--- Annotated Markdown ---',
     markdown
+  ].join('\n')
+}
+
+export function buildReviewAiPromptForSnippet(snippet, scope) {
+  return [
+    'You are reviewing a scoped Markdown snippet that uses source-readable review markers.',
+    ...REVIEW_AI_PROMPT_LEGEND,
+    'Read the scoped snippet and respond using these marker meanings.',
+    `--- Scoped Snippet (${scope}) ---`,
+    snippet
   ].join('\n')
 }
