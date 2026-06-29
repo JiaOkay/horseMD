@@ -377,3 +377,19 @@ GFM 表格单元格必须单行。直接在单元格插入换行/hardbreak,`mdas
 ## 功能：更新提示展示"更新内容"
 
 `update:check` 把 release 的 `body`(Markdown,截断 4000 字)作为 `notes` 返回;`UpdateToast` 用**纯 React 元素**把标题/要点/粗体/行内代码渲染出来(**不 `dangerouslySetInnerHTML`,无 XSS**),长内容在卡片内细滚动条滚动。全自动——发布时在 GitHub Release 写的说明,用户升级时就能看到。
+
+## bug 22：审阅「替换」标记在富文本里被删除线吞掉（Mac 尤甚）
+
+CriticMarkup 的替换标记 `{~~旧~>新~~}` 在富文本里**渲染不出来、还会把整行删掉**;而新增 `{++++}`、删除 `{----}` 都正常。修了好几轮都不彻底,根因在两层。
+
+**根因一(prosemirror-inputrules 的 `exec` 不锚定光标)。** GFM 删除线输入规则是 `markRule(/(?<![\w:/])(~{1,2})(.+?)\1(?!\w|\/)/, strike)`。`prosemirror-inputrules` 的 `run()` 是 `match = rule.match.exec(textBefore)`——**`exec` 在光标前的整段文本里任意位置匹配,并不要求匹配结束在光标处**。所以只要这一行有个字面的 `{~~旧~>新~~}`,**打任何一个字符** `exec` 都会先命中标记里的波浪号,然后 `markRule` 执行 `tr.delete(textEnd, to)`——**把标记到光标之间的内容全删掉、标记变删除线**。这正是"打字就把整行删了"的真相,跟打的是不是 `~` 无关。(其它三个标记不用波浪号,所以从不撞删除线。)用真实的 `prosemirror-inputrules` + `markRule` 跑无头测试复现:关掉守卫时,打 `{~~old~>new~~}` 变成 `{old>new~}` + 删除线。
+
+**根因二(为什么 Windows 没事、Mac 坏)。** macOS 中文输入法是通过 `compositionend` 事件提交文字的,而 `prosemirror-inputrules` 的 `compositionend` 处理器会**用 `text=""` 再跑一次 `run()`——这条路不经过 `handleTextInput`**。Windows 输入法提交走的是 `handleTextInput`。所以挂在 `handleTextInput` 上的守卫在 Mac 上被绕过,删除线规则照常吞标记。
+
+**修复(两层,缺一不可):**
+
+1. **守卫插件 `createStrikeGuardPlugin`**(`Editor.jsx`,**prepend 到 `prosePluginsCtx` 最前**,这样它的 `handleTextInput` 抢在 inputRules 之前)。用一个**纯函数** `strikeInputWouldCorruptCriticMarkup(textBefore, typed)`(`strikeGuard.js`,4 个条件:匹配内容含 `~>` / 紧跟在 `{` 后 / 紧接 `}` 前 / 行里有未闭合的 `{~~` 等 opener)判断这次删除线匹配会不会吃掉 CriticMarkup 标记;**会的话就把这次输入按字面字符插进去(程序化事务,绕过输入规则)**,标记保住为纯文本走文本扫描渲染。普通 `~~删除线~~` 不命中这些条件,照常变删除线。Milkdown 的 `customInputRules` 是排在 `...prosePlugins` 之后的(`@milkdown/core` 源码可证),所以 prepend 必然先跑。
+2. **`appendTransaction` 兜底 `createSubstitutionLiveReconstructPlugin`**——专门补 compositionend 这条 `handleTextInput` 拦不到的路。重写成**用 `oldState` 还原**:当一笔事务碰了删除线 mark、且某文本块现在有删除线、但 `oldState` 里这里有完整的 `{~~…~~}` 而现在不完整了 → 用 oldState 的原始内容还原(光标也保留)。**只有替换标记撞删除线**(其它标记不用波浪号),所以只处理 `{~~`。快速通道:没碰删除线 mark 就直接 `return null`,正常打字零开销。
+
+**验证**:纯函数 27 例 + 用真实 `prosemirror-inputrules`/`markRule` 的集成 8 例 + 专门复现 compositionend 的 3 例全过(后者用 inputRules 插件真实的 `compositionend` 处理器复现 Mac 路径,断言兜底把标记还原成 `{~~旧~>新~~}` 且无删除线)。教训:改输入规则相关的 bug,**一定要用真实的 `prosemirror-inputrules` 跑无头测试**(光看代码会误以为"匹配必须在光标处"),并且要覆盖 IME 的 compositionend 路径(跨平台差异的常见来源)。
+

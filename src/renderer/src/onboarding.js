@@ -46,6 +46,16 @@ flowchart LR
 
 $$\\int_{0}^{\\infty} e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}$$
 
+**Review marks** — annotate a draft while keeping the original text. They render
+live (below) and stay readable right in the Markdown source. Select text and use
+the review commands in the command palette (\`Ctrl+P\`) to insert them; accept or
+reject all from there too.
+
+- Addition: {++new text++}
+- Deletion: {--cut this--}
+- Substitution: {~~old word~>new word~~}
+- Highlight + comment: {==key point==}{>>a reviewer note<<}
+
 | Feature | Try it |
 | --- | --- |
 | Tables | edit any cell |
@@ -131,6 +141,13 @@ flowchart LR
 **数学公式** 用 LaTeX 写：质能方程 $E = mc^2$，或者块级公式：
 
 $$\\int_{0}^{\\infty} e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}$$
+
+**审阅标记** —— 在草稿上批注而不丢失原文。它们会实时渲染（见下），并且始终以源码可读的形式留在 Markdown 里。选中文字后用命令面板（\`Ctrl+P\`）里的审阅命令插入，也能在里面一键全部接受 / 拒绝。
+
+- 新增：{++新增的文字++}
+- 删除：{--要删掉的文字--}
+- 替换：{~~旧词~>新词~~}
+- 高亮 + 评论：{==关键这句==}{>>一句批注<<}
 
 | 功能 | 试试看 |
 | --- | --- |
