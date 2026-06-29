@@ -1002,7 +1002,6 @@ export default function App() {
     reviewAdd: () => applyReviewMarkupToActive(REVIEW_KINDS.addition),
     reviewDelete: () => applyReviewMarkupToActive(REVIEW_KINDS.deletion),
     reviewSubstitute: () => applyReviewMarkupToActive(REVIEW_KINDS.substitution),
-    reviewComment: () => applyReviewMarkupToActive(REVIEW_KINDS.comment),
     reviewHighlight: () => applyReviewMarkupToActive(REVIEW_KINDS.highlight),
     reviewCopyPrompt: copyReviewPrompt,
     reviewAcceptAll: () => applyReviewDecisionToActive('accept'),
@@ -1247,7 +1246,6 @@ export default function App() {
           icon: 'review',
           run: () => handlers.current.reviewSubstitute()
         },
-        { id: 'cmd.reviewComment', title: t('cmd.reviewComment'), icon: 'review', run: () => handlers.current.reviewComment() },
         { id: 'cmd.reviewHighlight', title: t('cmd.reviewHighlight'), icon: 'review', run: () => handlers.current.reviewHighlight() },
         { id: 'cmd.reviewCopyPrompt', title: t('cmd.reviewCopyPrompt'), icon: 'review', run: () => handlers.current.reviewCopyPrompt() },
         { id: 'cmd.reviewAcceptAll', title: t('cmd.reviewAcceptAll'), icon: 'review', run: () => handlers.current.reviewAcceptAll() },

@@ -43,8 +43,6 @@ function testWrapping() {
   assert.equal(wrapReviewSelection('abc', 1, 2, REVIEW_KINDS.deletion).text, 'a{--b--}c')
   assert.equal(wrapReviewSelection('abc', 1, 2, REVIEW_KINDS.substitution).text, 'a{~~b~>~~}c')
   assert.equal(wrapReviewSelection('abc', 1, 2, REVIEW_KINDS.highlight).text, 'a{==b==}{>><<}c')
-  assert.equal(wrapReviewSelection('abc', 1, 1, REVIEW_KINDS.comment).text, 'a{>><<}bc')
-  assert.equal(wrapReviewSelection('abcd', 1, 3, REVIEW_KINDS.comment).text, 'a{>><<}bcd')
 
   assert.deepEqual(wrapReviewSelection('abc', 1, 2, REVIEW_KINDS.addition), {
     text: 'a{++b++}c',
@@ -67,14 +65,10 @@ function testWrapping() {
     selectionEnd: 11
   })
   assert.deepEqual(wrapReviewSelection('abc', 1, 1, REVIEW_KINDS.comment), {
-    text: 'a{>><<}bc',
-    selectionStart: 4,
-    selectionEnd: 4
+    error: 'kind'
   })
   assert.deepEqual(wrapReviewSelection('abcd', 1, 3, REVIEW_KINDS.comment), {
-    text: 'a{>><<}bcd',
-    selectionStart: 4,
-    selectionEnd: 4
+    error: 'kind'
   })
 
   assert.deepEqual(wrapReviewSelection('a\nb', 0, 3, REVIEW_KINDS.addition), {
@@ -98,6 +92,7 @@ function testPrompt() {
 
   assert.match(prompt, /Review marker meanings:/)
   assert.match(prompt, /\{\+\+new text\+\+\}.*addition/i)
+  assert.doesNotMatch(prompt, /\{>>comment<<\}: reviewer comment/i)
   assert.match(prompt, /--- Annotated Markdown ---/)
   assert.ok(prompt.includes(sample))
 }
@@ -140,15 +135,11 @@ function testDisplayParts() {
     { type: 'syntax', role: 'syntax', start: 0, end: 3, pos: undefined, label: undefined, title: undefined },
     { type: 'content', role: 'highlight', start: 3, end: 8, pos: undefined, label: undefined, title: undefined },
     { type: 'syntax', role: 'syntax', start: 8, end: 14, pos: undefined, label: undefined, title: undefined },
-    { type: 'widget', role: 'comment', start: undefined, end: undefined, pos: 14, label: 'comment', title: 'why' },
+    { type: 'widget', role: 'comment-margin', start: undefined, end: undefined, pos: 8, label: undefined, title: 'why' },
     { type: 'syntax', role: 'syntax', start: 14, end: 20, pos: undefined, label: undefined, title: undefined }
   ])
 
-  assert.deepEqual(simplifyDisplayParts('{>>note<<}'), [
-    { type: 'syntax', role: 'syntax', start: 0, end: 3, pos: undefined, label: undefined, title: undefined },
-    { type: 'widget', role: 'comment', start: undefined, end: undefined, pos: 3, label: 'comment', title: 'note' },
-    { type: 'syntax', role: 'syntax', start: 3, end: 10, pos: undefined, label: undefined, title: undefined }
-  ])
+  assert.deepEqual(simplifyDisplayParts('{>>note<<}'), [])
 
   assert.deepEqual(simplifyDisplayParts('{>><<}'), [])
   assert.deepEqual(simplifyDisplayParts('{~~old~>~~}'), [])
@@ -157,7 +148,7 @@ function testDisplayParts() {
   assert.deepEqual(simplifyDisplayParts('{>>note<<}', { revealRange: { start: 4, end: 4 } }), [])
   assert.equal(
     simplifyDisplayParts('{>>note<<}', { revealRange: { start: 10, end: 10 } }).length,
-    3
+    0
   )
 }
 

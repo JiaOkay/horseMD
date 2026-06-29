@@ -23,13 +23,15 @@ function createReviewWidget(part) {
   const widget = document.createElement('span')
   widget.contentEditable = 'false'
 
-  if (part.role === 'comment') {
-    widget.className = 'hm-review-widget hm-review-comment-widget'
-    widget.textContent = '💬'
+  if (part.role === 'comment-margin') {
+    widget.className = 'hm-review-widget hm-review-margin-note'
+    widget.textContent = part.label || ''
     widget.title = part.title || ''
     widget.setAttribute(
       'aria-label',
-      part.title ? `Review comment: ${part.title}` : 'Review comment'
+      part.title
+        ? `Review comment ${part.label}: ${part.title}`
+        : `Review comment ${part.label}`
     )
     return widget
   }
@@ -58,6 +60,7 @@ export function createReviewDecorationPlugin() {
     props: {
       decorations(state) {
         const decorations = []
+        let commentNumber = 0
 
         state.doc.descendants((node, pos) => {
           if (!node.isText || !node.text) return true
@@ -66,10 +69,14 @@ export function createReviewDecorationPlugin() {
 
           for (const part of getReviewMarkupDisplayParts(node.text, { revealRange })) {
             if (part.type === 'widget') {
+              const widgetPart =
+                part.role === 'comment-margin'
+                  ? { ...part, label: String(++commentNumber) }
+                  : part
               decorations.push(
-                Decoration.widget(pos + part.pos, () => createReviewWidget(part), {
-                  key: `${part.role}:${pos + part.pos}:${part.title || part.label || ''}`,
-                  side: -1
+                Decoration.widget(pos + part.pos, () => createReviewWidget(widgetPart), {
+                  key: `${widgetPart.role}:${pos + part.pos}:${widgetPart.title || ''}:${widgetPart.label || ''}`,
+                  side: widgetPart.role === 'comment-margin' ? 1 : -1
                 })
               )
               continue
@@ -97,18 +104,6 @@ export function applyReviewMarkupInView(view, kind) {
   if (!view) return { ok: false, reason: 'no-view' }
 
   const { from, to } = view.state.selection
-  if (kind === REVIEW_KINDS.comment) {
-    const result = wrapReviewSelection('', 0, 0, kind)
-    if (result.error) return { ok: false, reason: result.error }
-
-    let tr = view.state.tr.insertText(result.text, from, from)
-    const cursor = from + result.selectionStart
-    tr = tr.setSelection(TextSelection.create(tr.doc, cursor, cursor))
-    view.dispatch(tr.scrollIntoView())
-    view.focus()
-    return { ok: true }
-  }
-
   const selected = view.state.doc.textBetween(from, to, '\n')
   const result = wrapReviewSelection(selected, 0, selected.length, kind)
   if (result.error) return { ok: false, reason: result.error }

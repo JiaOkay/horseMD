@@ -142,17 +142,6 @@ export function getReviewMarkupDisplayParts(markdown, options = {}) {
       continue
     }
 
-    if (marker.kind === REVIEW_KINDS.comment) {
-      if (!marker.content.text) continue
-
-      const commentStart = marker.start + 3
-
-      pushSyntaxPart(parts, marker.start, commentStart)
-      pushWidgetPart(parts, 'comment', commentStart, 'comment', marker.content.text)
-      pushSyntaxPart(parts, commentStart, marker.end)
-      continue
-    }
-
     if (marker.kind === REVIEW_KINDS.highlight) {
       if (!marker.content.text || !marker.content.comment) continue
 
@@ -163,7 +152,7 @@ export function getReviewMarkupDisplayParts(markdown, options = {}) {
       pushSyntaxPart(parts, marker.start, textStart)
       pushContentPart(parts, 'highlight', textStart, textEnd)
       pushSyntaxPart(parts, textEnd, commentStart)
-      pushWidgetPart(parts, 'comment', commentStart, 'comment', marker.content.comment)
+      pushWidgetPart(parts, 'comment-margin', textEnd, undefined, marker.content.comment)
       pushSyntaxPart(parts, commentStart, marker.end)
     }
   }
@@ -234,16 +223,6 @@ export function wrapReviewSelection(text, start, end, kind) {
     }
   }
 
-  if (kind === REVIEW_KINDS.comment) {
-    const marker = '{>><<}'
-    const selectionStart = start + '{>>'.length
-    return {
-      text: spliceText(text, start, start, marker),
-      selectionStart,
-      selectionEnd: selectionStart
-    }
-  }
-
   return { error: 'kind' }
 }
 
@@ -295,7 +274,6 @@ export function buildReviewAiPrompt(markdown) {
     '- {++new text++}: addition proposed by the reviewer.',
     '- {--old text--}: deletion proposed by the reviewer.',
     '- {~~old text~>new text~~}: substitution from old text to new text.',
-    '- {>>comment<<}: reviewer comment.',
     '- {==highlighted text==}{>>comment<<}: highlighted text with a reviewer comment.',
     'Read the annotated Markdown and respond using these marker meanings.',
     '--- Annotated Markdown ---',

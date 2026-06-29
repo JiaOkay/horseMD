@@ -327,8 +327,8 @@ export default function Editor({
         ...plugins,
         // Table-cell line break (issue #7): keymap first so it wins Enter inside a cell.
         tableBreakKeymap(),
-        // Source-readable review markers stay visible in rich mode, but get
-        // tinted by kind so they are easy to spot while editing.
+        // Rich mode parses source-readable review markers, including right-margin
+        // notes for highlighted comments, while the Markdown source stays raw.
         createReviewDecorationPlugin(),
         // Split a mermaid block that holds 2+ diagrams (e.g. a 2nd paste appended
         // into the same block) back into one block per diagram.
@@ -951,7 +951,6 @@ export default function Editor({
           [REVIEW_KINDS.addition, 'review.add', 'Addition'],
           [REVIEW_KINDS.deletion, 'review.delete', 'Deletion'],
           [REVIEW_KINDS.substitution, 'review.substitute', 'Substitution'],
-          [REVIEW_KINDS.comment, 'review.comment', 'Comment'],
           [REVIEW_KINDS.highlight, 'review.highlight', 'Highlight + comment']
         ]
         const injectReviewButton = (toolbar) => {
