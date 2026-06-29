@@ -135,63 +135,87 @@ function remarkReconstructSubstitution() {
   }
 }
 
-// Runtime (live-edit) companion to remarkReconstructSubstitution — a BACKSTOP.
-// PREVENTION lives in createStrikeGuardPlugin() (below), which stops the
-// strikethrough input rule from ever firing on a CriticMarkup marker. But some
-// paths can still leave a strike mark adjacent to `{`/`}` in the live doc (a
-// programmatic insert, an IME composition, a plugin that re-applies marks), so
-// this appendTransaction detects the `{` + strike(~>) + `}` (or the garbled
-// `{` + strike(>) + `~}`) triple on every edit and converts it back to literal
-// text `{~~old~>new~~}`, so the robust text-scan path renders it. Only scans
-// textblocks containing {/~/}, so it's cheap on normal typing.
+// Runtime (live-edit) BACKSTOP. PREVENTION lives in createStrikeGuardPlugin()
+// (handleTextInput), but one path bypasses it: on macOS, Chinese IME commits via
+// compositionend, and prosemirror-inputrules' compositionend handler re-runs
+// run() with text="" — NOT through handleTextInput, so the guard never sees it.
+// The strike rule then matches the marker's tildes and markRule deletes the
+// marker's content + strikes a `~` (e.g. `{~~旧~>新~~}` → `{~~~>~~}` + <del>).
+// (On Windows IME commit usually goes through handleTextInput, which is why the
+// bug is Mac-only.) oldState still holds the intact literal marker, so this
+// appendTransaction restores it. Only `{~~` (substitution) collides with the
+// tilde strike rule, so only substitution markers are touched.
+//
+// Fast path: it's a no-op unless a transaction touched a strike mark, so normal
+// typing/cursor/scroll never pay the walk cost.
 function createSubstitutionLiveReconstructPlugin() {
   return new Plugin({
-    appendTransaction(transs, _oldState, newState) {
+    appendTransaction(transs, oldState, newState) {
       if (!transs.some((tr) => tr.docChanged)) return null
-      const tr = newState.tr
-      let modified = false
-      newState.doc.descendants((node, pos) => {
-        if (!node.isTextblock) return true
-        if (!/[~{}]/.test(node.textContent)) return false
-        const kids = []
-        node.forEach((child, offset) => kids.push({ node: child, pos: pos + 1 + offset }))
-        for (let i = kids.length - 3; i >= 0; i--) {
-          const a = kids[i]
-          const b = kids[i + 1]
-          const c = kids[i + 2]
-          if (!a.node.isText || !b.node.isText || !c.node.isText) continue
-          const aT = a.node.text || ''
-          const bT = b.node.text || ''
-          const cT = c.node.text || ''
-          if (!aT.endsWith('{')) continue
-          const bStrike = b.node.marks.some((m) => /strike|del/i.test(m.type.name))
-          if (!bStrike) continue
-          // Two forms of a strike-marked substitution in the live doc:
-          //   ① clean (parse/insert): strike has `~>` and c starts with `}`.
-          //   ② garbled (TYPED): Milkdown's strikethrough input rule consumed the
-          //      `~` from `~>` and one `~` from the closing `~~}`, so the strike
-          //      text has `>` (no `~>`) and c starts with `~}`. Restore `~>`.
-          let content = null
-          let cSkip = 0
-          if (bT.includes('~>') && cT.startsWith('}')) {
-            content = bT
-            cSkip = 1
-          } else if (bT.includes('>') && !bT.includes('~>') && cT.startsWith('~}')) {
-            content = bT.replace('>', '~>')
-            cSkip = 2
+      // Only run when a strike mark was added/removed (the corruption signature).
+      const touchedStrike = transs.some((t) =>
+        t.steps.some((s) => s.mark && s.mark.type && /strike|del/i.test(s.mark.type.name))
+      )
+      if (!touchedStrike) return null
+
+      // Find textblocks where newState has a strike mark but oldState held a
+      // `{~~…~~}` substitution marker that is no longer intact (the strike rule
+      // ate it). Restoring the WHOLE textblock content from oldState is safe
+      // because the corruption is always its own isolated transaction, so
+      // oldState == newState except for the strike-rule damage.
+      const toRestore = []
+      // nStart/oStart = position where the node's CONTENT begins (nodePos+1; 0
+      // for the root doc). Walking by content-start avoids the root-level
+      // off-by-one (the doc's first child sits at pos 0, not 1).
+      const walk = (nNode, oNode, nStart, oStart) => {
+        if (nNode.isTextblock) {
+          const nPos = nStart - 1
+          if (oNode && oNode.isTextblock) {
+            let hasStrike = false
+            nNode.forEach((c) => {
+              if (c.marks.some((m) => /strike|del/i.test(m.type.name))) hasStrike = true
+            })
+            if (hasStrike) {
+              const oldMarkers = oNode.textContent.match(/\{~~[\s\S]*?~~\}/g) || []
+              // Restore only if some old substitution marker is missing from the
+              // new text (it got corrupted). Intact markers → leave alone (also
+              // avoids reverting a legitimate toolbar strike on adjacent text).
+              if (oldMarkers.length && !oldMarkers.every((m) => nNode.textContent.includes(m))) {
+                toRestore.push({ nPos, oPos: oStart - 1, oldNode: oNode })
+              }
+            }
           }
-          if (content != null) {
-            tr.replaceWith(
-              a.pos,
-              c.pos + c.node.nodeSize,
-              newState.schema.text(`${aT.slice(0, -1)}{~~${content}~~}${cT.slice(cSkip)}`)
-            )
-            modified = true
-          }
+          return
         }
-        return false
-      })
-      return modified ? tr : null
+        const count = Math.min(nNode.childCount, oNode ? oNode.childCount : 0)
+        let nOff = 0
+        let oOff = 0
+        for (let i = 0; i < nNode.childCount; i++) {
+          const nc = nNode.child(i)
+          const oc = i < count && oNode ? oNode.child(i) : null
+          if (oc) {
+            walk(nc, oc, nStart + nOff + 1, oStart + oOff + 1)
+            oOff += oc.nodeSize
+          }
+          nOff += nc.nodeSize
+        }
+      }
+      walk(newState.doc, oldState.doc, 0, 0)
+      if (!toRestore.length) return null
+
+      const tr = newState.tr
+      toRestore.sort((a, b) => b.nPos - a.nPos) // bottom-up so earlier positions stay valid
+      for (const { nPos, oPos, oldNode } of toRestore) {
+        const size = newState.doc.nodeAt(nPos).nodeSize
+        tr.replaceWith(nPos + 1, nPos + size - 1, oldNode.content)
+        // Keep the caret where oldState had it (e.g. right after the composed
+        // char) — restored content is identical, so the offset maps 1:1.
+        const head = oldState.selection.head
+        if (head > oPos && head < oPos + oldNode.nodeSize) {
+          tr.setSelection(TextSelection.create(tr.doc, nPos + (head - oPos)))
+        }
+      }
+      return tr
     }
   })
 }
