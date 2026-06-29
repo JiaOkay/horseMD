@@ -158,12 +158,28 @@ function createSubstitutionLiveReconstructPlugin() {
           const aT = a.node.text || ''
           const bT = b.node.text || ''
           const cT = c.node.text || ''
+          if (!aT.endsWith('{')) continue
           const bStrike = b.node.marks.some((m) => /strike|del/i.test(m.type.name))
-          if (aT.endsWith('{') && bStrike && bT.includes('~>') && cT.startsWith('}')) {
+          if (!bStrike) continue
+          // Two forms of a strike-marked substitution in the live doc:
+          //   ① clean (parse/insert): strike has `~>` and c starts with `}`.
+          //   ② garbled (TYPED): Milkdown's strikethrough input rule consumed the
+          //      `~` from `~>` and one `~` from the closing `~~}`, so the strike
+          //      text has `>` (no `~>`) and c starts with `~}`. Restore `~>`.
+          let content = null
+          let cSkip = 0
+          if (bT.includes('~>') && cT.startsWith('}')) {
+            content = bT
+            cSkip = 1
+          } else if (bT.includes('>') && !bT.includes('~>') && cT.startsWith('~}')) {
+            content = bT.replace('>', '~>')
+            cSkip = 2
+          }
+          if (content != null) {
             tr.replaceWith(
               a.pos,
               c.pos + c.node.nodeSize,
-              newState.schema.text(`${aT.slice(0, -1)}{~~${bT}~~}${cT.slice(1)}`)
+              newState.schema.text(`${aT.slice(0, -1)}{~~${content}~~}${cT.slice(cSkip)}`)
             )
             modified = true
           }
