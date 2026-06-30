@@ -1665,8 +1665,12 @@ body.hm-col-resizing * {
    always-rendered keeps that cache exact. contain-intrinsic-size uses the
    `auto` keyword so Chromium caches each block's real height after its first
    render — the scrollbar only adjusts once per block on the first scroll
-   through, then stays stable. */
-.editor-scroll.hm-cv .milkdown .ProseMirror > *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+   through, then stays stable.
+   :has(.hm-review-widget) excludes paragraphs holding a review margin-note:
+   contain:paint (implied by content-visibility) would clip its absolute
+   position:right:-2.7rem button. :has is style-recalc only (no layout), and
+   content-visibility already skips style recalc off-screen, so no perf hit. */
+.editor-scroll.hm-cv .milkdown .ProseMirror > *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(:has(.hm-review-widget)) {
   content-visibility: auto;
   contain-intrinsic-size: auto 3.5em;
 }
