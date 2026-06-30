@@ -1,5 +1,6 @@
 import { Plugin, PluginKey, TextSelection } from '@milkdown/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/prose/view'
+import { iconMarkup } from './icons.jsx'
 import {
   REVIEW_KINDS,
   buildReviewAiPromptForSnippet,
@@ -423,41 +424,54 @@ function renderReadMode(card, view, part, options) {
     : resolveReviewGroupActiveIndex(annotations, annotation?.key, 0)
   card.replaceChildren()
 
+  // Global note index/total (set by the decoration) for the X/Y display +
+  // cross-note navigation. Fall back to per-group for safety.
+  const noteIndex = Number.isInteger(part.noteIndex) ? part.noteIndex : activeIndex + 1
+  const noteTotal = Number.isInteger(part.noteTotal) ? part.noteTotal : annotations.length
+
   const header = document.createElement('div')
   header.className = 'hm-review-card-head'
   const number = document.createElement('span')
   number.className = 'hm-review-card-number'
-  number.textContent = part.indexLabel || (annotation ? `${activeIndex + 1} / ${annotations.length}` : '')
+  number.textContent = `${noteIndex} / ${noteTotal}`
   const title = document.createElement('span')
   title.className = 'hm-review-card-title'
   title.textContent = t(options, 'review.cardTitle', 'Review note')
   header.append(number, title)
 
-  if (annotations.length > 1) {
+  // Cross-note navigation: jump to the previous/next review note in document
+  // order (switches openGroupKey + scrolls the note into view).
+  if (noteTotal > 1) {
     const nav = document.createElement('span')
     nav.className = 'hm-review-card-nav'
 
-    const addNavButton = (key, fallback, direction) => {
+    const addNavButton = (iconName, key, fallback, groupKey, pos) => {
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'hm-review-card-nav-button'
-      button.textContent = t(options, key, fallback)
-      button.title = button.textContent
+      button.innerHTML = iconMarkup(iconName, { size: 14 })
+      button.title = t(options, key, fallback)
+      button.disabled = !groupKey
       button.addEventListener('mousedown', stopWidgetMouseDown)
       button.addEventListener('click', (event) => {
         event.preventDefault()
         event.stopPropagation()
-        activateReviewGroupIndex(
-          view,
-          part,
-          cycleReviewGroupActiveIndex(activeIndex, annotations.length, direction)
+        if (!groupKey) return
+        view?.dispatch(
+          view.state.tr.setMeta(REVIEW_PLUGIN_KEY, {
+            type: 'activate',
+            groupKey,
+            activeKey: null,
+            activeIndex: 0
+          })
         )
+        if (Number.isInteger(pos)) scrollEditorToPos(view, pos)
       })
       nav.appendChild(button)
     }
 
-    addNavButton('review.previous', 'Previous', -1)
-    addNavButton('review.next', 'Next', 1)
+    addNavButton('chevron-up', 'review.previous', 'Previous', part.prevNoteKey, part.prevNotePos)
+    addNavButton('chevron-down', 'review.next', 'Next', part.nextNoteKey, part.nextNotePos)
     header.appendChild(nav)
   }
 
@@ -472,18 +486,21 @@ function renderReadMode(card, view, part, options) {
   commentLabel.className = 'hm-review-card-label'
   commentLabel.textContent = t(options, 'review.commentText', 'Comment')
   const comment = document.createElement('div')
-  comment.className = 'hm-review-card-comment'
+  comment.className = 'hm-review-card-comment hm-review-card-comment-prominent'
   comment.textContent = annotation.comment
 
   const actions = document.createElement('div')
   actions.className = 'hm-review-card-actions'
 
-  const addButton = (key, fallback, onClick, className) => {
+  // Icon action buttons (with text tooltips). Pass null icon for a text button.
+  const addButton = (iconName, key, fallback, onClick, className) => {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = `hm-review-card-action${className ? ` ${className}` : ''}`
-    button.textContent = t(options, key, fallback)
-    button.title = button.textContent
+    const label = t(options, key, fallback)
+    button.title = label
+    if (iconName) button.innerHTML = iconMarkup(iconName, { size: 15 })
+    else button.textContent = label
     button.addEventListener('mousedown', stopWidgetMouseDown)
     button.addEventListener('click', (event) => {
       event.preventDefault()
@@ -493,27 +510,29 @@ function renderReadMode(card, view, part, options) {
     actions.appendChild(button)
   }
 
-  addButton('review.editMarkup', 'Edit markup', () => renderEditMode(card, view, part, options))
+  addButton('pencil', 'review.editMarkup', 'Edit markup', () => renderEditMode(card, view, part, options))
   addButton(
+    'check',
     'review.doneMarkup',
     'Done',
     () => removeAnnotationMarkup(view, part, options),
     'hm-review-card-primary'
   )
   addButton(
+    'close',
     'review.deleteMarkup',
     'Delete',
     () => removeAnnotationMarkup(view, part, options),
     'hm-review-card-action-danger'
   )
-  addButton('review.copyMarkup', 'Copy markup', () => {
+  addButton('copy', 'review.copyMarkup', 'Copy markup', () => {
     if (!validateAnnotationRange(view, annotation)) {
       notify(options, 'review.stale', 'Review note changed')
       return
     }
     copyText(options, makeHighlightCommentMarkup(annotation.text, annotation.comment))
   })
-  addButton('review.copyMarkupAi', 'Copy markup for AI', () => {
+  addButton('sparkle', 'review.copyMarkupAi', 'Copy markup for AI', () => {
     if (!validateAnnotationRange(view, annotation)) {
       notify(options, 'review.stale', 'Review note changed')
       return
@@ -521,7 +540,7 @@ function renderReadMode(card, view, part, options) {
     const markup = makeHighlightCommentMarkup(annotation.text, annotation.comment)
     copyText(options, buildReviewAiPromptForSnippet(markup, 'markup'), 'review.promptCopied', 'Review prompt copied')
   })
-  addButton('review.copyParagraphAi', 'Copy paragraph for AI', () => {
+  addButton('file', 'review.copyParagraphAi', 'Copy paragraph for AI', () => {
     if (!validateAnnotationRange(view, annotation)) {
       notify(options, 'review.stale', 'Review note changed')
       return
@@ -634,6 +653,21 @@ function renderEditMode(card, view, part, options) {
   textInput.select()
 }
 
+// Scroll the editor's scroll container so the given doc position is centered.
+// Used by the review card's prev/next note navigation.
+function scrollEditorToPos(view, pos) {
+  try {
+    const coords = view.coordsAtPos(pos)
+    const scroller = view.dom.closest && view.dom.closest('.editor-scroll')
+    if (!scroller) return
+    const sr = scroller.getBoundingClientRect()
+    const targetTop = (coords.top + coords.bottom) / 2 - (sr.top + sr.bottom) / 2
+    scroller.scrollTop += targetTop
+  } catch {
+    /* pos out of range / view tearing down */
+  }
+}
+
 function createReviewWidget(part, options = {}, view) {
   const widget = document.createElement('span')
   widget.contentEditable = 'false'
@@ -670,6 +704,31 @@ function createReviewWidget(part, options = {}, view) {
           activeIndex: Number.isInteger(part.activeIndex) ? part.activeIndex : 0
         })
       )
+    })
+    // Hover to expand (desktop): enter the widget (button or card) opens it
+    // after a short delay; leaving closes it after a delay. Timers tolerate the
+    // visual gap between button and card. Click (above) still works for touch.
+    let openTimer = 0
+    let closeTimer = 0
+    widget.addEventListener('mouseenter', () => {
+      window.clearTimeout(closeTimer)
+      if (part.open) return
+      openTimer = window.setTimeout(() => {
+        view?.dispatch(
+          view.state.tr.setMeta(REVIEW_PLUGIN_KEY, {
+            type: 'toggle',
+            groupKey: part.groupKey,
+            activeKey: part.annotation?.key,
+            activeIndex: Number.isInteger(part.activeIndex) ? part.activeIndex : 0
+          })
+        )
+      }, 120)
+    })
+    widget.addEventListener('mouseleave', () => {
+      window.clearTimeout(openTimer)
+      closeTimer = window.setTimeout(() => {
+        view?.dispatch(view.state.tr.setMeta(REVIEW_PLUGIN_KEY, { type: 'close' }))
+      }, 220)
     })
     widget.appendChild(button)
 
@@ -1048,6 +1107,22 @@ export function createReviewDecorationPlugin(options = {}) {
           }
         }
 
+        // Global note list (for X/Y numbering + cross-note prev/next nav).
+        // widgetList is already sorted by pos, so comment-margin widgets here
+        // are in document order.
+        const notes = widgetList.filter((w) => w.part?.role === 'comment-margin' && w.part.groupKey)
+        const noteTotal = notes.length
+        notes.forEach((w, i) => {
+          const prev = i > 0 ? notes[i - 1] : null
+          const next = i < notes.length - 1 ? notes[i + 1] : null
+          w.part.noteIndex = i + 1
+          w.part.noteTotal = noteTotal
+          w.part.prevNoteKey = prev ? prev.part.groupKey : null
+          w.part.nextNoteKey = next ? next.part.groupKey : null
+          w.part.prevNotePos = prev ? prev.pos : null
+          w.part.nextNotePos = next ? next.pos : null
+        })
+
         widgetList.forEach(({ pos, part }) => {
             const widgetPart = part
             if (widgetPart.role === 'comment-margin' && widgetPart.open && widgetPart.annotation) {
@@ -1060,7 +1135,8 @@ export function createReviewDecorationPlugin(options = {}) {
                   `${widgetPart.label || ''}:${widgetPart.open ? 'open' : 'closed'}:` +
                   `${widgetPart.activeKey || ''}:${widgetPart.activeIndex ?? ''}:` +
                   `${widgetPart.annotations?.length || ''}:` +
-                  `${widgetPart.crowded ? 'crowded' : 'single'}`,
+                  `${widgetPart.crowded ? 'crowded' : 'single'}:` +
+                  `${widgetPart.noteIndex ?? ''}/${widgetPart.noteTotal ?? ''}`,
                 side: widgetPart.role === 'comment-margin' ? 1 : -1,
                 marks: [],
                 stopEvent: (event) =>
