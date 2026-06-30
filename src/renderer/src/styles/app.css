@@ -3334,39 +3334,41 @@ body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
   font-size: 0.92rem;
   line-height: 1.5;
 }
-/* Comment is the visual focus of the card: bigger, bolder, accent-tinted. */
+/* Comment is the visual focus: a soft tinted block, readable, not heavy. */
 .milkdown .ProseMirror .hm-review-card-comment-prominent {
-  padding: 0.45rem 0.55rem;
-  border-left: 3px solid #4d8fd6;
-  border-radius: 4px;
-  background: #f3f8ff;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: var(--accent-soft, #eef4ff);
   color: var(--text-strong);
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.5;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.55;
 }
 .milkdown .ProseMirror .hm-review-card-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.7rem;
+  gap: 0.2rem;
+  margin-top: 0.6rem;
 }
+/* Ghost icon buttons — borderless, muted; a subtle fill on hover. Cleaner
+   than bordered boxes. Color-coded: primary=accent, danger=red. */
 .milkdown .ProseMirror .hm-review-card-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.85rem;
+  height: 1.85rem;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--bg);
-  color: var(--text);
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
+  transition: background 0.15s var(--ease-out), color 0.15s var(--ease-out);
 }
 .milkdown .ProseMirror .hm-review-card-action svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   pointer-events: none;
 }
 .milkdown .ProseMirror .hm-review-card-action:hover,
@@ -3376,16 +3378,19 @@ body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
   outline: none;
 }
 .milkdown .ProseMirror .hm-review-card-primary {
-  border-color: #4d8fd6;
-  background: #4d8fd6;
-  color: #ffffff;
+  color: #4d8fd6;
 }
 .milkdown .ProseMirror .hm-review-card-primary:hover,
 .milkdown .ProseMirror .hm-review-card-primary:focus-visible {
-  background: #367bc4;
-  color: #ffffff;
+  background: rgba(77, 143, 214, 0.14);
+  color: #367bc4;
 }
 .milkdown .ProseMirror .hm-review-card-action-danger {
+  color: var(--danger);
+}
+.milkdown .ProseMirror .hm-review-card-action-danger:hover,
+.milkdown .ProseMirror .hm-review-card-action-danger:focus-visible {
+  background: rgba(220, 60, 60, 0.12);
   color: var(--danger);
 }
 .milkdown .ProseMirror .hm-review-card-input,
