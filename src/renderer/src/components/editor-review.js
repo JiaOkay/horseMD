@@ -790,7 +790,7 @@ function addTextNodeReviewParts(node, pos, state, decorations, widgetParts, grou
             groupKey
           })
         : null
-      addWidgetPart(widgetParts, pos + part.pos, annotation ? { ...part, annotation, groupKey } : part)
+      addWidgetPart(widgetParts, pos + part.pos, annotation ? { ...part, annotation, groupKey: annotation.key || groupKey } : part)
       continue
     }
 
@@ -860,7 +860,10 @@ function addParsedHighlightCommentParts(entries, index, state, decorations, widg
     role: 'comment-margin',
     title: close.comment,
     annotation,
-    groupKey: openEntry.groupKey
+    // One group PER highlight (not per textblock) so each highlight+comment on
+    // the same line gets its own margin button + sequence number. annotation.key
+    // is unique per highlight (derived from its position + content).
+    groupKey: annotation.key || openEntry.groupKey
   })
   addInlineDecoration(
     decorations,
