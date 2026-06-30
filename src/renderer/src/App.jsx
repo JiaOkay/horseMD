@@ -472,6 +472,7 @@ export default function App() {
   const handlers = useRef({})
   handlers.current = createMenuHandlers({
     pickEditableId,
+    activeId,
     setHome,
     isMobile,
     setSidebarOpen,

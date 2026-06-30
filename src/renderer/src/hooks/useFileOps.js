@@ -14,7 +14,7 @@
 //   editorApis — ref map of tab id → rich editor API (exportPathToPdf getDocHTML)
 //   isMobile/t/tRef — i18n + mobile save-dialog branch
 //   setRenameState/setSaveNameState — rename / mobile-save modal triggers
-//   setRefreshNonce/setSidebarOpen — tree refresh + openFolder affordance
+//   setSidebarOpen — openFolder affordance (refreshNonce is owned internally)
 //   sessionWorkspace — initial workspace (sanitizeWorkspace applied here)
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { baseName, dirName, joinPath, genId, isHeavyDoc, sanitizeWorkspace } from '../paths.js'

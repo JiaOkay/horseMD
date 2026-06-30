@@ -14,6 +14,7 @@ import { REVIEW_KINDS } from '../reviewMarkup.js'
 
 export function createMenuHandlers({
   pickEditableId,
+  activeId,
   setHome,
   isMobile,
   setSidebarOpen,
