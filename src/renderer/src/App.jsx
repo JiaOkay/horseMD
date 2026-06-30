@@ -9,7 +9,6 @@ import CommandPalette from './components/CommandPalette.jsx'
 import { Icon } from './components/icons.jsx'
 import { THEMES, DEFAULT_THEME, applyTheme } from './themes.js'
 import { I18nProvider, translate, DEFAULT_LANG } from './i18n.jsx'
-import { welcomeDoc } from './onboarding.js'
 import Welcome from './components/Welcome.jsx'
 import WindowControls from './components/WindowControls.jsx'
 import UpdateToast from './components/UpdateToast.jsx'
@@ -24,19 +23,17 @@ import {
   applyParagraphSpacing
 } from './settings.js'
 import { applyCustomTheme } from './customThemes.js'
-import { fireToast, HM_TOAST_EVENT } from './ui.js'
+import { fireToast } from './ui.js'
 import logoUrl from './assets/logo.png'
 import { useFindReplace } from './hooks/useFindReplace.js'
 import { useOutline } from './hooks/useOutline.js'
+import { useAppLifecycle } from './hooks/useAppLifecycle.js'
 import {
-  isNewerVersion, isAbsolutePath, sanitizeWorkspace, baseName, dirName, joinPath,
-  isPlainTextDoc, isHeavyDoc, genId, LS, loadSession
+  isAbsolutePath, sanitizeWorkspace, baseName, dirName, joinPath,
+  isPlainTextDoc, isHeavyDoc, genId, loadSession
 } from './paths.js'
 import { REVIEW_KINDS } from './reviewMarkup.js'
 import { createReviewActions } from './lib/reviewActions.js'
-
-const ONBOARDED_KEY = 'horsemd.onboarded.v1'
-const UPDATE_DISMISS_KEY = 'horsemd.update.dismissed'
 
 export default function App() {
   const session = useRef(loadSession()).current
@@ -80,10 +77,6 @@ export default function App() {
   const [focusedPane, setFocusedPane] = useState('left')
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [files, setFiles] = useState([])
-  // "New version available" toast — populated by the startup update check below.
-  const [update, setUpdate] = useState(null)
-  // Transient bottom-center toast (e.g. "Copied"), fired via a `hm:toast` event.
-  const [toast, setToast] = useState(null)
   // Rename-from-tab-menu modal: { id, value } or null. (Electron has no
   // window.prompt, so renaming a tab's file uses this small inline dialog.)
   const [renameState, setRenameState] = useState(null)
@@ -107,25 +100,6 @@ export default function App() {
   // The tab id of whichever editor pane last had focus — so Save / Export target
   // the pane you're actually editing in split view, not always the left one.
   const focusedTabRef = useRef(null)
-  // Latest session snapshot, kept in a ref so the close/flush path can persist it
-  // synchronously without waiting on the debounced write.
-  const sessionRef = useRef(null)
-  // Write the latest snapshot now (close / pagehide / debounce all funnel here,
-  // so the persisted shape lives in exactly one place).
-  const flushSession = useCallback(() => {
-    if (!sessionRef.current) return
-    try {
-      // Patch unsaved-scratch content from the live mirror so a close-time write
-      // captures edits still inside a tab's debounce window. (commitAllLive, run
-      // before this on the close path, already synced tabsRef.current.)
-      const untitled = tabsRef.current
-        .filter((t) => !t.path && t.content !== t.savedContent && (t.content || '').trim())
-        .map((t) => ({ title: t.title, content: t.content }))
-      localStorage.setItem(LS, JSON.stringify({ ...sessionRef.current, untitled }))
-    } catch {
-      /* quota / serialization failure — skip this snapshot */
-    }
-  }, [])
   const [activeBlock, setActiveBlock] = useState('paragraph')
   // Lazy mounting: a rich (Crepe) editor is only created once its tab has been
   // activated, then kept mounted so later tab switches stay instant. This keeps
@@ -998,155 +972,32 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
-  useEffect(() => {
-    const paths = (session.openPaths || []).filter(Boolean)
-    const untitled = (session.untitled || []).filter((u) => u && (u.content || '').trim())
-    // Recreate unsaved scratch tabs (no path) from the last session.
-    const addUntitled = () => {
-      if (!untitled.length) return null
-      const created = untitled.map((u) => ({
-        id: genId(),
-        path: null,
-        title: u.title || tRef.current('tab.untitled'),
-        content: u.content,
-        // No prior save, so the baseline is empty → the tab shows as unsaved.
-        savedContent: '',
-        mtimeMs: null,
-        reloadNonce: 0,
-        heavy: isHeavyDoc(u.content)
-      }))
-      tabsRef.current = [...tabsRef.current, ...created]
-      setTabs((prev) => [...prev, ...created])
-      return created
-    }
-    // Restore silently: skip files that were deleted/moved since last session
-    // without popping an error for each one.
-    if (paths.length) {
-      openPaths(paths, true).then(() => {
-        addUntitled()
-        if (session.activePath) {
-          setTabs((prev) => {
-            const t = prev.find((x) => x.path === session.activePath)
-            if (t) setActiveId(t.id)
-            return prev
-          })
-        }
-      })
-    } else {
-      const created = addUntitled()
-      if (created && created.length) setActiveId(created[0].id)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // --------------------------- persistence -------------------------
-  useEffect(() => {
-    const data = {
-      workspace,
-      theme,
-      customTheme,
-      lang,
-      recents,
-      sidebarOpen,
-      sidebarMode,
-      openPaths: tabs.map((t) => t.path).filter(Boolean),
-      // Persist unsaved scratch/new tabs (no path, with edited content) so they
-      // survive a restart — closing the app no longer silently loses them. Only
-      // dirty tabs are stored, so the untouched welcome doc / empty new tabs
-      // don't keep coming back. Saved files are reopened from disk instead.
-      untitled: tabs
-        .filter((t) => !t.path && t.content !== t.savedContent && (t.content || '').trim())
-        .map((t) => ({ title: t.title, content: t.content })),
-      activePath
-    }
-    sessionRef.current = data
-    // Debounce the write: this effect runs on every keystroke (tabs/content
-    // change), and JSON.stringify-ing the whole session — including the full
-    // text of large unsaved scratch docs — plus a synchronous localStorage write
-    // on every keypress is enough to make typing in big documents stutter. Wait
-    // for a brief pause, then write once. The close path flushes the last edit.
-    const id = setTimeout(flushSession, 400)
-    return () => clearTimeout(id)
-  }, [workspace, theme, customTheme, lang, recents, sidebarOpen, sidebarMode, tabs, activePath, flushSession])
-
-  // Flush the pending session snapshot immediately when the window is closing,
-  // so the debounce above never drops the user's last few keystrokes.
-  useEffect(() => {
-    window.addEventListener('pagehide', flushSession)
-    window.addEventListener('beforeunload', flushSession)
-    return () => {
-      window.removeEventListener('pagehide', flushSession)
-      window.removeEventListener('beforeunload', flushSession)
-    }
-  }, [flushSession])
-
-  // ------------------------- update check (notify-only) ------------
-  useEffect(() => {
-    let alive = true
-    window.api.checkUpdate?.().then((r) => {
-      if (!alive || !r?.ok || !r.latest) return
-      const dismissed = localStorage.getItem(UPDATE_DISMISS_KEY)
-      if (isNewerVersion(r.latest, r.current) && r.latest !== dismissed) {
-        setUpdate({ latest: r.latest, current: r.current, url: r.url, notes: r.notes, name: r.name })
-      }
-    }).catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  // Lightweight transient toast (copy feedback, etc.). Any component can fire one
-  // via `fireToast(msg)` from ui.js.
-  useEffect(() => {
-    let timer = null
-    const onToast = (e) => {
-      const d = e?.detail
-      const msg = typeof d === 'string' ? d : d?.msg
-      const sticky = typeof d === 'object' && !!d?.sticky
-      const duration = typeof d === 'object' ? d?.duration : undefined
-      if (!msg) return
-      setToast({ msg, key: Date.now() + Math.random(), sticky })
-      clearTimeout(timer)
-      // duration wins; otherwise sticky stays until ✕, plain toasts hide quickly.
-      const ms = duration || (sticky ? 0 : 1600)
-      if (ms) timer = setTimeout(() => setToast(null), ms)
-    }
-    window.addEventListener(HM_TOAST_EVENT, onToast)
-    return () => {
-      window.removeEventListener(HM_TOAST_EVENT, onToast)
-      clearTimeout(timer)
-    }
-  }, [])
-
-  const dismissUpdate = useCallback(() => {
-    setUpdate((u) => {
-      if (u) localStorage.setItem(UPDATE_DISMISS_KEY, u.latest)
-      return null
-    })
-  }, [])
-
-  // ------------------------- first-run onboarding ------------------
-  useEffect(() => {
-    if (localStorage.getItem(ONBOARDED_KEY)) return
-    localStorage.setItem(ONBOARDED_KEY, '1')
-    // Only greet on a genuinely fresh start (no restored session — neither saved
-    // files nor unsaved scratch tabs).
-    if ((session.openPaths || []).filter(Boolean).length || (session.untitled || []).length) return
-    const doc = welcomeDoc(session.lang || DEFAULT_LANG)
-    const id = genId()
-    setTabs((prev) => [
-      ...prev,
-      { id, path: null, title: doc.title, content: doc.content, savedContent: doc.content, mtimeMs: null, reloadNonce: 0 }
-    ])
-    setActiveId(id)
-    // Land on the Outline (导航条) so the welcome doc's heading hierarchy is
-    // visible right away — the doc is written with a clear H1→H2→H3 structure
-    // to demo the outline (click-to-jump + cursor-follow).
-    setHome(false)
-    setSidebarMode('outline')
-    if (!isMobile) setSidebarOpen(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // App lifecycle (session restore/persist/flush + update check + toast +
+  // first-run onboarding) lives in hooks/useAppLifecycle.js (phase-2 US-4).
+  // flushSession is also used by the window-close guard; update/toast/
+  // dismissUpdate/setToast feed the JSX. These are read only inside effect/event
+  // closures, so defining them here is safe (resolved at commit/call time).
+  const { update, dismissUpdate, toast, setToast, flushSession } = useAppLifecycle({
+    session,
+    tabs,
+    activePath,
+    workspace,
+    theme,
+    customTheme,
+    lang,
+    recents,
+    sidebarOpen,
+    sidebarMode,
+    openPaths,
+    isMobile,
+    tabsRef,
+    setActiveId,
+    setTabs,
+    setSidebarMode,
+    setSidebarOpen,
+    setHome,
+    tRef
+  })
 
   // --------------------------- commands ----------------------------
   const commands = useMemo(
