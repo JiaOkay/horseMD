@@ -28,9 +28,9 @@ import logoUrl from './assets/logo.png'
 import { useFindReplace } from './hooks/useFindReplace.js'
 import { useOutline } from './hooks/useOutline.js'
 import { useAppLifecycle } from './hooks/useAppLifecycle.js'
+import { useFileOps } from './hooks/useFileOps.js'
 import {
-  isAbsolutePath, sanitizeWorkspace, baseName, dirName, joinPath,
-  isPlainTextDoc, isHeavyDoc, genId, loadSession
+  isAbsolutePath, baseName, isPlainTextDoc, loadSession
 } from './paths.js'
 import { REVIEW_KINDS } from './reviewMarkup.js'
 import { createReviewActions } from './lib/reviewActions.js'
@@ -42,7 +42,6 @@ export default function App() {
   const isMobile = window.api.platform === 'ios' || window.api.platform === 'android'
   const [tabs, setTabs] = useState([])
   const [activeId, setActiveId] = useState(null)
-  const [workspace, setWorkspace] = useState(sanitizeWorkspace(session.workspace))
   // On phones the sidebar overlays the editor, so it starts closed to keep the
   // writing surface front-and-center (desktop keeps its previous default).
   const [sidebarOpen, setSidebarOpen] = useState(session.sidebarOpen ?? !isMobile)
@@ -75,8 +74,6 @@ export default function App() {
   // click loads into the focused pane, so both panes are switchable from the one
   // tab strip. Always 'left' when not split.
   const [focusedPane, setFocusedPane] = useState('left')
-  const [refreshNonce, setRefreshNonce] = useState(0)
-  const [files, setFiles] = useState([])
   // Rename-from-tab-menu modal: { id, value } or null. (Electron has no
   // window.prompt, so renaming a tab's file uses this small inline dialog.)
   const [renameState, setRenameState] = useState(null)
@@ -324,126 +321,50 @@ export default function App() {
     }
   }, [sourceMode])
 
-  // --------------------------- open files --------------------------
-  const openPaths = useCallback(async (paths, silent = false) => {
-    if (!paths || !paths.length) return
-    let lastId = null
-    const seen = new Set()
-    const remember = (fp) => {
-      const n = fp.replace(/\\/g, '/')
-      setRecents((prev) =>
-        [
-          { path: fp, name: baseName(fp), dir: dirName(fp), openedAt: Date.now() },
-          ...prev.filter((r) => (r.path || '').replace(/\\/g, '/') !== n)
-        ].slice(0, 8)
-      )
-    }
-    for (const path of paths) {
-      const norm = path.replace(/\\/g, '/')
-      if (seen.has(norm)) continue // dedupe within this call
-      seen.add(norm)
-      // Synchronous check against the live tab list (no setState race).
-      const existing = tabsRef.current.find((t) => (t.path || '').replace(/\\/g, '/') === norm)
-      if (existing) {
-        lastId = existing.id
-        remember(path)
-        continue
-      }
-      try {
-        const { content, mtimeMs } = await window.api.readFile(path)
-        // Re-check after the await in case a concurrent open added this path.
-        const concurrent = tabsRef.current.find((t) => (t.path || '').replace(/\\/g, '/') === norm)
-        if (concurrent) {
-          lastId = concurrent.id
-          remember(path)
-          continue
-        }
-        const id = genId()
-        lastId = id
-        const newTab = {
-          id,
-          path,
-          title: baseName(path),
-          content,
-          savedContent: content,
-          mtimeMs,
-          reloadNonce: 0,
-          heavy: isHeavyDoc(content)
-        }
-        tabsRef.current = [...tabsRef.current, newTab] // keep snapshot current for the next iteration
-        setTabs((prev) => [...prev, newTab])
-        remember(path)
-      } catch (e) {
-        // File was moved/deleted (e.g. a stale "recent" entry). Drop it from the
-        // recents list so the dead link disappears, and show a friendly message
-        // instead of the raw IPC error.
-        const missing = e?.message?.includes('ENOENT')
-        setRecents((prev) => prev.filter((r) => (r.path || '').replace(/\\/g, '/') !== norm))
-        // Startup restore skips missing files quietly; an explicit open (clicking
-        // a Recent, File > Open) still tells the user what happened.
-        if (!silent) {
-          window.alert(
-            tRef.current(missing ? 'error.fileMissing' : 'error.openFailed', { name: baseName(path) })
-          )
-        }
-      }
-    }
-    if (lastId) {
-      setActiveId(lastId)
-      setHome(false)
-    }
-  }, [])
-
-  const newTab = useCallback(() => {
-    const id = genId()
-    setTabs((prev) => [
-      ...prev,
-      { id, path: null, title: t('tab.untitled'), content: '', savedContent: '', mtimeMs: null, reloadNonce: 0 }
-    ])
-    setActiveId(id)
-    setHome(false)
-  }, [t])
-
-  const updateContent = useCallback((id, md, isInitial) => {
-    setTabs((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t
-        if (isInitial) {
-          // Rebaseline a clean doc against Crepe's normalized output; keep the
-          // existing baseline if the doc already had unsaved edits.
-          if (t.content === t.savedContent) return { ...t, content: md, savedContent: md }
-          return { ...t, content: md }
-        }
-        return { ...t, content: md }
-      })
-    )
-  }, [])
-
-  const closeTab = useCallback(
-    (id) => {
-      commitAllLive() // flush textarea edits so the unsaved-check below is accurate
-      setTabs((prev) => {
-        const tab = prev.find((x) => x.id === id)
-        if (tab && tab.content !== tab.savedContent) {
-          if (!window.confirm(tRef.current('confirm.closeUnsaved', { name: tab.title }))) return prev
-        }
-        // Drop the closing tab's live-edit bookkeeping.
-        const timer = liveTimersRef.current.get(id)
-        if (timer) clearTimeout(timer)
-        liveTimersRef.current.delete(id)
-        liveContentRef.current.delete(id)
-        const idx = prev.findIndex((x) => x.id === id)
-        const next = prev.filter((x) => x.id !== id)
-        setActiveId((cur) => {
-          if (cur !== id) return cur
-          if (next.length === 0) return null
-          return next[Math.min(idx, next.length - 1)].id
-        })
-        return next
-      })
-    },
-    [commitAllLive]
-  )
+  // File operations (open/new/update/close/save/rename/dup/delete/export) +
+  // workspace + watcher live in hooks/useFileOps.js (phase-2 US-5). Split ops
+  // (openRight/toggleSplit/startSplitDrag/openFileRight) + split state stay
+  // here — they're consumed by the editor-area JSX below.
+  const {
+    openPaths,
+    newTab,
+    updateContent,
+    closeTab,
+    closeOthers,
+    renameTabFile,
+    commitTabRename,
+    duplicateTabFile,
+    deleteTabFile,
+    writeTab,
+    saveTab,
+    commitMobileSave,
+    exportPathToPdf,
+    openFolder,
+    workspace,
+    setWorkspace,
+    files,
+    refreshNonce,
+    reloadTabFromDisk
+  } = useFileOps({
+    tabs,
+    setTabs,
+    tabsRef,
+    setActiveId,
+    setHome,
+    setSplitId,
+    setRecents,
+    commitAllLive,
+    liveContentRef,
+    liveTimersRef,
+    editorApis,
+    isMobile,
+    t,
+    tRef,
+    setRenameState,
+    setSaveNameState,
+    setSidebarOpen,
+    sessionWorkspace: session.workspace
+  })
 
   // Show a tab in the right (split) pane. If it's currently the active tab, move
   // the left pane to a different tab so the two panes differ.
@@ -503,292 +424,6 @@ export default function App() {
     },
     [openPaths, openRight]
   )
-
-  // --- File operations shared by the tab menu and the sidebar menu, so both
-  //     right-click menus offer the same actions on a file. ---
-  // Open the rename dialog for a tab's file (Electron has no window.prompt).
-  const renameTabFile = useCallback((id) => {
-    const tab = tabsRef.current.find((t) => t.id === id)
-    if (!tab?.path) return
-    setRenameState({ id, value: baseName(tab.path) })
-  }, [])
-
-  // Commit a tab-file rename from the dialog.
-  const commitTabRename = useCallback(async (id, rawName) => {
-    setRenameState(null)
-    const tab = tabsRef.current.find((t) => t.id === id)
-    const name = (rawName || '').trim()
-    if (!tab?.path || !name) return
-    if (name === baseName(tab.path)) return
-    if (/[\\/:*?"<>|]/.test(name) || name === '.' || name === '..') {
-      window.alert(tRef.current('err.invalidName') + name)
-      return
-    }
-    const newPath = joinPath(dirName(tab.path), name)
-    try {
-      await window.api.rename(tab.path, newPath)
-      setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, path: newPath, title: name } : t)))
-      setRefreshNonce((n) => n + 1)
-    } catch (e) {
-      window.alert(
-        /eexist|already exists/i.test(e.message)
-          ? tRef.current('err.nameExists')
-          : tRef.current('err.rename') + e.message
-      )
-    }
-  }, [])
-
-  const duplicateTabFile = useCallback(async (id) => {
-    const tab = tabsRef.current.find((t) => t.id === id)
-    if (!tab?.path) return
-    try {
-      await window.api.duplicate(tab.path)
-      setRefreshNonce((n) => n + 1)
-    } catch (e) {
-      window.alert(
-        /eexist|already exists/i.test(e.message)
-          ? tRef.current('err.nameExists')
-          : tRef.current('err.duplicate') + e.message
-      )
-    }
-  }, [])
-
-  const deleteTabFile = useCallback(async (id) => {
-    const tab = tabsRef.current.find((t) => t.id === id)
-    if (!tab?.path) return
-    if (!window.confirm(tRef.current('confirm.trash', { name: tab.title }))) return
-    try {
-      await window.api.deleteItem(tab.path)
-      // Remove the tab outright (the file is gone; don't re-prompt about unsaved edits).
-      setTabs((prev) => {
-        const idx = prev.findIndex((x) => x.id === id)
-        const next = prev.filter((x) => x.id !== id)
-        setActiveId((cur) => (cur !== id ? cur : next.length ? next[Math.min(idx, next.length - 1)].id : null))
-        return next
-      })
-      setRefreshNonce((n) => n + 1)
-    } catch (e) {
-      window.alert(tRef.current('err.delete') + e.message)
-    }
-  }, [])
-
-  // Close every tab except `keepId` (from the tab right-click menu).
-  const closeOthers = useCallback((keepId) => {
-    commitAllLive()
-    setTabs((prev) => {
-      const others = prev.filter((t) => t.id !== keepId)
-      const firstDirty = others.find((t) => t.content !== t.savedContent)
-      if (firstDirty && !window.confirm(tRef.current('confirm.closeUnsaved', { name: firstDirty.title }))) {
-        return prev
-      }
-      for (const t of others) {
-        const timer = liveTimersRef.current.get(t.id)
-        if (timer) clearTimeout(timer)
-        liveTimersRef.current.delete(t.id)
-        liveContentRef.current.delete(t.id)
-      }
-      setActiveId(keepId)
-      setSplitId(null)
-      return prev.filter((t) => t.id === keepId)
-    })
-  }, [commitAllLive])
-
-  const writeTab = useCallback(async (tab, targetPath) => {
-    try {
-      // Move pasted images (base64 blobs / global paste-folder files) into the
-      // doc's ./assets and rewrite links to relative paths, so the saved file is
-      // clean and portable (Typora-style). No-op when there are none / on mobile.
-      const { content: written, changed } = window.api.inlineForSave
-        ? await window.api.inlineForSave(tab.content, targetPath)
-        : { content: tab.content, changed: false }
-      const { mtimeMs } = await window.api.writeFile(targetPath, written)
-      setTabs((prev) =>
-        prev.map((t) =>
-          t.id === tab.id
-            ? changed
-              ? // Images were moved to assets/: adopt the rewritten content and
-                // remount the editor so it shows the relative-path images.
-                {
-                  ...t,
-                  path: targetPath,
-                  title: baseName(targetPath),
-                  content: written,
-                  savedContent: written,
-                  mtimeMs,
-                  reloadNonce: t.reloadNonce + 1
-                }
-              : { ...t, path: targetPath, title: baseName(targetPath), savedContent: t.content, mtimeMs }
-            : t
-        )
-      )
-      setRefreshNonce((n) => n + 1)
-      // On mobile, where files land in a system folder, confirm what + where —
-      // sticky so the user can read the location before dismissing it.
-      if (isMobile) {
-        const loc =
-          window.api.platform === 'ios' ? tRef.current('save.locIos') : tRef.current('save.locAndroid')
-        fireToast(tRef.current('save.savedTo', { name: baseName(targetPath), loc }), {
-          sticky: true,
-          duration: 5000
-        })
-      } else {
-        // Desktop: a brief "Saved ✓" so Ctrl+S / the save button give feedback
-        // (Typora-style). Short-lived so it doesn't linger over writing.
-        fireToast(tRef.current('save.saved'), { duration: 1500 })
-      }
-    } catch (e) {
-      // Never fail silently — surface the real error so saving is debuggable.
-      fireToast(tRef.current('save.failed', { msg: e?.message || String(e) }), { sticky: true })
-    }
-  }, [isMobile])
-
-  const saveTab = useCallback(
-    async (id, forceDialog = false) => {
-      commitAllLive() // flush any textarea edits in the debounce window before reading
-      const tab = tabsRef.current.find((t) => t.id === id)
-      if (!tab) return
-      let target = tab.path
-      if (!target || forceDialog) {
-        // Mobile has no native save dialog: ask for a filename, then write into
-        // the local library (see commitMobileSave). Desktop keeps the dialog.
-        if (isMobile) {
-          const base = (tab.title || 'Untitled').replace(/\.(md|markdown|mdx)$/i, '')
-          setSaveNameState({ id, value: base + '.md' })
-          return
-        }
-        target = await window.api.saveAs(tab.title.endsWith('.md') ? tab.title : tab.title + '.md')
-        if (!target) return
-      }
-      await writeTab(tab, target)
-    },
-    [commitAllLive, writeTab, isMobile]
-  )
-
-  // Commit a mobile "save as": let the platform layer place the named file in
-  // the local library (it returns a de-duplicated path), then write it.
-  const commitMobileSave = useCallback(
-    async (id, rawName) => {
-      setSaveNameState(null)
-      commitAllLive()
-      const tab = tabsRef.current.find((t) => t.id === id)
-      let name = (rawName || '').trim()
-      if (!tab || !name) return
-      if (/[\\/:*?"<>|]/.test(name) || name === '.' || name === '..') {
-        window.alert(tRef.current('err.invalidName') + name)
-        return
-      }
-      if (!/\.(md|markdown|mdx)$/i.test(name)) name += '.md'
-      const target = await window.api.saveAs(name)
-      if (!target) return
-      await writeTab(tab, target)
-    },
-    [commitAllLive, writeTab]
-  )
-
-  // Export a file (by path) to PDF: open/focus it, wait for its editor to mount,
-  // then reuse the same HTML→PDF pipeline as the menu command. Driven from the
-  // sidebar's right-click menu, where the file may not be open yet.
-  const exportPathToPdf = useCallback(
-    async (path) => {
-      await openPaths([path])
-      const norm = (path || '').replace(/\\/g, '/')
-      const tab = tabsRef.current.find((t) => (t.path || '').replace(/\\/g, '/') === norm)
-      if (!tab) return
-      let html = null
-      for (let i = 0; i < 40 && !html; i++) {
-        html = editorApis.current[tab.id]?.getDocHTML?.()
-        if (!html) await new Promise((r) => setTimeout(r, 75))
-      }
-      if (!html) {
-        window.alert(tRef.current('error.exportPdfUnavailable'))
-        return
-      }
-      const base = (tab.title || 'Untitled').replace(/\.(md|markdown|mdx|txt)$/i, '')
-      await window.api.exportPDF(html, base + '.pdf')
-    },
-    [openPaths]
-  )
-
-  // --------------------------- workspace ---------------------------
-  const openFolder = useCallback(async () => {
-    const dir = await window.api.openFolder()
-    if (!dir) return
-    const rootName = baseName(dir)
-    setWorkspace({ rootPath: dir, rootName })
-    setSidebarOpen(true)
-  }, [])
-
-  useEffect(() => {
-    if (!workspace) {
-      setFiles([])
-      return
-    }
-    window.api.watchStart(workspace.rootPath)
-    window.api.listFiles(workspace.rootPath).then(setFiles)
-    return () => window.api.watchStop(workspace.rootPath)
-  }, [workspace])
-
-  useEffect(() => {
-    const off = window.api.onWatchChanged(() => {
-      setRefreshNonce((n) => n + 1)
-      if (workspace) window.api.listFiles(workspace.rootPath).then(setFiles)
-    })
-    return off
-  }, [workspace])
-
-  // --------- auto-reload open files edited by external programs ----------
-  const watchedRef = useRef(new Set())
-
-  // Keep a per-file watcher in sync with the set of open file paths.
-  useEffect(() => {
-    const want = new Set(tabs.map((t) => t.path).filter(Boolean))
-    for (const p of want) if (!watchedRef.current.has(p)) window.api.watchFile(p)
-    for (const p of watchedRef.current) if (!want.has(p)) window.api.unwatchFile(p)
-    watchedRef.current = want
-  }, [tabs])
-
-  const reloadTabFromDisk = useCallback(async (id, path) => {
-    commitAllLive() // so the "don't clobber unsaved" check below sees live edits
-    try {
-      const { content, mtimeMs } = await window.api.readFile(path)
-      setTabs((prev) =>
-        prev.map((t) => {
-          if (t.id !== id) return t
-          // Bail if the user has started editing since the change fired —
-          // never clobber unsaved work.
-          if (t.content !== t.savedContent) return t
-          if (t.content === content) return { ...t, mtimeMs }
-          // Adopt the on-disk content: drop any stale live-edit entry so the
-          // textarea (keyed by reloadNonce) remounts with the new defaultValue.
-          liveContentRef.current.delete(id)
-          return {
-            ...t,
-            content,
-            savedContent: content,
-            mtimeMs,
-            reloadNonce: t.reloadNonce + 1,
-            heavy: isHeavyDoc(content)
-          }
-        })
-      )
-    } catch {
-      /* file vanished mid-reload; leave the tab as-is */
-    }
-  }, [commitAllLive])
-
-  useEffect(() => {
-    const off = window.api.onFileChanged(({ path, mtimeMs }) => {
-      const norm = (path || '').replace(/\\/g, '/')
-      const tab = tabsRef.current.find((t) => (t.path || '').replace(/\\/g, '/') === norm)
-      if (!tab) return
-      // Ignore the echo from our own save (same or older mtime).
-      if (tab.mtimeMs && mtimeMs && mtimeMs <= tab.mtimeMs) return
-      // Don't overwrite unsaved local edits.
-      if (tab.content !== tab.savedContent) return
-      reloadTabFromDisk(tab.id, tab.path)
-    })
-    return off
-  }, [reloadTabFromDisk])
 
   // Outline panel (#20) — scrollspy + heading list + click-to-jump. State and
   // the reflow-free scrollspy live in hooks/useOutline.js (phase-2 US-3).
