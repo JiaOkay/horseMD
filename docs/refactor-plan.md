@@ -5,21 +5,33 @@
 > 重构阶段用 OMC 的 **ralph loop**(持久化循环 + 每步验证)驱动,每拆一块就跑
 > 对应测试,绿灯才继续。
 
+## 进度
+
+| Phase | 目标 | 状态 |
+|---|---|---|
+| **1** | Editor.jsx → 3 模块(chunked-parse / toolbar / block-controls) | ✅ **完成**(1738→1385,ralph 驱动,architect 验证) |
+| **2** | App.jsx → hooks(useTabs/useFindReplace/useOutline/useSession/useFileOps)+ shell 子组件 | ⬜ 待做(下一步) |
+
 ## 一、代码体检(行数,降序)
 
 | 文件 | 行数 | 角色 | 评级 |
 |---|---|---|---|
-| `App.jsx` | **1975** | 整个 shell + 几乎所有状态/逻辑 | 🔴 头号目标 |
-| `components/Editor.jsx` | **1738** | Crepe 包装 + 一切编辑器机制 | 🔴 头号目标 |
+| `App.jsx` | **1981** | 整个 shell + 几乎所有状态/逻辑 | 🔴 phase 2 目标 |
+| `components/Editor.jsx` | **1385** | Crepe 包装(phase 1 已从 1738 瘦身) | 🟡 phase 1 ✅ |
 | `components/editor-review.js` | 1028 | review 装饰器(单一特性,内聚) | 🟡 可选拆 |
 | `i18n.jsx` | 578 | zh/en 字符串(数据,非逻辑) | 🟢 暂不动 |
 | `components/Sidebar.jsx` | 518 | 文件树 + 右键菜单 + 图床 + workspace | 🟡 中 |
 | `components/StatusBar.jsx` | 452 | stats + 布局 + 块切换 + 源码切换 | 🟡 中 |
+| `components/editor-toolbar.js` | 225 | phase 1 抽出(工具栏注入) | ✅ |
+| `components/editor-block-controls.js` | 130 | phase 1 抽出(块控制) | ✅ |
+| `components/editor-chunked-parse.js` | 96 | phase 1 抽出(分块解析) | ✅ |
 | `reviewMarkup.js` | 384 | review 解析(内聚) | 🟢 |
 | `platform/capacitor-api.js` | 373 | 移动端平台层(内聚) | 🟢 |
 | 其余 | <210 | 多为单一职责小模块 | 🟢 |
 
 > 主进程 `main/index.js` 910 行(窗口 + IPC + 文件监听 + 菜单)也可考虑拆,但优先级低于渲染层。
+>
+> **文件体量纪律**(用户指令):新功能一律放进小而专的模块/hook,目标 < 500 行/文件(硬上限 800),超了就拆。App.jsx/Editor.jsx 不再 append 新功能。
 
 ## 二、头号目标拆解
 
