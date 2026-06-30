@@ -20,9 +20,9 @@
 
 // Private-use chars as stash sentinels (never appear in real Markdown, and avoid
 // null bytes that trip some tooling).
-const OPEN = ''
-const CLOSE = ''
-const HOLE = new RegExp(`${OPEN}(\\d+)${CLOSE}`)
+const OPEN = '\uE000'
+const CLOSE = '\uE001'
+const HOLE = /\uE000(\d+)\uE001/g
 
 export function normalizeDisplayMath(md) {
   if (!md || md.indexOf('$$') === -1) return md
