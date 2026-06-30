@@ -149,7 +149,11 @@ export function getReviewMarkupDisplayParts(markdown, options = {}) {
     }
 
     if (marker.kind === REVIEW_KINDS.highlight) {
-      if (!marker.content.text || !marker.content.comment) continue
+      // Allow an EMPTY comment (see editor-review.js ensureAnnotation): the
+      // toolbar inserts `{==selected==}{>><<}`, which must render immediately so
+      // the margin button + number show and the user can type the comment. Only
+      // reject empty TEXT.
+      if (!marker.content.text) continue
 
       const textStart = marker.start + 3
       const textEnd = textStart + marker.content.text.length

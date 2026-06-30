@@ -113,7 +113,14 @@ function parseReviewTextblockGroupStart(groupKey) {
 }
 
 function ensureAnnotation(annotation) {
-  if (!annotation?.text || !annotation?.comment) return null
+  // Allow an EMPTY comment: the highlight toolbar command inserts
+  // `{==selected==}{>><<}` (cursor inside the comment), so the marker must
+  // render immediately — margin button + number visible — for the user to type
+  // the comment into. Rejecting empty comment left the just-inserted highlight
+  // invisible (no button, no number), which in large docs where the cursor
+  // didn't land in the comment slot meant the highlight stayed bare forever.
+  // Mirrors the substitution empty-new-text fix. Only reject empty TEXT.
+  if (!annotation?.text) return null
   try {
     const raw = annotation.raw || makeHighlightCommentMarkup(annotation.text, annotation.comment)
     return {
