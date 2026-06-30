@@ -32,7 +32,7 @@ import { inlineRichStyles } from './editor-copy.js'
 import { createMermaidPreviewRenderer, createMermaidSplitPlugin } from './editor-mermaid.js'
 import { tableBreakKeymap, tableCellBreakHandler, brToBreakRemarkPlugin } from './editor-tablebreak.js'
 import { attachMdPasteHandler } from './editor-md-paste.js'
-import { normalizeDisplayMath } from './editor-math.js'
+import { normalizeDisplayMath, createMathBlockPromotionPlugin } from './editor-math.js'
 import { splitMarkdown, CHUNK_THRESHOLD, CHUNK_SIZE, appendChunks } from './editor-chunked-parse.js'
 import { createToolbarScanner } from './editor-toolbar.js'
 import { createBlockControls } from './editor-block-controls.js'
@@ -553,7 +553,12 @@ export default function Editor({
         // Live-edit fix: convert `{`+<strike>~>..</strike>+`}` (formed when the
         // user types a substitution marker and the strikethrough input rule
         // fires) back to literal text so it renders via text-scan.
-        createSubstitutionLiveReconstructPlugin()
+        createSubstitutionLiveReconstructPlugin(),
+        // Promote typed $$…$$ (single-line) to block math. The inline-math input
+        // rule fires on the first closing $; this detects the resulting
+        // [text("$"), math_inline, text("$")] shape and lifts it to a latex
+        // code_block. See editor-math.js.
+        createMathBlockPromotionPlugin()
       ])
       // Table-cell line break — serialize a break to <br> inside a cell, and parse
       // inline <br> back into a break (see editor-tablebreak.js). Also serialize

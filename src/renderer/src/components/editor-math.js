@@ -1,3 +1,5 @@
+import { Plugin, PluginKey } from '@milkdown/prose/state'
+
 // Math (LaTeX) helpers.
 //
 // remark-math (what Milkdown Crepe's Latex feature uses under the hood) only
@@ -45,4 +47,59 @@ export function normalizeDisplayMath(md) {
   out = out.replace(HOLE, (_m, i) => holes[Number(i)] ?? '')
 
   return out
+}
+
+// Promote typed `$$…$$` (single-line) to block math.
+//
+// Crepe's inline-math input rule fires on the FIRST closing `$` of `$$x²$$`
+// (matching `$x²$`), swallowing the content as inline math before the user can
+// type the second `$`. handleTextInput runs BEFORE input rules, so we intercept
+// the closing `$`:
+//   - `$$content$` (one `$` short) → insert `$` as PLAIN TEXT (return true → the
+//     inline rule never fires, so the `$$…` survives for one more keystroke).
+//   - `$$content$$` (complete)     → replace the whole run with a code_block
+//     (language LaTeX). Round-trips as `$$\n…\n$$` (same as paste).
+// Single `$content$` (no preceding `$`) is left alone → the inline rule handles
+// it normally.
+const TYPING_KEY = new PluginKey('hm-math-block-typing')
+
+export function createMathBlockPromotionPlugin() {
+  return new Plugin({
+    key: TYPING_KEY,
+    props: {
+      handleTextInput(view, from, _to, text) {
+        if (text !== '$') return false
+        const $from = view.state.doc.resolve(from)
+        const parent = $from.parent
+        if (!parent.isTextblock) return false
+        const before = parent.textBetween(0, $from.parentOffset, '\n')
+        const full = before + '$'
+
+        // `$$content$$` complete → replace the whole run with a code_block.
+        const blockMatch = full.match(/\$\$([^\n$]+)\$\$$/)
+        if (blockMatch) {
+          const codeType = view.state.schema.nodes.code_block
+          if (!codeType) return false
+          const content = blockMatch[1]
+          const start = from - (blockMatch[0].length - 1) // start of `$$content$` in `before`
+          const codeNode = codeType.create(
+            { language: 'LaTeX' },
+            content ? view.state.schema.text(content) : null
+          )
+          const tr = view.state.tr.replaceWith(start, from, codeNode)
+          tr.setMeta('addToHistory', true)
+          view.dispatch(tr)
+          return true
+        }
+
+        // `$$content$` (one `$` short) → insert `$` as plain text, prevent the
+        // inline-math input rule from firing on `$content$`.
+        if (/\$\$([^\n$]+)\$$/.test(full)) {
+          view.dispatch(view.state.tr.insertText('$', from))
+          return true
+        }
+        return false
+      }
+    }
+  })
 }
