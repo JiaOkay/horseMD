@@ -818,7 +818,11 @@ function addParsedHighlightCommentParts(entries, index, state, decorations, widg
   const closeEntry = entries[cursor]
   const close = parseParsedHighlightCommentClose(closeEntry?.text)
   const annotationText = highlightedText + (close?.leadingText || '')
-  if (!close || !close.comment || !annotationText) return 0
+  // Allow an EMPTY comment (see ensureAnnotation): the toolbar inserts
+  // `{==sel==}{>><<}` and the user fills the comment afterward, so the marker
+  // must render (mark + margin button) immediately. Only skip if there's no
+  // close marker or no highlighted text.
+  if (!close || !annotationText) return 0
 
   const from = openEntry.pos + openIndex
   const to = closeEntry.pos + close.length
