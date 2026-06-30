@@ -10,13 +10,13 @@
 | Phase | 目标 | 状态 |
 |---|---|---|
 | **1** | Editor.jsx → 3 模块(chunked-parse / toolbar / block-controls) | ✅ **完成**(1738→1385,ralph 驱动,architect 验证) |
-| **2** | App.jsx → hooks(useTabs/useFindReplace/useOutline/useSession/useFileOps)+ shell 子组件 | ⬜ 待做(下一步) |
+| **2** | App.jsx → hooks(lib/reviewActions + hooks/useFindReplace·useOutline·useAppLifecycle·useFileOps + lib/menuHandlers + shell/{ActivityBar,Topbar,FindBar,EditorArea}) | ✅ **完成**(1981→**781**,-61%,ralph 驱动 7 个 story,architect 验证 + 1 个 closeTab bug 修复) |
 
 ## 一、代码体检(行数,降序)
 
 | 文件 | 行数 | 角色 | 评级 |
 |---|---|---|---|
-| `App.jsx` | **1981** | 整个 shell + 几乎所有状态/逻辑 | 🔴 phase 2 目标 |
+| `App.jsx` | **781** | shell 组合器(phase 2 已从 1981 瘦身) | 🟢 phase 2 ✅ |
 | `components/Editor.jsx` | **1385** | Crepe 包装(phase 1 已从 1738 瘦身) | 🟡 phase 1 ✅ |
 | `components/editor-review.js` | 1028 | review 装饰器(单一特性,内聚) | 🟡 可选拆 |
 | `i18n.jsx` | 578 | zh/en 字符串(数据,非逻辑) | 🟢 暂不动 |
@@ -25,6 +25,16 @@
 | `components/editor-toolbar.js` | 225 | phase 1 抽出(工具栏注入) | ✅ |
 | `components/editor-block-controls.js` | 130 | phase 1 抽出(块控制) | ✅ |
 | `components/editor-chunked-parse.js` | 96 | phase 1 抽出(分块解析) | ✅ |
+| `hooks/useFileOps.js` | 478 | phase 2 抽出(文件 I/O + workspace/watcher) | ✅ |
+| `components/shell/EditorArea.jsx` | 184 | phase 2 抽出(双格编辑器渲染) | ✅ |
+| `lib/menuHandlers.js` | 240 | phase 2 抽出(命令分发 + 全局键 + 命令面板) | ✅ |
+| `hooks/useAppLifecycle.js` | 226 | phase 2 抽出(会话 + 更新 + toast + onboarding) | ✅ |
+| `hooks/useOutline.js` | 188 | phase 2 抽出(scrollspy + 标题列表) | ✅ |
+| `components/shell/Topbar.jsx` | 84 | phase 2 抽出(标签条 + 顶栏按钮) | ✅ |
+| `components/shell/FindBar.jsx` | 78 | phase 2 抽出(查找替换栏) | ✅ |
+| `hooks/useFindReplace.js` | 177 | phase 2 抽出(查找替换逻辑) | ✅ |
+| `lib/reviewActions.js` | 105 | phase 2 抽出(active-tab review 动作) | ✅ |
+| `components/shell/ActivityBar.jsx` | 40 | phase 2 抽出(左侧活动条) | ✅ |
 | `reviewMarkup.js` | 384 | review 解析(内聚) | 🟢 |
 | `platform/capacitor-api.js` | 373 | 移动端平台层(内聚) | 🟢 |
 | 其余 | <210 | 多为单一职责小模块 | 🟢 |
