@@ -3220,8 +3220,8 @@ body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
   color: var(--text);
   box-shadow: 0 10px 30px rgba(24, 31, 42, 0.18);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 0.78rem;
-  line-height: 1.35;
+  font-size: 0.82rem;
+  line-height: 1.4;
   text-align: left;
   white-space: normal;
   cursor: default;
@@ -3293,12 +3293,16 @@ body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
   overflow-wrap: anywhere;
 }
 .milkdown .ProseMirror .hm-review-card-text {
-  padding: 0.25rem 0.35rem;
+  padding: 0.3rem 0.45rem;
   border-radius: 6px;
   background: #e0f0ff;
+  font-size: 0.92rem;
+  line-height: 1.45;
 }
 .milkdown .ProseMirror .hm-review-card-comment {
   white-space: pre-wrap;
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
 .milkdown .ProseMirror .hm-review-card-actions {
   display: flex;
@@ -3307,15 +3311,15 @@ body.dark .milkdown .ProseMirror mark.hm-hl-blue { background: #2f4a6b; }
   margin-top: 0.7rem;
 }
 .milkdown .ProseMirror .hm-review-card-action {
-  min-height: 1.7rem;
-  padding: 0.24rem 0.48rem;
+  min-height: 1.45rem;
+  padding: 0.14rem 0.4rem;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 5px;
   background: var(--bg);
   color: var(--text);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.15;
   cursor: pointer;
 }
 .milkdown .ProseMirror .hm-review-card-action:hover,

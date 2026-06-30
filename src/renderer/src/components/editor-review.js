@@ -174,11 +174,23 @@ export function groupReviewAnnotationParts(widgetParts) {
     }
   })
 
-  return [...passthrough, ...grouped].sort((a, b) => {
+  const sorted = [...passthrough, ...grouped].sort((a, b) => {
     const posDelta = (a?.pos ?? 0) - (b?.pos ?? 0)
     if (posDelta) return posDelta
     return String(a?.part?.role || '').localeCompare(String(b?.part?.role || ''))
   })
+  // Number the margin-note buttons 1, 2, 3, … in document order (instead of the
+  // per-group count, which was always "1" because each highlight+comment gets its
+  // own groupKey). noteCount (aria) still reads part.annotations.length, so a
+  // group with several comments is still announced correctly.
+  let seq = 0
+  for (const item of sorted) {
+    if (item?.part?.role === 'comment-margin') {
+      seq += 1
+      item.part.label = String(seq)
+    }
+  }
+  return sorted
 }
 
 export function resolveReviewGroupActiveIndex(annotations, activeKey, preferredIndex = 0) {
@@ -952,6 +964,20 @@ export function createReviewDecorationPlugin(options = {}) {
       }
     },
     props: {
+      // A mousedown anywhere in the editor that isn't on the margin-note button
+      // or the card itself closes any open review card. Using handleDOMEvents
+      // (not handleClick) so it fires reliably for every editor click — headings,
+      // paragraphs, code, etc. — not just position-mapped text clicks.
+      handleDOMEvents: {
+        mousedown(view, event) {
+          if (event?.target?.closest?.('.hm-review-note-button, .hm-review-card')) return false
+          const st = REVIEW_PLUGIN_KEY.getState(view.state)
+          if (st?.openGroupKey) {
+            view.dispatch(view.state.tr.setMeta(REVIEW_PLUGIN_KEY, { type: 'close' }))
+          }
+          return false
+        }
+      },
       decorations(state) {
         const decorations = []
         const widgetParts = []

@@ -547,6 +547,11 @@ export default function App() {
     ({ win32: ' is-win', darwin: ' is-mac', ios: ' is-ios is-mobile', android: ' is-android is-mobile' }[
       window.api.platform
     ] || '')
+  // Save targets the focused pane (pickEditableId), so the FAB must reflect
+  // THAT pane's dirty state — not always the left/active tab. In split view this
+  // is what makes the FAB follow whichever pane the user is editing.
+  const fabId = pickEditableId()
+  const fabTab = (fabId ? tabs.find((t) => t.id === fabId) : null) || activeTab
 
   return (
     <I18nProvider lang={lang} setLang={setLang}>
@@ -721,7 +726,7 @@ export default function App() {
       />
 
       <SaveFab
-        visible={!home && !!activeTab && activeTab.content !== activeTab.savedContent}
+        visible={!home && !!fabTab && fabTab.content !== fabTab.savedContent}
         onSave={() => handlers.current.save()}
       />
 
