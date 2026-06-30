@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import Editor from './components/Editor.jsx'
 import Sidebar from './components/Sidebar.jsx'
-import Tabs from './components/Tabs.jsx'
 import Outline from './components/Outline.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import SaveFab from './components/SaveFab.jsx'
@@ -10,10 +8,12 @@ import { Icon } from './components/icons.jsx'
 import { THEMES, DEFAULT_THEME, applyTheme } from './themes.js'
 import { I18nProvider, translate, DEFAULT_LANG } from './i18n.jsx'
 import Welcome from './components/Welcome.jsx'
-import WindowControls from './components/WindowControls.jsx'
+import ActivityBar from './components/shell/ActivityBar.jsx'
+import Topbar from './components/shell/Topbar.jsx'
+import FindBar from './components/shell/FindBar.jsx'
+import EditorArea from './components/shell/EditorArea.jsx'
 import UpdateToast from './components/UpdateToast.jsx'
 import RenameModal from './components/RenameModal.jsx'
-import ImageHostButton from './components/ImageHostButton.jsx'
 import {
   loadSettings,
   saveSettings,
@@ -24,14 +24,13 @@ import {
 } from './settings.js'
 import { applyCustomTheme } from './customThemes.js'
 import { fireToast } from './ui.js'
-import logoUrl from './assets/logo.png'
 import { useFindReplace } from './hooks/useFindReplace.js'
 import { useOutline } from './hooks/useOutline.js'
 import { useAppLifecycle } from './hooks/useAppLifecycle.js'
 import { useFileOps } from './hooks/useFileOps.js'
 import { createMenuHandlers, useGlobalKeys, useCommands } from './lib/menuHandlers.js'
 import {
-  isAbsolutePath, isPlainTextDoc, loadSession
+  isAbsolutePath, loadSession
 } from './paths.js'
 import { createReviewActions } from './lib/reviewActions.js'
 
@@ -551,96 +550,45 @@ export default function App() {
   return (
     <I18nProvider lang={lang} setLang={setLang}>
     <div className={`app${platformClass}${isMobile && sidebarOpen ? ' drawer-open' : ''}`}>
-      <div className="activity-bar">
-        <button
-          className={`activity-item activity-home${home ? ' active' : ''}`}
-          title={t('nav.home')}
-          onClick={() => handlers.current.home()}
-        >
-          <img className="activity-logo" src={logoUrl} alt="HorseMD" />
-        </button>
-        <button
-          className={`activity-item${sidebarMode === 'files' ? ' active' : ''}`}
-          title={t('cmd.files')}
-          onClick={() => handlers.current.toggleFiles()}
-        >
-          <Icon name="folder" size={20} />
-        </button>
-        <button
-          className={`activity-item${sidebarMode === 'outline' ? ' active' : ''}`}
-          title={t('outline.title')}
-          onClick={() => handlers.current.toggleOutline()}
-        >
-          <Icon name="outline" size={20} />
-        </button>
-        <div className="activity-spacer" />
-        <button
-          className="activity-item"
-          title={sidebarOpen ? t('side.collapsePane') : t('side.expandPane')}
-          onClick={() => setSidebarOpen((v) => !v)}
-        >
-          <Icon name={sidebarOpen ? 'panel-left-close' : 'panel-left-open'} size={20} />
-        </button>
-      </div>
+      <ActivityBar
+        home={home}
+        sidebarMode={sidebarMode}
+        sidebarOpen={sidebarOpen}
+        t={t}
+        onHome={() => handlers.current.home()}
+        onFiles={() => handlers.current.toggleFiles()}
+        onOutline={() => handlers.current.toggleOutline()}
+        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+      />
 
-      <div className="topbar">
-        {isMobile && (
-          <button
-            className="icon-btn drag-no hm-menu-btn"
-            title={t('cmd.files')}
-            onClick={() => setSidebarOpen((v) => !v)}
-          >
-            <Icon name="menu" size={20} />
-          </button>
-        )}
-        <Tabs
-          tabs={tabs}
-          activeId={home ? null : activeId}
-          splitId={home ? null : splitId}
-          focusedPane={focusedPane}
-          onActivate={(id) => {
-            setHome(false)
-            // Load into whichever pane is focused, so both panes are switchable.
-            if (split && focusedPane === 'right' && id !== activeId) {
-              setSplitId(id)
-            } else {
-              setActiveId(id)
-            }
-          }}
-          onClose={closeTab}
-          onNew={newTab}
-          onCloseOthers={closeOthers}
-          onOpenRight={openRight}
-          onRename={renameTabFile}
-          onDuplicate={duplicateTabFile}
-          onDelete={deleteTabFile}
-          onExportPdf={exportPathToPdf}
-        />
-        <div className="topbar-spacer" />
-        <button className="icon-btn drag-no" title={`${t('welcome.newFile')} (Ctrl+N)`} onClick={newTab}>
-          <Icon name="plus" size={18} />
-        </button>
-        {!isMobile && (
-          <button
-            className={`icon-btn drag-no${split ? ' active' : ''}`}
-            title={split ? t('split.close') : t('split.toggle')}
-            onClick={toggleSplit}
-          >
-            <Icon name="columns" size={16} />
-          </button>
-        )}
-        {!isMobile && (
-          <ImageHostButton
-            t={t}
-            command={settings.imageUploadCommand}
-            onChange={(cmd) => updateSettings({ imageUploadCommand: cmd })}
-          />
-        )}
-        <button className="icon-btn drag-no" title="Command palette (Ctrl+P)" onClick={() => setPaletteOpen(true)}>
-          <Icon name="command" size={16} />
-        </button>
-        {window.api.platform === 'win32' && <WindowControls t={t} />}
-      </div>
+      <Topbar
+        isMobile={isMobile}
+        t={t}
+        tabs={tabs}
+        activeId={home ? null : activeId}
+        splitId={home ? null : splitId}
+        focusedPane={focusedPane}
+        split={split}
+        imageUploadCommand={settings.imageUploadCommand}
+        onActivate={(id) => {
+          setHome(false)
+          // Load into whichever pane is focused, so both panes are switchable.
+          if (split && focusedPane === 'right' && id !== activeId) setSplitId(id)
+          else setActiveId(id)
+        }}
+        onClose={closeTab}
+        onNew={newTab}
+        onCloseOthers={closeOthers}
+        onOpenRight={openRight}
+        onRename={renameTabFile}
+        onDuplicate={duplicateTabFile}
+        onDelete={deleteTabFile}
+        onExportPdf={exportPathToPdf}
+        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+        onToggleSplit={toggleSplit}
+        onImageHostChange={(cmd) => updateSettings({ imageUploadCommand: cmd })}
+        onOpenPalette={() => setPaletteOpen(true)}
+      />
 
       {isMobile && sidebarOpen && (
         <div className="hm-scrim" onClick={() => setSidebarOpen(false)} />
@@ -666,212 +614,56 @@ export default function App() {
 
         <main className="pane-center">
           {find.open && (
-            <div className="findbar">
-              <div className="findbar-row">
-                <Icon name="search" size={14} />
-                <input
-                  ref={findInputRef}
-                  value={find.query}
-                  placeholder={t('find.placeholder')}
-                  onChange={(e) => {
-                    const q = e.target.value
-                    setFind((f) => ({ ...f, query: q }))
-                    runFind(q) // live: highlight as you type
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); stepFind(e.shiftKey) }
-                    if (e.key === 'Escape') closeFind()
-                  }}
-                />
-                <span className="findbar-count">
-                  {find.query ? `${find.active}/${find.matches}` : ''}
-                </span>
-                <button title={t('find.prev')} onClick={() => stepFind(true)}>
-                  <Icon name="chevron-up" size={14} />
-                </button>
-                <button title={t('find.next')} onClick={() => stepFind(false)}>
-                  <Icon name="chevron-down" size={14} />
-                </button>
-                <button title={t('find.close')} onClick={closeFind}>
-                  <Icon name="close" size={14} />
-                </button>
-              </div>
-              <div className="findbar-row">
-                <Icon name="replace" size={14} />
-                <input
-                  ref={replaceInputRef}
-                  value={find.replace}
-                  placeholder={t('find.replace.placeholder')}
-                  onChange={(e) => {
-                    replaceRef.current = e.target.value
-                    setFind((f) => ({ ...f, replace: e.target.value }))
-                  }}
-                  onKeyDown={(e) => {
-                    // Enter = replace this one; Shift+Enter = replace all.
-                    if (e.key === 'Enter') { e.preventDefault(); applyReplace(e.shiftKey) }
-                    if (e.key === 'Escape') closeFind()
-                  }}
-                />
-                <span className="findbar-spacer" />
-                <button
-                  className="findbar-textbtn"
-                  title={t('find.replace')}
-                  disabled={!find.query}
-                  onClick={() => applyReplace(false)}
-                >
-                  {t('find.replace')}
-                </button>
-                <button
-                  className="findbar-textbtn"
-                  title={t('find.replaceAll')}
-                  disabled={!find.query}
-                  onClick={() => applyReplace(true)}
-                >
-                  {t('find.replaceAll')}
-                </button>
-              </div>
-            </div>
+            <FindBar
+              find={find}
+              findInputRef={findInputRef}
+              replaceInputRef={replaceInputRef}
+              t={t}
+              onQuery={(q) => { setFind((f) => ({ ...f, query: q })); runFind(q) }}
+              onReplaceText={(text) => { replaceRef.current = text; setFind((f) => ({ ...f, replace: text })) }}
+              onPrev={stepFind}
+              onNext={stepFind}
+              onClose={closeFind}
+              onReplace={applyReplace}
+              onReplaceAll={applyReplace}
+            />
           )}
 
-          {/* Editor area — a flex row so the active (left) and split (right) tabs
-              can sit side by side. Editors are siblings here; only the one(s) in
-              view are shown (the rest are display:none but stay mounted, so tab
-              switches / toggling split never re-create an editor). Hidden as a
-              whole on the welcome/home screen so it doesn't fight Welcome for space. */}
-          <div
-            ref={editorAreaRef}
-            className={`editor-area${split ? ' is-split' : ''}`}
-            style={{ display: home || !activeTab ? 'none' : undefined }}
-          >
-            {tabs.map((tab) => {
-              // Which pane (if any) this tab occupies. `split` already excludes
-              // home and the case where the two ids are equal.
-              const isLeft = !home && tab.id === activeId
-              const isRight = split && tab.id === splitId
-              const inView = isLeft || isRight
-              // Flex order: left pane (1) · divider (2) · right pane (3).
-              // Irrelevant for hidden tabs (display:none removes them from layout).
-              const order = isRight ? 3 : 1
-              // Mark the focused pane (only meaningful while split) so the user
-              // can see which pane a tab click will load into.
-              const isFocusedPane = split && ((isRight && focusedPane === 'right') || (isLeft && focusedPane === 'left'))
-              const paneClass =
-                (isRight ? ' hm-pane-right' : isLeft ? ' hm-pane-left' : '') + (isFocusedPane ? ' hm-focused' : '')
-              const onPaneFocus = () => {
-                focusedTabRef.current = tab.id
-                if (split) setFocusedPane(isRight ? 'right' : 'left')
-              }
-              // In split view the left pane holds a fixed fraction; the right pane
-              // grows to fill the rest. Outside split, panes fill the row.
-              const paneFlex = split && isLeft ? `0 0 calc(${(splitRatio * 100).toFixed(2)}% - 3px)` : undefined
-
-              // Plain-text docs always use the textarea; "heavy" Markdown docs do
-              // too until the user opts into rich (avoids a multi-second freeze);
-              // the active pane also uses it in global source mode. The right pane
-              // never shows global source mode.
-              const heavyAsSource = tab.heavy && !richForced.has(tab.id)
-              const usesTextarea = isPlainTextDoc(tab) || heavyAsSource || (sourceMode && isLeft)
-              // content-visibility virtualization (see .hm-cv in app.css) kicks in
-              // only for genuinely large RICH documents — small docs and the
-              // textarea path are untouched. ~20k chars ≈ hundreds of blocks,
-              // the range where software-composited scrolling starts to struggle.
-              const largeRich = !usesTextarea && (tab.content?.length || 0) >= 20000
-              if (usesTextarea) {
-                if (!inView) return null
-                const setSourceTextareaRef = (el) => {
-                  if (el) {
-                    sourceTextareas.current[tab.id] = el
-                    if (isLeft) sourceRef.current = el
-                    return
-                  }
-                  const existing = sourceTextareas.current[tab.id]
-                  delete sourceTextareas.current[tab.id]
-                  if (isLeft && (!existing || sourceRef.current === existing)) sourceRef.current = null
-                }
-                return (
-                  <textarea
-                    key={`${tab.id}:${tab.reloadNonce}`}
-                    ref={setSourceTextareaRef}
-                    className={`source-editor${paneClass}`}
-                    defaultValue={tab.content}
-                    spellCheck={false}
-                    style={{ order, flex: paneFlex }}
-                    onFocus={onPaneFocus}
-                    onMouseDown={onPaneFocus}
-                    onChange={(e) => {
-                      // Uncontrolled: stash the edit and debounce-commit it, so
-                      // typing never re-renders App or re-sets a multi-MB value per
-                      // keystroke. commitAllLive() flushes before save/close/etc.
-                      const v = e.target.value
-                      liveContentRef.current.set(tab.id, v)
-                      const prev = liveTimersRef.current.get(tab.id)
-                      if (prev) clearTimeout(prev)
-                      liveTimersRef.current.set(tab.id, setTimeout(() => commitLive(tab.id), 400))
-                    }}
-                  />
-                )
-              }
-              // Lazy mount: don't create a Crepe editor for a tab the user hasn't
-              // opened yet (keeps session-restore of many tabs fast). Panes in
-              // view always mount; visited tabs stay mounted.
-              if (!inView && !mountedIds.has(tab.id)) return null
-              return (
-                <div
-                  // Include reloadNonce so an external-edit reload remounts the
-                  // Crepe editor with the new content (the create effect only
-                  // runs on mount). tab switches keep the same key → stay mounted.
-                  key={`${tab.id}:${tab.reloadNonce}`}
-                  className={`editor-scroll${paneClass}${largeRich ? ' hm-cv' : ''}`}
-                  ref={isLeft && !sourceMode ? editorHostRef : undefined}
-                  style={{ display: inView ? undefined : 'none', order, flex: paneFlex }}
-                  onFocusCapture={onPaneFocus}
-                  onMouseDownCapture={onPaneFocus}
-                >
-                  <Editor
-                    tabId={`${tab.id}:${tab.reloadNonce}`}
-                    initialContent={tab.content}
-                    docPath={tab.path}
-                    imageUploadCommand={settings.imageUploadCommand}
-                    onChange={(md, isInitial) => updateContent(tab.id, md, isInitial)}
-                    onReady={(api) => {
-                      editorApis.current[tab.id] = api
-                    }}
-                    onActiveBlock={(id) => {
-                      if (tab.id === activeIdRef.current) setActiveBlock(id)
-                    }}
-                    onStructureChange={() => setRichDocVersion((v) => v + 1)}
-                    onLoadingChange={setRichLoading}
-                  />
-                </div>
-              )
-            })}
-
-            {/* Heavy-doc notice: this Markdown file is shown as plain source to
-                stay responsive; offer a one-click switch to the rich editor. */}
-            {!home && activeTab && activeTab.heavy && !richForced.has(activeTab.id) && (
-              <div className="hm-heavy-banner">
-                <span>{t('heavy.notice')}</span>
-                <button onClick={() => setRichForced((s) => new Set(s).add(activeTab.id))}>
-                  {t('heavy.loadRich')}
-                </button>
-              </div>
-            )}
-
-            {split && (
-              <div
-                className="hm-split-divider"
-                style={{ order: 2 }}
-                onMouseDown={startSplitDrag}
-                title={t('split.drag')}
-              />
-            )}
-
-            {split && (
-              <button className="hm-split-close" title={t('split.close')} onClick={() => setSplitId(null)}>
-                <Icon name="close" size={14} />
-              </button>
-            )}
-          </div>
+          {/* Editor area — extracted to components/shell/EditorArea.jsx (US-7).
+              Preserves lazy mount + uncontrolled textarea + split flex/order. */}
+          <EditorArea
+            tabs={tabs}
+            activeId={activeId}
+            splitId={splitId}
+            split={split}
+            splitRatio={splitRatio}
+            focusedPane={focusedPane}
+            home={home}
+            sourceMode={sourceMode}
+            richForced={richForced}
+            mountedIds={mountedIds}
+            activeTab={activeTab}
+            imageUploadCommand={settings.imageUploadCommand}
+            editorAreaRef={editorAreaRef}
+            editorHostRef={editorHostRef}
+            sourceRef={sourceRef}
+            sourceTextareas={sourceTextareas}
+            liveContentRef={liveContentRef}
+            liveTimersRef={liveTimersRef}
+            commitLive={commitLive}
+            editorApis={editorApis}
+            activeIdRef={activeIdRef}
+            focusedTabRef={focusedTabRef}
+            setRichForced={setRichForced}
+            setSplitId={setSplitId}
+            setFocusedPane={setFocusedPane}
+            setActiveBlock={setActiveBlock}
+            setRichDocVersion={setRichDocVersion}
+            setRichLoading={setRichLoading}
+            startSplitDrag={startSplitDrag}
+            updateContent={updateContent}
+            t={t}
+          />
 
           {(home || !activeTab) && (
             <Welcome
