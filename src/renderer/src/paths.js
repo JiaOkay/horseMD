@@ -46,7 +46,7 @@ export const isExistsError = (e) => /eexist|already exists/i.test(e?.message || 
 //     main thread for many seconds.
 // Such docs open in the fast plain-text editor by default (instant); the user
 // can opt into the rich editor per-tab.
-const HEAVY_MAX_BLOCK_LINES = 150
+const HEAVY_MAX_BLOCK_LINES = 1000
 const HEAVY_MAX_TOTAL = 400000
 const HEAVY_MAX_LINES = 50000
 export function isHeavyDoc(content) {
