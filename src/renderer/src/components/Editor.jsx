@@ -33,6 +33,7 @@ import { createMermaidPreviewRenderer, createMermaidSplitPlugin } from './editor
 import { tableBreakKeymap, tableCellBreakHandler, brToBreakRemarkPlugin } from './editor-tablebreak.js'
 import { attachMdPasteHandler } from './editor-md-paste.js'
 import { normalizeDisplayMath } from './editor-math.js'
+import { splitMarkdown, CHUNK_THRESHOLD, CHUNK_SIZE, appendChunks } from './editor-chunked-parse.js'
 import remarkFrontmatter from 'remark-frontmatter'
 import { frontmatterSchema, renderFrontmatterNodeView, remarkFrontmatterAnywhere } from './editor-frontmatter.js'
 import { highlightFeatures, highlightStringifyHandler, toggleHighlightCommand, applyHighlightInView, HIGHLIGHT_COLORS } from './editor-highlight.js'
@@ -43,48 +44,6 @@ import {
 } from './editor-review.js'
 import { normalizeReviewMarkupMarkdown } from '../reviewMarkup.js'
 import { strikeInputWouldCorruptCriticMarkup } from '../strikeGuard.js'
-
-// ── Chunked async parsing for huge documents (Typora-style progressive render) ──
-// Milkdown/ProseMirror parse the WHOLE markdown string synchronously in
-// crepe.create(), which is O(n²)-ish — a 1M-char doc freezes the main thread for
-// minutes ("Not Responding"). content-visibility can't help: the freeze is the
-// PARSE, not paint. So for docs above CHUNK_THRESHOLD we instead create the
-// editor with only the FIRST chunk (fast first paint), then parse + append the
-// remaining chunks in the background on requestIdleCallback (yielding between
-// chunks so the UI never freezes, and breaking the quadratic blowup into linear
-// per-chunk parses). The editor is read-only during load; cv already gives the
-// "blank off-screen → render on scroll" behaviour for the loaded content.
-const CHUNK_THRESHOLD = 120000 // above this, parse incrementally
-const CHUNK_SIZE = 40000 // chars per chunk (first chunk renders in ~one frame)
-// Split markdown into parse-safe chunks at blank-line boundaries, never inside a
-// fenced code block. Each chunk is valid standalone markdown, so parsing it
-// separately reconstructs its blocks correctly (lists/tables/headings stay whole
-// because they're blank-line-delimited).
-function splitMarkdown(md, target) {
-  if (!md) return []
-  const lines = md.split('\n')
-  const chunks = []
-  let cur = []
-  let len = 0
-  let inFence = false
-  let fence = null
-  for (const line of lines) {
-    const m = line.match(/^\s*(```|~~~)/)
-    if (m) {
-      if (!inFence) { inFence = true; fence = m[1] }
-      else if (fence && line.includes(fence)) { inFence = false; fence = null }
-    }
-    cur.push(line)
-    len += line.length + 1
-    if (!inFence && len >= target && /^\s*$/.test(line)) {
-      chunks.push(cur.join('\n'))
-      cur = []
-      len = 0
-    }
-  }
-  if (cur.length) chunks.push(cur.join('\n'))
-  return chunks
-}
 
 // Reconstruct `{~~old~>new~~}` substitution markers that GFM strikethrough
 // consumed during parse. remark turns `{~~old~>new~~}` into three mdast nodes:
@@ -1516,45 +1475,6 @@ export default function Editor({
         // avoid edit/append races; restored after. Yields via setTimeout (NOT
         // requestIdleCallback — that stops firing when the window is occluded,
         // which would leave the final yield pending and the editor read-only).
-        const appendChunks = async (rest) => {
-          if (!rest || !rest.length) return
-          appending = true
-          onLoadingChange?.(true) // outline shows a skeleton while the doc streams in
-          const setEditable = (on) => {
-            try { view.setProps({ editable: () => on }) } catch { /* view tearing down */ }
-            try { view.dom.contentEditable = on ? 'true' : 'false' } catch { /* */ }
-          }
-          setEditable(false)
-          let parser = null
-          try { parser = crepe.editor.ctx.get(parserCtx) } catch { /* no parser */ }
-          try {
-            for (const chunkText of rest) {
-              if (destroyed) break
-              let parsed = null
-              // Normalize review markup + display math in each appended chunk
-              // too — defaultValue wraps firstContent with both, but these
-              // background-appended chunks are parsed directly, so wrap them.
-              // (Chunking splits only at blank lines; a normalized $$…$$ block
-              // has no internal blank line, so math never spans two chunks.)
-              try { parsed = parser ? parser(normalizeReviewMarkupMarkdown(normalizeDisplayMath(chunkText))) : null } catch { /* skip unparseable chunk */ }
-              if (parsed && parsed.content && parsed.content.size > 0 && !destroyed) {
-                view.dispatch(view.state.tr.insert(view.state.doc.content.size, parsed.content))
-              }
-              // Yield to the event loop so paint/input happen between chunks
-              // (setTimeout fires even when occluded; rAF/idle don't).
-              await new Promise((r) => setTimeout(r, 0))
-            }
-          } finally {
-            appending = false
-            setEditable(true)
-            onLoadingChange?.(false)
-            // The full doc is now in the DOM — tell the host to refresh the
-            // outline heading list + scrollspy (they couldn't track it during
-            // load because onChange was suppressed).
-            if (!destroyed) onStructureChange?.()
-          }
-        }
-
         // Compute the initial markdown snapshot (content baseline for dirty
         // tracking / outline / word count). On a big doc serializing the whole
         // document is non-trivial, so for large docs defer it past a paint —
@@ -1573,8 +1493,20 @@ export default function Editor({
         }
         if (chunks) {
           // chunks[0] is already rendered; append the rest in the background,
-          // then finish (no rebase).
-          appendChunks(chunks.slice(1)).then(() => {
+          // then finish (no rebase). `appending` suppresses onChange while the
+          // doc streams in (see the markdownUpdated handler) — managed here, not
+          // inside appendChunks, so the flag stays in this closure.
+          const rest = chunks.slice(1)
+          if (rest.length) appending = true
+          appendChunks({
+            rest,
+            view,
+            getParser: () => { try { return crepe.editor.ctx.get(parserCtx) } catch { return null } },
+            isDestroyed: () => destroyed,
+            onLoadingChange,
+            onStructureChange
+          }).then(() => {
+            if (rest.length) appending = false
             if (!destroyed) finishInitial(false)
           })
         } else if (isLargeDoc) {
