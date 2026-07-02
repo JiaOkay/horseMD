@@ -230,9 +230,13 @@ if (isLargeDoc) {
 | **3（P0-3a）** | 大纲 scrollspy 节流 300ms + 缓存 heading 元素 | 滚动不再追赶（#17）；打字时少一次全 DOM 扫描 | 1 小时 | ✅ 已完成 |
 | **3（P0-3b）** | `refreshLevel` 节流 200ms | 快速滚动时主线程不被强制 reflow 卡住 | 20 分钟 | ✅ 已完成 |
 | **3（P0-3c）** | 大纲标题列表 debounce 500ms | 大文档打字时不再每键全 DOM 扫描 | 20 分钟 | ✅ 已完成 |
-| 4（P1/P2） | 富文本分片/虚拟化（`content-visibility: auto` 起步） | 富文本里也能流畅查看/编辑大文档（硬需求） | 数天～数周 | ⬜ 待评估 |
+| 4（P1） | 富文本 `content-visibility: auto`（CSS 层虚拟化） | 富文本里大文档滚动不卡（#17 Windows 软件合成器） | 已完成 | ✅ 已完成 |
+| 4b（P1） | `contain-intrinsic-size` 估算 + `.hm-cv` 下 `overflow-anchor: auto` | 修 content-visibility 引起的「跳页」（#25） | 已完成 | ✅ 已完成 |
+| 5（P2） | 富文本分块虚拟化 / 每节点精确 `contain-intrinsic-size` | 极大文档仍卡时的下一步 | 数天～数周 | ⬜ 待评估 |
 
-**第一步 + 第三步已完成**（大文件秒开 + 滚动追赶修复）。**P1/P2（让富文本流畅承载大文档）不是可选项**——按文首产品原则，用户打开大文档后必须在富文本里查看/编辑，textarea 只是过渡。下一步优先 `content-visibility: auto`（最低成本的 CSS 层虚拟化，对超大 DOM 滚动卡顿常有数量级改善），实测不够再上分块虚拟化。
+**第一/三/四步已完成**（大文件秒开 + 滚动追赶修复 + 富文本 `content-visibility`）。**P2（让富文本流畅承载极大文档）不是可选项**——按文首产品原则,用户打开大文档后必须在富文本里查看/编辑,textarea 只是过渡。
+
+**#25「跳页」修复(重要,易踩):** `content-visibility:auto` 用 `contain-intrinsic-size` 估算屏外块高度,滚入视口时从估算变为真实高度 → 块"长高"。若此时 `.editor-scroll { overflow-anchor: none }`,浏览器不补偿 → 视口内容上蹿(停在代码块上尤其明显,因为 CodeMirror 还会延迟测量行换行,代码块真实高度 20em+ vs 估算 5em)。修法两条都已落地:① 估算 `3.5em → 5em`(实测段落均值,降低单块误差);② `.editor-scroll.hm-cv { overflow-anchor: auto }`(让 Chromium 自动补偿高度变化,把 delta 吸收掉)——**只对 CV 文档开,小文档保持 `none` 不变**。**教训:用了 content-visibility,几乎总要配 `overflow-anchor: auto`,否则估算↔真实的差就是可见的跳。**
 
 ---
 
