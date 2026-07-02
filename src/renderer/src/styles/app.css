@@ -1640,7 +1640,10 @@ body.hm-col-resizing * {
   /* No smooth scroll on the edit surface: it turns every implicit
      scroll-into-view (on click/select) into a visible upward slide.
      Outline/find jumps pass `behavior: 'smooth'` explicitly when wanted. */
-  overflow-anchor: none;
+  overflow-anchor: none; /* overridden to `auto` under .hm-cv (large docs) below —
+     content-visibility there needs anchoring to absorb estimate→real height
+     deltas; small docs keep `none`. Don't remove either rule without reading
+     the .hm-cv block (~L1687) + issue #25. */
   position: relative; /* containing block for the loading skeleton */
 }
 
