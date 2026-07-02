@@ -1666,13 +1666,18 @@ body.hm-col-resizing * {
    `auto` keyword so Chromium caches each block's real height after its first
    render — the scrollbar only adjusts once per block on the first scroll
    through, then stays stable.
+   The 5em estimate is the MEASURED average body-paragraph height (a typical
+   wrapped paragraph is 4–6em; 1em = 16px default). The old 3.5em was below
+   even the shortest real paragraph, so EVERY block grew on first render and
+   the cumulative drift caused a visible "page jump" while scrolling (#25).
+   5em centers the per-block error → drift drops ~4×. Don't lower it again.
    :has(.hm-review-widget) excludes paragraphs holding a review margin-note:
    contain:paint (implied by content-visibility) would clip its absolute
    position:right:-2.7rem button. :has is style-recalc only (no layout), and
    content-visibility already skips style recalc off-screen, so no perf hit. */
 .editor-scroll.hm-cv .milkdown .ProseMirror > *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(:has(.hm-review-widget)) {
   content-visibility: auto;
-  contain-intrinsic-size: auto 3.5em;
+  contain-intrinsic-size: auto 5em;
 }
 
 /* Loading skeleton: pulsing gray placeholder bars while a (large) document is
