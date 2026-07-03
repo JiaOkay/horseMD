@@ -1,0 +1,99 @@
+# Ralph progress — App.jsx Phase 2 refactor
+
+Source plan: /Users/yangtingyi/.claude/plans/mellow-bouncing-widget.md
+PRD: .omc/state/sessions/b01a2653-58b5-4808-b46e-18bb2b64c52b/prd.json
+Baseline: App.jsx = 1981 lines; build green at HEAD (origin/main 174dc1a synced).
+
+## Invariants to preserve verbatim (plan §2)
+- Uncontrolled textarea: liveContentRef/commitLive/commitAllLive (debounce + flush-before-read).
+- Lazy mount: mountedIds Set; editorApis/sourceTextareas keyed by tab id.
+- Split: flex siblings, display/order visibility, NO re-parent.
+- Scroll-ratio restore on source toggle.
+- Reflow-free scrollspy (single layout pass; scrollTop compare per frame).
+- Session: 400ms debounce + pagehide/beforeunload flush.
+- Watcher echo suppression (mtime compare; never clobber unsaved).
+- Heavy guard (heavy + richForced).
+
+## Patterns
+- Custom hook (owns state): usePopover precedent. Factory fn (shared state): createBlockControls({...deps}) precedent.
+- Deps via options bag; verbatim move; no logic change.
+
+## Iteration log
+[0] PRD refined (7 stories US-1..US-7). Baseline build green. Starting US-1.
+[1] US-1 DONE (commit f65f723). lib/reviewActions.js = createReviewActions factory.
+    pickEditableId kept in App (shared w/ save+export handlers), passed as dep.
+    App.jsx 1981→1922. Build green. CDP live: review-add via palette drives
+    App.review source branch (sel 6→9-14 = inner "world" in {++world++}, no exc).
+    Note: LSP TS-server not installed; Vite build is the JSX gate (no typecheck).
+    Lesson: uncontrolled textarea DOM value does NOT reflect updateContent —
+    verify source-path handlers via selectionStart/activeElement, not ta.value.
+    Starting US-2 (useFindReplace).
+[2] US-2 DONE (commit 98772ef). hooks/useFindReplace.js = useFindReplace hook,
+    returns same names (find/setFind/findInputRef/replaceInputRef/replaceRef/
+    runFind/stepFind/closeFind/applyReplace) so findbar JSX + handlers untouched.
+    App.jsx 1922→1785. Build green. CDP live: source .txt 3 matches replace-all
+    → "qux bar qux baz qux" (uncontrolled contract intact); rich .md 2 matches
+    → "qux bar qux". Lesson: typing into React controlled input via CDP needs
+    the native value setter (Object.getOwnPropertyDescriptor(...,'value').set)
+    + dispatch input event — plain el.value= doesn't trigger onChange. Also:
+    openPaths activates the LAST opened tab, not the first.
+    Starting US-3 (useOutline).
+[3] US-3 DONE (commit 02d0d03). hooks/useOutline.js. App.jsx 1785→1637. Build
+    green. CDP live: outline lists 4 headings (levels 1/2/3/2), scroll-follow
+    active 0→3 at bottom (reflow-free scrollspy intact), close-tab clears outline
+    + Home (#20). Lesson: target the VISIBLE .editor-scroll (offsetParent!==null),
+    not querySelector first-match (hidden tabs); close tab via .tab-close button
+    (no palette close command); .click() works on CSS-hidden buttons.
+    Starting US-4 (useAppLifecycle = session restore/persist/flush + update-check
+    + toast + onboarding). Settings/theme apply-effects stay in App (co-located
+    w/ theme callbacks for StatusBar) — keep US-4 to pure lifecycle.
+[4] US-4 DONE (commit b886ba1). hooks/useAppLifecycle.js. App.jsx 1637→1488
+    (-179 clean move). Build green. Onboarding live ✓, persistence writes
+    localStorage ✓, no exceptions. NOTE: full quit→disk→reopen restore cycle
+    NOT CDP-testable here — Electron localStorage leveldb doesn't flush under
+    SIGKILL/SIGTERM/location.reload (reload re-reads stale on-disk state; my
+    injects/typing stay in-memory). Restore/persist code is byte-identical to
+    pre-refactor, so the cycle is unchanged. Verified via build + live onboarding
+    + live persistence write + verbatim diff. Lesson: Electron localStorage
+    persistence across process death is not reliably testable via CDP; don't
+    burn cycles on it — a verbatim move + the testable sub-behaviors suffice.
+    Settings apply* + theme effects left in App (co-located w/ theme callbacks).
+    Starting US-5 (useFileOps — highest risk, all file I/O + workspace/watcher).
+[5] US-5 DONE (commit 6bfec34). hooks/useFileOps.js (478 lines). App.jsx
+    1488→1123 (-365, biggest cut). Build green. CDP: open file ✓, new tab ✓,
+    source-edit→save→disk-write ✓ ("# Original EDITED_US5..."), save toast
+    "已保存 ✓" ✓, no exceptions (watcher save-echo suppressed). Split ops +
+    split state KEPT in App (cohesion w/ editor-area JSX); closeOthers gets
+    setSplitId passed in. Lesson: onboarding creates a welcome tab FIRST on a
+    fresh UD even when launching with a file arg (file arg → openPaths IPC, not
+    session.openPaths) — so tabs[0] is the welcome doc, not the opened file.
+    Starting US-6 (menuHandlers + keyboard/menu effects + commands useMemo).
+[6] US-6 DONE (commit 70c2f93). lib/menuHandlers.js (238 lines) = createMenuHandlers
+    (+ pickEditableId passed in) + useGlobalKeys (menu IPC + Ctrl+Tab/B/F) +
+    useCommands. App.jsx 1123→989 (-134, under 1000!). Build green. CDP: Ctrl+B
+    toggles sidebar ✓, Ctrl+F opens findbar ✓, palette new creates tab ✓,
+    Ctrl+Tab cycles ✓, no exceptions. Reshuffle: useFindReplace hoisted above
+    handlers (so createMenuHandlers can close over setFind/findInputRef/
+    replaceInputRef); useGlobalKeys sits after useAppLifecycle (flushSession scope).
+    pickEditableId stays in App (shared w/ review factory). Starting US-7
+    (shell: ActivityBar/FindBar/EditorArea) — final story.
+[7] US-7 DONE (commit af115ff). shell/{ActivityBar,Topbar,FindBar,EditorArea}.jsx.
+    App.jsx 989→781. Build green. CDP full regression (fresh UD): 2 files opened,
+    switch A→B→A (3 editors stay mounted — lazy mount intact), source/rich toggle
+    preserves content, FindBar "1/1", ActivityBar outline toggles, split shows 2
+    editors, no exceptions. EditorArea invariants (lazy mount / uncontrolled
+    textarea / split flex-order) all hold.
+    === PHASE 2 COMPLETE === App.jsx 1981→781 (-61%); 9 new files all <500 lines.
+    Commits: f65f723(US-1) 98772ef(US-2) 02d0d03(US-3) b886ba1(US-4) 6bfec34(US-5)
+    70c2f93(US-6) af115ff(US-7). All 7 stories passes:true. → architect verification.
+[architect] REJECTED on 1 bug: createMenuHandlers.closeTab referenced `activeId`
+    as a free var (never threaded) → Cmd/Ctrl+W silently no-op'd. Fixed in
+    41008cc (pass activeId into createMenuHandlers; behavior-preserving option a —
+    closeTab targets active LEFT tab, not the focused split pane). Also fixed
+    stale useFileOps docstring. Build green. closeTab(id) verified working (US-3
+    .tab-close); menu→handler wiring unchanged (verbatim useGlobalKeys); activeId
+    now in scope (grep-confirmed). NOTE: CDP Input.dispatchKeyEvent does NOT
+    trigger Electron native menu accelerators → menu closeTab path inconclusive
+    via CDP (a CDP limitation, not a code issue); verify Cmd/Ctrl+W manually.
+    [deslop] clean — no debug/TODO slop, all imports used in every module.
+    PHASE 2 COMPLETE + architect-approved (modulo the fixed bug).

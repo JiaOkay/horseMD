@@ -85,6 +85,7 @@ export function useFileOps({
         lastId = id
         const newTab = {
           id,
+          kind: 'doc',
           path,
           title: baseName(path),
           content,
@@ -121,11 +122,39 @@ export function useFileOps({
     const id = genId()
     setTabs((prev) => [
       ...prev,
-      { id, path: null, title: t('tab.untitled'), content: '', savedContent: '', mtimeMs: null, reloadNonce: 0 }
+      { id, kind: 'doc', path: null, title: t('tab.untitled'), content: '', savedContent: '', mtimeMs: null, reloadNonce: 0 }
     ])
     setActiveId(id)
     setHome(false)
   }, [t, setTabs, setActiveId, setHome])
+
+  // Open the Settings page as a real tab. Idempotent: if a Settings tab already
+  // exists, just focus it (never open a second one). Settings tabs are transient
+  // — useAppLifecycle filters `kind!=='doc'` out of session persistence, so they
+  // don't survive a restart.
+  const openSettingsTab = useCallback(() => {
+    const existing = tabsRef.current.find((tb) => tb.kind === 'settings')
+    if (existing) {
+      setActiveId(existing.id)
+      setHome(false)
+      return
+    }
+    const id = genId()
+    const tab = {
+      id,
+      kind: 'settings',
+      path: null,
+      title: t('nav.settings'),
+      content: '',
+      savedContent: '',
+      mtimeMs: null,
+      reloadNonce: 0
+    }
+    tabsRef.current = [...tabsRef.current, tab]
+    setTabs((prev) => [...prev, tab])
+    setActiveId(id)
+    setHome(false)
+  }, [t, setTabs, setActiveId, setHome, tabsRef])
 
   const updateContent = useCallback((id, md, isInitial) => {
     setTabs((prev) =>
@@ -311,6 +340,9 @@ export function useFileOps({
       commitAllLive() // flush any textarea edits in the debounce window before reading
       const tab = tabsRef.current.find((t) => t.id === id)
       if (!tab) return
+      // Settings tabs aren't documents — ⌘S / the save button must never try to
+      // write one to disk (it has no path and no real content).
+      if (tab.kind === 'settings') return
       let target = tab.path
       if (!target || forceDialog) {
         // Mobile has no native save dialog: ask for a filename, then write into
@@ -457,6 +489,7 @@ export function useFileOps({
   return {
     openPaths,
     newTab,
+    openSettingsTab,
     updateContent,
     closeTab,
     closeOthers,

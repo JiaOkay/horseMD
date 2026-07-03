@@ -3,7 +3,7 @@
 import { Icon } from '../icons.jsx'
 import logoUrl from '../../assets/logo.png'
 
-export default function ActivityBar({ home, sidebarMode, sidebarOpen, t, onHome, onFiles, onOutline, onToggleSidebar }) {
+export default function ActivityBar({ home, sidebarMode, sidebarOpen, settingsActive, t, onHome, onFiles, onOutline, onSettings, onToggleSidebar }) {
   return (
     <div className="activity-bar">
       <button
@@ -28,6 +28,13 @@ export default function ActivityBar({ home, sidebarMode, sidebarOpen, t, onHome,
         <Icon name="outline" size={20} />
       </button>
       <div className="activity-spacer" />
+      <button
+        className={`activity-item${settingsActive ? ' active' : ''}`}
+        title={t('nav.settings')}
+        onClick={onSettings}
+      >
+        <Icon name="gear" size={20} />
+      </button>
       <button
         className="activity-item"
         title={sidebarOpen ? t('side.collapsePane') : t('side.expandPane')}

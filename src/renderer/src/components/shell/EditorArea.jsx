@@ -49,9 +49,12 @@ export default function EditorArea({
     <div
       ref={editorAreaRef}
       className={`editor-area${split ? ' is-split' : ''}`}
-      style={{ display: home || !activeTab ? 'none' : undefined }}
+      style={{ display: home || !activeTab || activeTab?.kind === 'settings' ? 'none' : undefined }}
     >
       {tabs.map((tab) => {
+        // Settings tabs aren't documents — never mount an editor for them.
+        // SettingsView (a sibling in App.jsx) renders instead.
+        if (tab.kind === 'settings') return null
         // Which pane (if any) this tab occupies. `split` already excludes
         // home and the case where the two ids are equal.
         const isLeft = !home && tab.id === activeId

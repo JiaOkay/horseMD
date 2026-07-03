@@ -63,7 +63,7 @@ export function useAppLifecycle({
       // captures edits still inside a tab's debounce window. (commitAllLive, run
       // before this on the close path, already synced tabsRef.current.)
       const untitled = tabsRef.current
-        .filter((t) => !t.path && t.content !== t.savedContent && (t.content || '').trim())
+        .filter((t) => t.kind !== 'settings' && !t.path && t.content !== t.savedContent && (t.content || '').trim())
         .map((t) => ({ title: t.title, content: t.content }))
       localStorage.setItem(LS, JSON.stringify({ ...sessionRef.current, untitled }))
     } catch {
@@ -129,7 +129,7 @@ export function useAppLifecycle({
       // dirty tabs are stored, so the untouched welcome doc / empty new tabs
       // don't keep coming back. Saved files are reopened from disk instead.
       untitled: tabs
-        .filter((t) => !t.path && t.content !== t.savedContent && (t.content || '').trim())
+        .filter((t) => t.kind !== 'settings' && !t.path && t.content !== t.savedContent && (t.content || '').trim())
         .map((t) => ({ title: t.title, content: t.content })),
       activePath
     }

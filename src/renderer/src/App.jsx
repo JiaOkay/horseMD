@@ -8,6 +8,7 @@ import { Icon } from './components/icons.jsx'
 import { THEMES, DEFAULT_THEME, applyTheme } from './themes.js'
 import { I18nProvider, translate, DEFAULT_LANG } from './i18n.jsx'
 import Welcome from './components/Welcome.jsx'
+import SettingsView from './components/SettingsView.jsx'
 import ActivityBar from './components/shell/ActivityBar.jsx'
 import Topbar from './components/shell/Topbar.jsx'
 import FindBar from './components/shell/FindBar.jsx'
@@ -327,6 +328,7 @@ export default function App() {
   const {
     openPaths,
     newTab,
+    openSettingsTab,
     updateContent,
     closeTab,
     closeOthers,
@@ -560,10 +562,12 @@ export default function App() {
         home={home}
         sidebarMode={sidebarMode}
         sidebarOpen={sidebarOpen}
+        settingsActive={!home && activeTab?.kind === 'settings'}
         t={t}
         onHome={() => handlers.current.home()}
         onFiles={() => handlers.current.toggleFiles()}
         onOutline={() => handlers.current.toggleOutline()}
+        onSettings={openSettingsTab}
         onToggleSidebar={() => setSidebarOpen((v) => !v)}
       />
 
@@ -671,6 +675,11 @@ export default function App() {
             t={t}
           />
 
+          {/* Settings page — a full-tab view for kind:'settings' tabs (the
+              ActivityBar gear button opens one). EditorArea skips settings
+              tabs, so this sibling renders in their place. */}
+          {!home && activeTab?.kind === 'settings' && <SettingsView />}
+
           {(home || !activeTab) && (
             <Welcome
               t={t}
@@ -689,7 +698,7 @@ export default function App() {
       </div>
 
       <StatusBar
-        tab={home ? null : activeTab}
+        tab={home || activeTab?.kind === 'settings' ? null : activeTab}
         isMobile={isMobile}
         onSave={() => handlers.current.save()}
         onShare={() => {
@@ -700,6 +709,7 @@ export default function App() {
           }
           window.api.shareFile?.(activeTab.path)
         }}
+        onSettings={openSettingsTab}
         theme={theme}
         setTheme={pickBuiltinTheme}
         cycleTheme={cycleTheme}
@@ -726,7 +736,7 @@ export default function App() {
       />
 
       <SaveFab
-        visible={!home && !!fabTab && fabTab.content !== fabTab.savedContent}
+        visible={!home && activeTab?.kind !== 'settings' && !!fabTab && fabTab.content !== fabTab.savedContent}
         onSave={() => handlers.current.save()}
       />
 

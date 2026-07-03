@@ -1,0 +1,8 @@
+# Ralph progress — 设置页 + 字号 bug + 拼写检查
+
+## Iteration 0 (setup)
+- PRD written (7 stories US-1..US-7). Approved plan: /Users/yangtingyi/.claude/plans/mellow-bouncing-widget.md.
+- User decisions: 全套设置页;保留 StatusBar 快捷控件;spellcheck 默认关。
+- Investigation done (3 Explore agents): font-size bug root cause (Crepe reset.css hardcodes .ProseMirror p font-size:16px; app.css headings use em, paragraphs missing font-size); spellcheck hook (view.dom attribute + settings.js, no IPC); tab kind needed; ActivityBar spacer for bottom-left button; Toggle component must be built; design DNA tokens identified.
+
+## US-1 (in progress): font-size bug

@@ -182,6 +182,7 @@ function LangSwitch({ lang, setLang }) {
 function MobileMore({
   dirty,
   onSave,
+  onSettings,
   sourceMode,
   onToggleSource,
   theme,
@@ -295,6 +296,16 @@ function MobileMore({
           <button
             className="block-menu-item theme-menu-action"
             onClick={() => {
+              onSettings?.()
+              setOpen(false)
+            }}
+          >
+            <Icon name="gear" size={14} />
+            <span className="block-menu-name">{t('nav.settings')}</span>
+          </button>
+          <button
+            className="block-menu-item theme-menu-action"
+            onClick={() => {
               window.api.openExternal('https://github.com/BND-1/horseMD')
               setOpen(false)
             }}
@@ -313,6 +324,7 @@ export default function StatusBar({
   isMobile,
   onSave,
   onShare,
+  onSettings,
   theme,
   setTheme,
   lang,
@@ -395,6 +407,7 @@ export default function StatusBar({
               <MobileMore
                 dirty={dirty}
                 onSave={onSave}
+                onSettings={onSettings}
                 sourceMode={sourceMode}
                 onToggleSource={onToggleSource}
                 theme={theme}
