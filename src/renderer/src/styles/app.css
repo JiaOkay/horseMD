@@ -2533,48 +2533,14 @@ body.hm-full-width .source-editor {
   background: var(--bg);
   animation: menuFadeIn 0.18s var(--ease-out);
 }
-/* Sticky top jump-bar: section chips. */
-.settings-jumpbar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 14px 48px 12px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border-soft);
-}
-.settings-chip {
-  padding: 5px 13px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  color: var(--muted);
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: background 0.15s var(--ease-out), color 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
-}
-.settings-chip:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.settings-chip.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent-strong);
-  font-weight: 600;
-}
 /* All sections in one scroll, centered. */
 .settings-sections {
   max-width: 820px;
   margin: 0 auto;
-  padding: 24px 48px 96px;
+  padding: 40px 48px 96px;
 }
 .settings-block {
   margin-bottom: 36px;
-  /* Offset for scrollIntoView so the title clears the sticky jump-bar. */
-  scroll-margin-top: 64px;
 }
 .settings-block-title {
   font-size: 15px;
@@ -2589,12 +2555,13 @@ body.hm-full-width .source-editor {
   color: var(--muted);
   line-height: 1.6;
 }
-/* Typography: sliders left, sticky live preview right. */
+/* Typography: sliders left, live preview right — two columns aligned at top and
+   bottom (stretch), so the preview card's base lines up with the last slider. */
 .settings-typo {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 28px;
-  align-items: start;
+  align-items: stretch;
 }
 .settings-typo-controls {
   display: flex;
@@ -2602,8 +2569,8 @@ body.hm-full-width .source-editor {
   gap: 10px;
 }
 .settings-typo-preview {
-  position: sticky;
-  top: 64px;
+  display: flex;
+  min-width: 0;
 }
 /* A label/description + control row inside a section. */
 .settings-row {
@@ -2666,24 +2633,21 @@ body.hm-full-width .source-editor {
   outline-offset: 2px;
 }
 /* Live typography preview — reads the SAME CSS vars as the editor
-   (--editor-font-size / -line-height / -para-spacing / -max-width), so dragging
-   a slider in the Settings page updates this sample in real time. */
+   (--editor-font-size / -line-height / -para-spacing), so dragging a slider in
+   the Settings page updates this sample in real time. Fills its grid column so
+   its base aligns with the last slider. */
 .settings-preview {
   font-size: var(--editor-font-size, 16px);
   line-height: var(--editor-line-height, 1.85);
-  max-width: var(--editor-max-width, 800px);
   width: 100%;
+  height: 100%;
+  box-sizing: border-box;
   background: var(--bg);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
   padding: 18px 22px;
-  margin-bottom: 18px;
   color: var(--text);
   overflow: hidden;
-  transition: max-width 0.15s var(--ease-out);
-}
-body.hm-full-width .settings-preview {
-  max-width: 100%;
 }
 .settings-preview h2 {
   font-size: 1.75em;
@@ -2704,6 +2668,22 @@ body.hm-full-width .settings-preview {
 }
 .settings-preview li::marker {
   color: var(--accent);
+}
+.settings-preview pre {
+  background: var(--code-block-bg);
+  color: #e8e6e1;
+  border-radius: var(--radius-sm);
+  padding: 0.7em 0.9em;
+  margin: var(--editor-para-spacing, 0.8em) 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.settings-preview pre code {
+  background: none;
+  color: inherit;
+  font-family: inherit;
 }
 /* Compact AdjustGroup inside the Settings page (the StatusBar popover keeps its
    own sizing — these are scoped to .settings-page only). The 4 typography
@@ -2845,22 +2825,11 @@ body.hm-full-width .settings-preview {
   font-variant-numeric: tabular-nums;
 }
 /* Mobile — typography two-column collapses to one; tighter paddings. */
-.app.is-mobile .settings-jumpbar {
-  padding: 10px 14px 8px;
-  overflow-x: auto;
-  flex-wrap: nowrap;
-}
-.app.is-mobile .settings-chip {
-  white-space: nowrap;
-}
 .app.is-mobile .settings-sections {
-  padding: 18px 14px 64px;
+  padding: 24px 14px 64px;
 }
 .app.is-mobile .settings-typo {
   grid-template-columns: 1fr;
-}
-.app.is-mobile .settings-typo-preview {
-  position: static;
 }
 .app.is-mobile .settings-swatches {
   grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));

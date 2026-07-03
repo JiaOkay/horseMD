@@ -1,13 +1,12 @@
 // Settings page — a full-tab view (kind:'settings'). ONE scrolling page with all
-// sections, plus a sticky section "jump bar" at the top (click a chip → smooth-
-// scroll to that section; scroll → scrollspy highlights the current one), like the
-// Outline panel does for headings. Sections: Typography (sliders left + live
-// preview right) · Proofreading (spell-check) · Appearance (themes) · Language ·
-// Image host · About. Opened from the ActivityBar gear / mobile "•••" sheet.
+// sections stacked. Typography section is two-column: compact sliders left, a live
+// HorseMD-intro preview right (reflects font size / line height / paragraph
+// spacing / page width as you drag). Sections: Typography · Proofreading (spell-
+// check) · Appearance (themes) · Language · Image host · About. Opened from the
+// ActivityBar gear / mobile "•••" sheet.
 //
 // StatusBar quick-controls (排版/主题/语言) stay where they are — this is their
 // full-version home, not a replacement.
-import { useRef, useState } from 'react'
 import { useI18n, LANGS } from '../i18n.jsx'
 import { THEMES } from '../themes.js'
 import Toggle from './ui/Toggle.jsx'
@@ -31,60 +30,17 @@ export default function SettingsView({
   lang, setLang
 }) {
   const { t } = useI18n()
-  const [active, setActive] = useState('typography')
-  const refs = useRef({})
-
-  const sections = [
-    { id: 'typography', label: t('settings.typography') },
-    { id: 'proofreading', label: t('settings.proofreading') },
-    { id: 'appearance', label: t('settings.appearance') },
-    { id: 'language', label: t('settings.language') },
-    { id: 'imageHost', label: t('settings.imageHost') },
-    { id: 'about', label: t('settings.about') }
-  ]
-
-  // Scrollspy: mark the topmost section that has scrolled under the jump bar.
-  const onScroll = (e) => {
-    const cTop = e.currentTarget.getBoundingClientRect().top
-    let cur = sections[0].id
-    for (const s of sections) {
-      const el = refs.current[s.id]
-      if (el && el.getBoundingClientRect().top - cTop - 70 <= 0) cur = s.id
-    }
-    if (cur !== active) setActive(cur)
-  }
-  const jump = (id) => {
-    const el = refs.current[id]
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
   return (
-    <div className="settings-page" onScroll={onScroll}>
-      {/* Sticky section jump-bar (outline-style: click→jump, scroll→scrollspy). */}
-      <div className="settings-jumpbar">
-        {sections.map((s) => (
-          <button
-            key={s.id}
-            className={`settings-chip${active === s.id ? ' active' : ''}`}
-            onClick={() => jump(s.id)}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
+    <div className="settings-page">
       <div className="settings-sections">
         {/* Typography — sliders left, live preview right. */}
-        <section
-          className="settings-block"
-          ref={(el) => { refs.current.typography = el }}
-        >
+        <section className="settings-block">
           <h2 className="settings-block-title">{t('settings.typography')}</h2>
           <TypographyControls settings={settings} onUpdateSettings={onUpdateSettings} t={t} />
         </section>
 
         {/* Proofreading. */}
-        <section className="settings-block" ref={(el) => { refs.current.proofreading = el }}>
+        <section className="settings-block">
           <h2 className="settings-block-title">{t('settings.proofreading')}</h2>
           <div className="settings-row">
             <div className="settings-row-text">
@@ -100,7 +56,7 @@ export default function SettingsView({
         </section>
 
         {/* Appearance. */}
-        <section className="settings-block" ref={(el) => { refs.current.appearance = el }}>
+        <section className="settings-block">
           <h2 className="settings-block-title">{t('settings.appearance')}</h2>
           <div className="settings-swatches">
             {THEMES.map((th) => (
@@ -133,7 +89,7 @@ export default function SettingsView({
         </section>
 
         {/* Language. */}
-        <section className="settings-block" ref={(el) => { refs.current.language = el }}>
+        <section className="settings-block">
           <h2 className="settings-block-title">{t('settings.language')}</h2>
           <div className="settings-langs">
             {LANGS.map((l) => (
@@ -145,7 +101,7 @@ export default function SettingsView({
         </section>
 
         {/* Image host. */}
-        <section className="settings-block" ref={(el) => { refs.current.imageHost = el }}>
+        <section className="settings-block">
           <h2 className="settings-block-title">{t('settings.imageHost')}</h2>
           <p className="settings-block-desc">{t('settings.imageHostDesc')}</p>
           <input
@@ -157,7 +113,7 @@ export default function SettingsView({
         </section>
 
         {/* About. */}
-        <section className="settings-block" ref={(el) => { refs.current.about = el }}>
+        <section className="settings-block">
           <h2 className="settings-block-title">{t('settings.about')}</h2>
           <div className="settings-row">
             <div className="settings-row-label">HorseMD {APP_VERSION && <span className="settings-version">{APP_VERSION}</span>}</div>
@@ -172,7 +128,7 @@ export default function SettingsView({
   )
 }
 
-// Typography: sliders (left) + sticky live preview (right).
+// Typography: compact sliders (left) + live HorseMD-intro preview (right).
 function TypographyControls({ settings, onUpdateSettings, t }) {
   const { fontSize, lineHeight, paragraphSpacing, pageWidth } = settings
   const fontIdx = FONT_SIZE_PRESETS.findIndex((p) => p.size === fontSize)
@@ -216,9 +172,13 @@ function TypographyControls({ settings, onUpdateSettings, t }) {
       </div>
       <div className="settings-typo-preview">
         <div className="settings-preview markdown-body">
-          <h2>{t('settings.previewHeading')}</h2>
-          <p>{t('settings.previewBody')}</p>
-          <ul><li>{t('settings.previewListItem')}</li></ul>
+          <h2>HorseMD</h2>
+          <p>{t('settings.previewIntro')}</p>
+          <pre><code>{t('settings.previewCode')}</code></pre>
+          <ul>
+            <li>{t('settings.previewFeature1')}</li>
+            <li>{t('settings.previewFeature2')}</li>
+          </ul>
         </div>
       </div>
     </div>
