@@ -1,102 +1,66 @@
 {
-  "task": "HorseMD 设置页(全套)+ 字号 bug 修复 + 拼写检查开关。批准方案见 /Users/yangtingyi/.claude/plans/mellow-bouncing-widget.md。",
-  "userDecisions": [
-    "设置页全套:排版(字号/行距/段距/页宽)+ 拼写检查 + 主题 + 语言 + 图床 + 关于。",
-    "StatusBar 现有快捷控件(排版/主题/语言)保留不动(非破坏)。",
-    "拼写检查默认关(spellcheck:false)。"
+  "task": "根治 HorseMD #25 残余:滚动到代码块+停留+选中文字 → 内容跳页(纯滚动已修好)。验证先行、根治(非 patch/非改 node_modules)、根治文档。",
+  "userConstraints": [
+    "确定性验证根因,不假设。",
+    "根治(底层),禁止 global monkey-patch / 改 node_modules / 接受+记录。",
+    "根治文档(CLAUDE.md / docs/manual-test-checklist.md / 记忆)。",
+    "不引新旧 bug:代码块编辑/语法高亮/复制/mermaid/代码块内搜索/语言检测/查找替换/审阅/自定义主题/源码模式/移动端/#17 Windows 大文档性能。跨平台。",
+    "build 0 error;单文件 <500 行(上限 800);一行一 commit,每 story build+验证。"
   ],
-  "constraints": [
-    "用户铁律:不引新旧 bug。不改坏现有功能(代码块/mermaid/latex/表格/大纲/查找/保存/审阅/自定义主题/源码模式/分屏/移动端)。",
-    "跨平台(macOS + Windows + 移动端)。",
-    "npm run build 0 error;单文件 <500 行(上限 800);不往 App.jsx/Editor.jsx 末尾堆代码(抽模块)。",
-    "文档与代码/架构一致:CLAUDE.md + docs/manual-test-checklist.md + 记忆。",
-    "一行一 commit,每 story build + 按 acceptance 验。"
-  ],
+  "hypothesis": "Milkdown code-block node view (node_modules/@milkdown/components/lib/code-block/index.js) IntersectionObserver(200px)+setTimeout 懒挂载/拆卸 CodeMirror EditorView → 高度差;Chromium 在选区时禁用 scroll-anchoring → 选区时锚定失效 → 高度差裸奔 → 跳。未确定性验证。",
   "stories": [
     {
       "id": "US-1",
-      "title": "修字号 bug:正文段落随 --editor-font-size 缩放",
+      "title": "确定性验证根因(复现 + 量化 + 机制)",
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "acceptanceCriteria": [
-        "app.css `.milkdown .ProseMirror p` 加 `font-size: var(--editor-font-size, 16px)`;排查 li/blockquote 若被 Crepe reset.css 硬编码也一并修。",
-        "CDP 验证:改 `--editor-font-size` 后,`.ProseMirror p` 的 computed font-size 跟着变(之前恒 16px);h1/h2 仍按 em 比例变(不回归)。",
-        "源码模式(.source-editor)字号仍随设置变(不回归)。",
-        "npm run build 0 error。"
+        "用 CDP Input.dispatchMouseEvent(mousePressed/moved/Released)在编辑器真鼠标拖选,复现『滚动到代码块+停留+选中→scrollTop 跳』(合成 MouseEvent 不算;必须 Input domain)。记录跳的量级。",
+        "量化代码块 placeholder(未挂载,IO 200px 外)高度 vs 挂载后 EditorView 高度的 delta。",
+        "确认机制:选区时 overflow-anchor:auto 是否失效(受控实验:视口上方内容长高,对比无选区 vs 有选区下锚元素 screenY 是否被钉住)。",
+        "progress.txt 写明:确认的根因 + 确定性复现方法 + delta 量级。若根因与假设不同,据实修正后续 story。"
       ]
     },
     {
       "id": "US-2",
-      "title": "tab kind 字段 + 设置 tab 管线(路由/持久化/状态栏 gate)",
+      "title": "根治:消除代码块高度差(非 patch/非改 node_modules)",
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "acceptanceCriteria": [
-        "tab 对象加 `kind` 字段;现有 file/untitled tab 默认 'doc';新增幂等 `openSettingsTab()`(已有 settings tab 则激活,否则建 kind:'settings' tab 并 active + setHome(false))。",
-        "EditorArea 对 kind!=='doc' 的 tab 跳过(不挂编辑器);根容器 display 在 settings tab 激活时为 none。",
-        "App.jsx 中间区新增 <SettingsView> 兄弟,`!home && activeTab?.kind==='settings'` 时显示;EditorArea/Welcome/SettingsView 三视图互斥 display 正确。",
-        "useAppLifecycle 持久化前 filter 掉 kind==='settings';恢复时 activeId 指向已过滤 tab 则回退 home。",
-        "StatusBar/SaveFab/pickEditableId 在 settings tab 激活时正确 gate(隐藏保存 FAB、Save/Export 快捷键不作用于设置页)。",
-        "CDP 验证:打开设置 tab、切回文档 tab、关闭设置 tab 回到原 tab;文档编辑器不重建;session 重启不恢复设置 tab。build 0。"
+        "基于 US-1 确认的根因,实现根治(消除代码块高度差或让锚定在选区时仍有效)。禁止 global monkey-patch / 改 node_modules。",
+        "代码块全部功能零回归:编辑、语法高亮、复制按钮、mermaid 预览(renderPreview 链)、代码块内搜索、语言检测。",
+        "npm run build 0 error。"
       ]
     },
     {
       "id": "US-3",
-      "title": "ActivityBar 左下角设置按钮 + gear 图标 + 移动端入口",
+      "title": "验证跳页消失",
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "acceptanceCriteria": [
-        "icons.jsx 新增 paths.gear(齿轮);ActivityBar 在 .activity-spacer 后加 .activity-item(gear 图标、tooltip、onSettings、settings tab 激活时 active 高亮)。",
-        "App.jsx 把 openSettingsTab 作为 onSettings 传给 ActivityBar。",
-        "移动端:StatusBar MobileMore '•••' sheet 加'设置'入口(移动端无 ActivityBar)。",
-        "i18n 加 nav.settings(en+zh)。",
-        "CDP/手动:左下角按钮可见、点击开设置 tab、active 高亮、移动端可达。build 0。"
+        "用 US-1 的 Input.dispatchMouseEvent 复现方法验证『滚动+停留+选中』scrollTop 不再跳(选区前后 |ΔscrollTop| ≤ 阈值)。",
+        "纯滚动停留仍不跳(不回归 overflow-anchor:auto 的成果)。"
       ]
     },
     {
       "id": "US-4",
-      "title": "Toggle 开关组件 + 拼写检查设置(默认关)",
+      "title": "回归",
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "acceptanceCriteria": [
-        "新建 components/ui/Toggle.jsx(role=switch, aria-checked, 用主题 token:--accent/--hover/--bg-editor/--shadow-sm, radius 999px, --ease-spring)。",
-        "settings.js DEFAULT_SETTINGS 加 spellcheck:false + normalize/save 兼容。",
-        "Editor.jsx:crepe 创建后给 view.dom 设 spellcheck 属性;settings.spellcheck 变化时重设(effect);每个 tab 编辑器都应用。",
-        "CDP 验证:view.dom.getAttribute('spellcheck') 随 settings.spellcheck 变;关→无红线、开→红线;跨 tab 一致;持久化+重启仍为设定值。build 0。"
+        "代码块编辑/语法高亮/复制/mermaid/LaTeX/表格/大纲/查找替换/保存/审阅/自定义主题/源码模式 过 docs/manual-test-checklist.md 相关条目。",
+        "#17 Windows 大文档性能不回归(content-visibility 仍在;若根治改了虚拟化,量化性能)。",
+        "build 0 error;无运行异常。"
       ]
     },
     {
       "id": "US-5",
-      "title": "SettingsView 骨架 + 排版区 + 实时预览",
+      "title": "根治文档 + mac 包",
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "acceptanceCriteria": [
-        "抽出 components/ui/AdjustGroup.jsx(从 LayoutControl,供两边复用);LayoutControl 改用抽出的版本(行为不变)。",
-        "新建 components/SettingsView.jsx(<500 行):页壳(分节、DNA 样式、menuFadeIn 入场)+ 排版区(字号/行距/段距/页宽,用 AdjustGroup + liveApply 直写 CSS var)+ 实时预览区(标题+正文+代码+列表样本,用同款 CSS var)。",
-        "app.css 加 .settings-page 等(沿用 .hm-pop/.hm-seg 质感 + 主题 token)。",
-        "CDP/手动:拖排版滑块直写 CSS var、编辑器(切回去)+ 预览区实时变、与 LayoutControl 行为一致;LayoutControl 仍正常(不回归)。build 0。"
-      ]
-    },
-    {
-      "id": "US-6",
-      "title": "设置页其余区:外观/语言/图床/关于",
-      "priority": 6,
-      "passes": true,
-      "acceptanceCriteria": [
-        "SettingsView 加:外观(主题,复用 ThemePicker 逻辑)、语言(复用 LangSwitch)、图床(复用 ImageHostButton 命令输入)、关于(__APP_VERSION__ + GitHub/Gitee 链接)。",
-        "i18n 加齐 settings.*(en+zh)。",
-        "各区可用、DNA 一致;原 StatusBar ThemePicker/LangSwitch/ImageHostButton 不回归。build 0。"
-      ]
-    },
-    {
-      "id": "US-7",
-      "title": "收尾:CSS 打磨 + 全量回归 + 文档 + mac 包",
-      "priority": 7,
-      "passes": true,
-      "acceptanceCriteria": [
-        "CSS 响应式 + 移动端打磨;深浅主题 + 自定义主题下设置页都正常。",
-        "全量回归过 docs/manual-test-checklist.md 相关条目(代码块/mermaid/latex/表格/大纲/查找/保存/审阅/自定义主题/源码模式)。",
-        "CLAUDE.md 更新(Layout 加 SettingsView、Conventions 加 tab kind + 设置页 + 字号修复 + spellcheck);docs/manual-test-checklist.md 加 Settings 节;记忆更新。",
-        "npm run build 0 error;打 mac 包自测。"
+        "CLAUDE.md(Conventions 加代码块 lazy-mount 根因+根治)、docs/manual-test-checklist.md(更新 #25)、docs/performance-large-doc.md(若相关)、记忆(horsemd-perf-large-doc.md / 新建)。",
+        "打 mac 包自测。"
       ]
     }
   ]

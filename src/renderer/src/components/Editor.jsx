@@ -14,6 +14,7 @@ import {
 import { imageBlockConfig } from '@milkdown/kit/component/image-block'
 import { inlineImageConfig } from '@milkdown/kit/component/image-inline'
 import { codeBlockConfig } from '@milkdown/kit/component/code-block'
+import './editor-codeblock-eager.js' // side effect: root-fix #25 — eager, non-tearing code-block node view
 import { inlineCodeSchema } from '@milkdown/kit/preset/commonmark'
 import { LanguageDescription, LanguageSupport, StreamLanguage } from '@codemirror/language'
 import { TextSelection, Plugin } from '@milkdown/prose/state'
