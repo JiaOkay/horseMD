@@ -35,6 +35,8 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
   // here and executed once loading finishes — heading offsets aren't stable
   // mid-load, so jumping immediately would land wrong + fight the content stream.
   const pendingJumpRef = useRef(null)
+  // Timer for restoring overflow-anchor after a jump (see doJump).
+  const anchorTimerRef = useRef(0)
 
   // --------------------------- outline jump ------------------------
   const jumpToHeading = useCallback((index) => {
@@ -53,9 +55,18 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
       return
     }
     const doJump = () => {
-      const hs = getHeadings(editorHostRef.current)
+      const host = editorHostRef.current
+      if (!host) return false
+      const hs = getHeadings(host)
       const el = hs[index]
       if (!el) return false
+      // overflow-anchor:auto (#25 code-block-jump fix) fights the smooth
+      // scrollIntoView: after the animation reaches the target, a content-height
+      // change triggers anchoring, pulling scrollTop back to the wrong position.
+      // Temporarily disable it during the jump; restore after the scroll settles.
+      host.style.overflowAnchor = 'none'
+      clearTimeout(anchorTimerRef.current)
+      anchorTimerRef.current = setTimeout(() => { host.style.overflowAnchor = '' }, 700)
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
       return true
     }
