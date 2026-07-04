@@ -37,6 +37,10 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
   const pendingJumpRef = useRef(null)
   // Timer for restoring overflow-anchor after a jump (see jumpAndStabilize).
   const anchorTimerRef = useRef(0)
+  // After a jump, force the scrollspy to highlight the clicked heading (the
+  // tops cache may be stale mid-content-settle → wrong active heading). Set by
+  // jumpAndStabilize; the scrollspy's compute() honors it until cleared.
+  const forcedActiveRef = useRef(null)
 
   // Scroll to a heading, then poll until the position stabilizes. Async content
   // (images/mermaid/KaTeX/CV estimate→real) keeps shifting scrollTop after the
@@ -46,6 +50,9 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
   // docs + competes with anchoring during the animation.
   const jumpAndStabilize = (host, el) => {
     if (!host || !el) return false
+    // Force the scrollspy to highlight THIS heading during the poll — the tops
+    // cache may be stale (content still settling) → wrong active heading.
+    forcedActiveRef.current = getHeadings(host).indexOf(el)
     host.style.overflowAnchor = 'none'
     clearTimeout(anchorTimerRef.current)
     let lastST = -1
@@ -54,7 +61,11 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
       el.scrollIntoView({ block: 'start' })
       const st = host.scrollTop
       if (Math.abs(st - lastST) < 3) {
-        if (++stable >= 2) { host.style.overflowAnchor = ''; return }
+        if (++stable >= 2) {
+          host.style.overflowAnchor = ''
+          forcedActiveRef.current = null // release override → normal scrollspy resumes
+          return
+        }
       } else stable = 0
       lastST = st
       anchorTimerRef.current = setTimeout(poll, 200)
@@ -152,11 +163,18 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
       }
       // scrollTop is a cheap scroll-offset read — no layout, no reflow — so this
       // can run every frame without freezing and lands on the exact heading.
-      const limit = scroller.scrollTop + 90
-      let idx = 0
-      for (let i = 0; i < tops.length; i++) {
-        if (tops[i] <= limit) idx = i
-        else break
+      // A jump (jumpAndStabilize) overrides this with the clicked heading's index
+      // until the content settles — the tops cache may be stale mid-settle.
+      let idx
+      if (forcedActiveRef.current != null) {
+        idx = forcedActiveRef.current
+      } else {
+        const limit = scroller.scrollTop + 90
+        idx = 0
+        for (let i = 0; i < tops.length; i++) {
+          if (tops[i] <= limit) idx = i
+          else break
+        }
       }
       if (idx !== lastIdx) {
         lastIdx = idx
