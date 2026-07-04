@@ -352,6 +352,7 @@ export default function App() {
     openPaths,
     newTab,
     openSettingsTab,
+    reorderTabs,
     updateContent,
     closeTab,
     closeOthers,
@@ -630,6 +631,7 @@ export default function App() {
         onDuplicate={duplicateTabFile}
         onDelete={deleteTabFile}
         onExportPdf={exportPathToPdf}
+        onReorder={reorderTabs}
         onToggleSidebar={() => setSidebarOpen((v) => !v)}
         onToggleSplit={toggleSplit}
         onImageHostChange={(cmd) => updateSettings({ imageUploadCommand: cmd })}

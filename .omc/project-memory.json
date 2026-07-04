@@ -34,7 +34,7 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "cd /Users/yangtingyi/vibe_everything/horseMD\nnpm run build > /tmp/hm-D-build.log 2>&1; echo \"BUILD_EXIT=$?\"; tail -1 /tmp/hm-D-build.log",
+    "buildCommand": "cd /Users/yangtingyi/vibe_everything/horseMD\nnpm run build > /tmp/hm-E-build.log 2>&1; echo \"BUILD_EXIT=$?\"; tail -1 /tmp/hm-E-build.log",
     "testCommand": null,
     "lintCommand": null,
     "devCommand": "npm run dev",
@@ -255,14 +255,14 @@
   "hotPaths": [
     {
       "path": "src/renderer/src/styles/app.css",
-      "accessCount": 96,
-      "lastAccessed": 1783168353807,
+      "accessCount": 98,
+      "lastAccessed": 1783172225368,
       "type": "file"
     },
     {
       "path": "src/renderer/src/App.jsx",
-      "accessCount": 93,
-      "lastAccessed": 1783171350769,
+      "accessCount": 97,
+      "lastAccessed": 1783172126541,
       "type": "file"
     },
     {
@@ -279,8 +279,8 @@
     },
     {
       "path": "src/renderer/src/hooks/useFileOps.js",
-      "accessCount": 13,
-      "lastAccessed": 1783171281962,
+      "accessCount": 15,
+      "lastAccessed": 1783171926151,
       "type": "file"
     },
     {
@@ -356,6 +356,18 @@
       "type": "file"
     },
     {
+      "path": "src/renderer/src/components/Tabs.jsx",
+      "accessCount": 5,
+      "lastAccessed": 1783172000718,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/components/shell/Topbar.jsx",
+      "accessCount": 5,
+      "lastAccessed": 1783172193845,
+      "type": "file"
+    },
+    {
       "path": "src/renderer/src/components/editor-callout.js",
       "accessCount": 4,
       "lastAccessed": 1782802117965,
@@ -419,12 +431,6 @@
       "path": "src/renderer/src/onboarding.js",
       "accessCount": 2,
       "lastAccessed": 1782803885229,
-      "type": "file"
-    },
-    {
-      "path": "src/renderer/src/components/shell/Topbar.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1782819655868,
       "type": "file"
     },
     {
@@ -533,12 +539,6 @@
       "path": "src/renderer/src/find.js",
       "accessCount": 1,
       "lastAccessed": 1783010930089,
-      "type": "file"
-    },
-    {
-      "path": "src/renderer/src/components/Tabs.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1783047126891,
       "type": "file"
     },
     {

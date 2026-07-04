@@ -44,7 +44,7 @@
       "id": "D",
       "title": "#29 文件树显示点目录(.claude 等)开关",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "settings.js 加 showHiddenFiles:false(默认关);main/index.js readTree + 移动端 capacitor-api 接收该设置,开时放行点目录/点文件(仍屏蔽 IGNORED_DIRS 如 .git/node_modules)。",
         "SettingsView 加 Toggle(复用 ui/Toggle.jsx);i18n(en+zh)。",

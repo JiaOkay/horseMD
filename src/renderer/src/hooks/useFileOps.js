@@ -156,6 +156,18 @@ export function useFileOps({
     setHome(false)
   }, [t, setTabs, setActiveId, setHome, tabsRef])
 
+  // Reorder tabs by dragging (issue #31). Moves a tab from `from` to `to` in the
+  // array; session persistence (useAppLifecycle) already saves tabs in order.
+  const reorderTabs = useCallback((from, to) => {
+    if (from === to || from < 0 || to < 0 || from >= tabsRef.current.length) return
+    setTabs((prev) => {
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }, [setTabs, tabsRef])
+
   const updateContent = useCallback((id, md, isInitial) => {
     setTabs((prev) =>
       prev.map((t) => {
@@ -490,6 +502,7 @@ export function useFileOps({
     openPaths,
     newTab,
     openSettingsTab,
+    reorderTabs,
     updateContent,
     closeTab,
     closeOthers,

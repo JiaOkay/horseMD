@@ -17,12 +17,17 @@ export default function Tabs({
   onRename,
   onDuplicate,
   onDelete,
-  onExportPdf
+  onExportPdf,
+  onReorder
 }) {
   const { t } = useI18n()
   const activeRef = useRef(null)
   // Right-click context menu: { x, y, tab } in viewport coords, or null.
   const [menu, setMenu] = useState(null)
+  // Tab drag-reorder (#31). dragIndexRef holds the source index during a drag;
+  // dragOverIndex drives the visual insertion indicator (the tab being hovered).
+  const dragIndexRef = useRef(null)
+  const [dragOverIndex, setDragOverIndex] = useState(-1)
   // On touch there's no hover to reveal the close ✕, so show it always and use a
   // clear ✕ (the unsaved state is shown in the bottom bar, not as a tab dot).
   const isMobile = window.api.platform === 'ios' || window.api.platform === 'android'
@@ -57,7 +62,7 @@ export default function Tabs({
   return (
     <div className="tabs">
       <div className="tabs-scroll">
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const dirty = tab.content !== tab.savedContent
           const isLeft = tab.id === activeId
           const isRight = splitId != null && tab.id === splitId
@@ -69,7 +74,23 @@ export default function Tabs({
             <div
               key={tab.id}
               ref={isLeft ? activeRef : null}
-              className={`tab${isActive ? ' active' : ''}${isActive && !focused ? ' split-peer' : ''}`}
+              className={`tab${isActive ? ' active' : ''}${isActive && !focused ? ' split-peer' : ''}${dragOverIndex === index ? ' drag-over' : ''}`}
+              draggable={!!onReorder && !isMobile}
+              onDragStart={(e) => {
+                if (e.target.closest('.tab-close')) { e.preventDefault(); return }
+                dragIndexRef.current = index
+                e.dataTransfer.effectAllowed = 'move'
+                e.dataTransfer.setData('text/plain', '') // Firefox requires data
+              }}
+              onDragOver={(e) => { e.preventDefault(); if (dragIndexRef.current !== null && dragOverIndex !== index) setDragOverIndex(index) }}
+              onDragLeave={() => { if (dragOverIndex === index) setDragOverIndex(-1) }}
+              onDrop={(e) => {
+                e.preventDefault()
+                if (dragIndexRef.current !== null && onReorder) onReorder(dragIndexRef.current, index)
+                dragIndexRef.current = null
+                setDragOverIndex(-1)
+              }}
+              onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(-1) }}
               onClick={() => onActivate(tab.id)}
               onContextMenu={(e) => {
                 e.preventDefault()

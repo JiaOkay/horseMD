@@ -24,6 +24,7 @@ export default function Topbar({
   onDuplicate,
   onDelete,
   onExportPdf,
+  onReorder,
   onToggleSidebar,
   onToggleSplit,
   onImageHostChange,
@@ -54,6 +55,7 @@ export default function Topbar({
         onDuplicate={onDuplicate}
         onDelete={onDelete}
         onExportPdf={onExportPdf}
+        onReorder={onReorder}
       />
       <div className="topbar-spacer" />
       <button className="icon-btn drag-no" title={`${t('welcome.newFile')} (Ctrl+N)`} onClick={onNew}>
