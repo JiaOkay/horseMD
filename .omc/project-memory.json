@@ -255,14 +255,14 @@
   "hotPaths": [
     {
       "path": "src/renderer/src/styles/app.css",
-      "accessCount": 98,
-      "lastAccessed": 1783172225368,
+      "accessCount": 101,
+      "lastAccessed": 1783172438415,
       "type": "file"
     },
     {
       "path": "src/renderer/src/App.jsx",
-      "accessCount": 97,
-      "lastAccessed": 1783172126541,
+      "accessCount": 100,
+      "lastAccessed": 1783172604308,
       "type": "file"
     },
     {
@@ -279,14 +279,14 @@
     },
     {
       "path": "src/renderer/src/hooks/useFileOps.js",
-      "accessCount": 15,
-      "lastAccessed": 1783171926151,
+      "accessCount": 16,
+      "lastAccessed": 1783172392532,
       "type": "file"
     },
     {
       "path": "src/renderer/src/hooks/useOutline.js",
-      "accessCount": 11,
-      "lastAccessed": 1783169909683,
+      "accessCount": 12,
+      "lastAccessed": 1783172390792,
       "type": "file"
     },
     {
@@ -308,15 +308,15 @@
       "type": "file"
     },
     {
-      "path": "docs/refactor-plan.md",
-      "accessCount": 7,
-      "lastAccessed": 1782820428480,
+      "path": "src/renderer/src/settings.js",
+      "accessCount": 8,
+      "lastAccessed": 1783172391789,
       "type": "file"
     },
     {
-      "path": "src/renderer/src/settings.js",
+      "path": "docs/refactor-plan.md",
       "accessCount": 7,
-      "lastAccessed": 1783171164065,
+      "lastAccessed": 1782820428480,
       "type": "file"
     },
     {
@@ -350,21 +350,21 @@
       "type": "file"
     },
     {
-      "path": "src/renderer/src/components/LayoutControl.jsx",
-      "accessCount": 5,
-      "lastAccessed": 1783052060297,
-      "type": "file"
-    },
-    {
       "path": "src/renderer/src/components/Tabs.jsx",
-      "accessCount": 5,
-      "lastAccessed": 1783172000718,
+      "accessCount": 6,
+      "lastAccessed": 1783172397851,
       "type": "file"
     },
     {
       "path": "src/renderer/src/components/shell/Topbar.jsx",
+      "accessCount": 6,
+      "lastAccessed": 1783172419662,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/components/LayoutControl.jsx",
       "accessCount": 5,
-      "lastAccessed": 1783172193845,
+      "lastAccessed": 1783052060297,
       "type": "file"
     },
     {
@@ -449,6 +449,12 @@
       "path": "docs/performance-large-doc.md",
       "accessCount": 2,
       "lastAccessed": 1783010813473,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/components/Sidebar.jsx",
+      "accessCount": 2,
+      "lastAccessed": 1783172438355,
       "type": "file"
     },
     {
@@ -539,12 +545,6 @@
       "path": "src/renderer/src/find.js",
       "accessCount": 1,
       "lastAccessed": 1783010930089,
-      "type": "file"
-    },
-    {
-      "path": "src/renderer/src/components/Sidebar.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1783047128281,
       "type": "file"
     },
     {

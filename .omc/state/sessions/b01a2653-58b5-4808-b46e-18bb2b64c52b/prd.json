@@ -55,7 +55,7 @@
       "id": "E",
       "title": "#31 标签页拖拽排序",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Tabs.jsx HTML5 拖拽(draggable+onDragStart/onDragOver/onDrop)重排 tabs;抽 reorderTabs(from,to) 到 useFileOps(解耦)。session 自动持久化(已有按 tabs 顺序存的逻辑)。拖拽视觉反馈。无新依赖。",
         "CDP/手动: 拖标签到新位置 → 顺序变 + 重启保持;激活态/关闭/右键菜单不回归。build 0。"

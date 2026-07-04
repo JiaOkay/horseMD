@@ -5,7 +5,9 @@
 // TEXT is content-stable across modes, so we anchor on it instead (ratio is the
 // fallback when no heading is near the viewport top).
 //
-// Shared with the outline (getHeadings) for DRY.
+// Uses the same heading selector as useOutline.js (duplicated to avoid a cross-
+// module import for a single CSS-selector constant; the two modules are
+// independent and may diverge if one needs a different selector).
 
 const HEADING_SEL = '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6'
 

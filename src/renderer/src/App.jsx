@@ -396,8 +396,8 @@ export default function App() {
   // file tree when it changes (#29).
   useEffect(() => {
     window.api.setShowHidden?.(settings.showHiddenFiles)
-    bumpRefresh()
-  }, [settings.showHiddenFiles, bumpRefresh])
+    if (workspace) bumpRefresh()
+  }, [settings.showHiddenFiles, bumpRefresh, workspace])
 
   // Show a tab in the right (split) pane. If it's currently the active tab, move
   // the left pane to a different tab so the two panes differ.
