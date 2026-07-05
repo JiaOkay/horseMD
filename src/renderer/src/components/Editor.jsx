@@ -409,9 +409,14 @@ export default function Editor({
             fireToast(tRef.current('imghost.uploaded'))
             return res.url
           }
-          fireToast(tRef.current('imghost.failed'))
-        } catch {
-          fireToast(tRef.current('imghost.failed'))
+          // Surface the actual error so image-host failures (PicGo server down,
+          // wrong port, R2 auth, 404, …) are diagnosable instead of a generic
+          // "failed". Sticky so it stays readable until dismissed.
+          const detail = String(res?.error || '').slice(0, 240).trim()
+          fireToast({ msg: detail ? `${tRef.current('imghost.failed')}\n${detail}` : tRef.current('imghost.failed'), sticky: true })
+        } catch (e) {
+          const detail = String(e?.message || e || '').slice(0, 240).trim()
+          fireToast({ msg: detail ? `${tRef.current('imghost.failed')}\n${detail}` : tRef.current('imghost.failed'), sticky: true })
         }
         // Upload failed — fall through to local persistence so it isn't lost.
       }
