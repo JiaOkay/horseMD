@@ -607,7 +607,7 @@ export default function App() {
     const startX = e.clientX
     document.body.classList.add('resizing-pane')
     const onMove = (ev) => {
-      const w = Math.max(200, Math.min(560, startW + (ev.clientX - startX)))
+      const w = Math.max(160, Math.min(560, startW + (ev.clientX - startX)))
       setPaneWidth(w)
     }
     const onUp = () => {
