@@ -238,9 +238,9 @@ export const STRINGS = {
     'settings.imageHost': 'Image upload command',
     'settings.imageHostDesc':
       'When set, pasted, dropped or uploaded images run through this command and the returned URL is inserted (like Typora).',
-    'settings.imageHostPlaceholder': 'e.g. picgo upload',
+    'settings.imageHostPlaceholder': 'picgo  |  picgo upload  |  http://127.0.0.1:36677/upload',
     'settings.imageHostHint':
-      'The image file path is appended as an argument; the command must print the image URL to stdout. Leave empty to keep images local.',
+      'Enter "picgo" to use the PicGo app (its local server), an http(s) URL for any PicGo-compatible server, or a shell command (file path appended, must print the URL to stdout). Empty = keep images local.',
     'imghost.uploading': 'Uploading image…',
     'imghost.uploaded': 'Image uploaded',
     'imghost.failed': 'Image upload failed — kept a local copy',
@@ -529,9 +529,9 @@ export const STRINGS = {
     'settings.imageHost': '图床上传命令',
     'settings.imageHostDesc':
       '设置后，粘贴、拖入或上传的图片会经此命令处理，并把返回的链接插入文档（类似 Typora）。',
-    'settings.imageHostPlaceholder': '例如：picgo upload',
+    'settings.imageHostPlaceholder': 'picgo  |  picgo upload  |  http://127.0.0.1:36677/upload',
     'settings.imageHostHint':
-      '图片文件路径会作为参数追加到命令末尾；命令需将图片 URL 打印到标准输出。留空则图片保持本地。',
+      '填 picgo 走 PicGo 客户端（本地服务），填 http(s) 链接走任意 PicGo 兼容服务器，填命令则图片路径追加到末尾、需把 URL 打印到标准输出。留空 = 图片保持本地。',
     'imghost.uploading': '正在上传图片…',
     'imghost.uploaded': '图片已上传',
     'imghost.failed': '图片上传失败 —— 已保留本地副本',

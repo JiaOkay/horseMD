@@ -662,8 +662,54 @@ function parseUploadedUrl(out) {
   return m ? m[0].replace(/[)\]>"',.]+$/, '') : null
 }
 
+// PicGo app server upload (Typora-compatible, issue #35). The PicGo GUI app has
+// no CLI; instead it runs a local HTTP server (default 127.0.0.1:36677) that
+// accepts POST /upload with {"list": [<base64 data URI>]} and replies
+// {"success": true, "result": [url]}. We POST the image bytes as a data URI and
+// read the URL. Uses net.fetch (Chromium stack) like the update check.
+async function uploadViaServer(endpoint, name, bytes) {
+  const ext = (name || '').toLowerCase().match(/\.([a-z0-9]+)$/)?.[1]
+  const mime =
+    ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+    : ext === 'gif' ? 'image/gif'
+    : ext === 'webp' ? 'image/webp'
+    : ext === 'svg' ? 'image/svg+xml'
+    : 'image/png'
+  const dataUri = `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`
+  const res = await net.fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ list: [dataUri] }),
+  })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`PicGo server HTTP ${res.status}: ${text.slice(0, 200)}`)
+  try {
+    const j = JSON.parse(text)
+    if (j && j.success && Array.isArray(j.result) && j.result[0]) return String(j.result[0])
+    if (j && j.success === false) throw new Error(j.message || 'PicGo server returned failure')
+  } catch (e) {
+    if (!(e instanceof SyntaxError)) throw e // JSON but not the expected shape
+    /* not JSON — fall through to URL extraction */
+  }
+  return parseUploadedUrl(text) // fallback: any http(s) URL in the body
+}
+
 ipcMain.handle('image:upload', async (_e, command, name, bytes) => {
   if (!command || !String(command).trim()) return { ok: false, error: 'No upload command configured.' }
+  const cmd = String(command).trim()
+  // PicGo app server (Typora-compatible, #35): "picgo" → default server, or any
+  // http(s) URL → that endpoint. The PicGo GUI has no CLI; this is how Typora
+  // talks to it. Otherwise fall through to the shell-command uploader below.
+  let endpoint = cmd
+  if (cmd.toLowerCase() === 'picgo') endpoint = 'http://127.0.0.1:36677/upload'
+  if (/^https?:\/\//i.test(endpoint)) {
+    try {
+      const url = await uploadViaServer(endpoint, name, bytes)
+      return url ? { ok: true, url } : { ok: false, error: 'No URL in PicGo server response.' }
+    } catch (e) {
+      return { ok: false, error: e?.message || String(e) }
+    }
+  }
   let dir
   try {
     dir = await fs.mkdtemp(join(tmpdir(), 'horsemd-img-'))
