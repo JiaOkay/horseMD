@@ -741,6 +741,10 @@ export default function Editor({
         }
 
         const onContextMenu = (e) => {
+          // Mobile (Capacitor): don't suppress the native long-press menu —
+          // preventDefault + our custom block menu here blocks Android's paste /
+          // selection action mode (#37). Desktop keeps the right-click block menu.
+          if (window.api?.platform === 'ios' || window.api?.platform === 'android') return
           e.preventDefault()
           // Move the caret to the click so the menu acts on the clicked block.
           const v = viewRef.current
