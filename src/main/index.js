@@ -108,6 +108,18 @@ if (!gotLock) {
   })
 }
 
+// ---- First-launch open queue (#36): argv files (Win/Linux) and open-file
+// events (macOS) arrive before the renderer has registered its open-paths
+// listener. Hold them until the renderer signals 'app-ready', then deliver —
+// otherwise the launched file is lost and the restored session shows instead.
+let pendingLaunch = { files: [], folders: [] }
+ipcMain.on('app-ready', () => {
+  const { files, folders } = pendingLaunch
+  pendingLaunch = { files: [], folders: [] }
+  if (folders.length) sendToRenderer('open-folder', folders[0])
+  if (files.length) sendToRenderer('open-paths', files)
+})
+
 // Split launch args into markdown files and folders. A folder argument (from
 // the Explorer "Open with HorseMD" folder menu) opens as a workspace; markdown
 // files open as tabs. Non-existent paths and flags are ignored.
@@ -186,9 +198,10 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     focusMainWindow()
-    const { files, folders } = extractArgs(process.argv)
-    if (folders.length) sendToRenderer('open-folder', folders[0])
-    if (files.length) sendToRenderer('open-paths', files)
+    // Launch files/folders are delivered on the renderer's 'app-ready' signal
+    // (see pendingLaunch below) — sending here races the renderer's IPC listener
+    // registration, and the double-clicked file is lost to the restored session
+    // (issue #36).
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -241,11 +254,18 @@ app.on('open-file', (event, path) => {
     focusMainWindow()
     sendToRenderer('open-paths', [path])
   } else {
-    app.whenReady().then(() => sendToRenderer('open-paths', [path]))
+    // First launch: queue for the renderer's app-ready handshake (#36).
+    if (!pendingLaunch.files.includes(path)) pendingLaunch.files.push(path)
   }
 })
 
 app.whenReady().then(() => {
+  // Win/Linux: argv carries the launched file/folder. Merge into the launch
+  // queue (macOS open-file events already pushed above). Delivered on the
+  // renderer's app-ready signal (#36).
+  const launched = extractArgs(process.argv)
+  for (const f of launched.files) if (!pendingLaunch.files.includes(f)) pendingLaunch.files.push(f)
+  for (const d of launched.folders) if (!pendingLaunch.folders.includes(d)) pendingLaunch.folders.push(d)
   ensureThemesDir()
   buildMenu()
   createWindow()
@@ -823,67 +843,35 @@ ipcMain.on('app:cancel-close', () => {
 })
 
 // ----------------------------- update check --------------------------------
-// Notify-only update check: report the latest published release's version so the
-// renderer can show a "new version available" prompt. No download here.
-//
-// Two sources, tried in order — both shaped into the same return object:
-//   1) 官网 latest.json (https://horsemd.yangsir.net/latest.json) — 国内可达,
-//      绕开 api.github.com 被墙/超时导致国内用户收不到更新提醒的问题。由
-//      scripts/gen-latest-json.mjs 在每次发版后生成、随官网部署。
-//   2) GitHub releases/latest API — 回退(官网挂了 / 海外用户)。
-// Use Electron's net (Chromium's network stack), NOT Node's global fetch:
-// Node's fetch resolves DNS via the bundled c-ares, which can abort() the whole
-// main process for an unsigned app launched by Finder/launchd (observed as an
-// instant crash on open). net.fetch goes through Chromium's resolver, which
-// fails gracefully instead of crashing.
+// Notify-only update check: ask GitHub for the latest *published* release
+// (drafts/prereleases are excluded by this endpoint) and report its version so
+// the renderer can show a "new version available" prompt. No download here.
 ipcMain.handle('update:check', async () => {
-  const sources = [
-    {
-      url: 'https://horsemd.yangsir.net/latest.json',
-      headers: { Accept: 'application/json' },
-      // 官网 latest.json 已是 {latest,name,url,notes} 平结构
-      pick: (d) => ({
-        latest: String(d.latest || '').replace(/^v/i, ''),
-        url: d.url,
-        name: d.name,
-        notes: d.notes
-      })
-    },
-    {
-      url: 'https://api.github.com/repos/BND-1/horseMD/releases/latest',
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'HorseMD-Updater' },
-      // GitHub API 结构:tag_name / html_url / name / body(drafts & prereleases
-      // 已被该端点排除)
-      pick: (d) => ({
-        latest: String(d.tag_name || '').replace(/^v/i, ''),
-        url: d.html_url,
-        name: d.name,
-        notes: d.body
-      })
+  try {
+    // Use Electron's net (Chromium's network stack), NOT Node's global fetch:
+    // Node's fetch resolves DNS via the bundled c-ares, which can abort() the
+    // whole main process for an unsigned app launched by Finder/launchd (observed
+    // as an instant crash on open). net.fetch goes through Chromium's resolver,
+    // which fails gracefully instead of crashing.
+    const res = await net.fetch('https://api.github.com/repos/BND-1/horseMD/releases/latest', {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'HorseMD-Updater' }
+    })
+    if (!res.ok) return { ok: false }
+    const data = await res.json()
+    const latest = String(data.tag_name || '').replace(/^v/i, '')
+    return {
+      ok: true,
+      latest,
+      current: app.getVersion(),
+      url: data.html_url || 'https://github.com/BND-1/horseMD/releases',
+      // The release notes (Markdown) so the prompt can show "what's new". Capped
+      // so a huge changelog can't bloat the IPC payload / the toast.
+      name: typeof data.name === 'string' ? data.name : '',
+      notes: typeof data.body === 'string' ? data.body.slice(0, 4000) : ''
     }
-  ]
-  for (const s of sources) {
-    try {
-      const res = await net.fetch(s.url, { headers: s.headers })
-      if (!res.ok) continue
-      const data = await res.json()
-      const picked = s.pick(data)
-      if (!picked.latest) continue
-      return {
-        ok: true,
-        latest: picked.latest,
-        current: app.getVersion(),
-        url: picked.url || 'https://github.com/BND-1/horseMD/releases',
-        // Release notes (Markdown) so the prompt can show "what's new". Capped
-        // so a huge changelog can't bloat the IPC payload / the toast.
-        name: typeof picked.name === 'string' ? picked.name : '',
-        notes: typeof picked.notes === 'string' ? picked.notes.slice(0, 4000) : ''
-      }
-    } catch {
-      // 网络错误 / DNS 失败 → 试下一个源
-    }
+  } catch {
+    return { ok: false }
   }
-  return { ok: false }
 })
 
 // Menu actions are forwarded to renderer as commands.

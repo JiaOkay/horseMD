@@ -105,10 +105,15 @@ export function useAppLifecycle({
             return prev
           })
         }
+        // Restore done — tell main to deliver any argv / open-file queued at
+        // launch LAST, so the freshly opened file wins active tab over the
+        // restored session (#36).
+        window.api.appReady?.()
       })
     } else {
       const created = addUntitled()
       if (created && created.length) setActiveId(created[0].id)
+      window.api.appReady?.()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

@@ -72,6 +72,9 @@ const api = {
   // changes, then calls confirmAppClose() to proceed or cancelAppClose() to abort.
   confirmAppClose: () => ipcRenderer.send('app:confirm-close'),
   cancelAppClose: () => ipcRenderer.send('app:cancel-close'),
+  // Renderer signals it has registered its main→renderer listeners (e.g.
+  // open-paths); main then delivers any files/folders queued at launch (#36).
+  appReady: () => ipcRenderer.send('app-ready'),
 
   // events from main
   onOpenPaths: on('open-paths'),
