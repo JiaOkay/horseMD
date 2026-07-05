@@ -146,8 +146,11 @@ fetch('https://api.github.com/repos/BND-1/horseMD/releases/latest')
     // macOS: 主按钮 + 国内加速都指向安装指南页（未签名构建需说明）
     const macGuide = 'https://github.com/BND-1/horseMD#%E5%AE%89%E8%A3%85'
     document.getElementById('dlMacCn').href = CN + macGuide
-    // Android: 主按钮走 GitHub 直链（"国内加速" 是 Gitee 镜像，HTML 里已固定）
-    const apk = assets.find(a => /\.apk$/i.test(a.name))
-    if (apk) document.getElementById('dlAndroid').href = apk.browser_download_url
   })
+
+// Android: APK 暂停在 v0.3.1（未同步桌面端），直接钉到该版本直链 ——
+// 不从 latest release 找 apk（latest 是桌面版 v0.5.0，无 APK）。
+// 发新 APK 时改这两行版本号即可。
+document.getElementById('dlAndroid').href = 'https://github.com/BND-1/horseMD/releases/download/v0.3.1/HorseMD-0.3.1.apk'
+document.getElementById('dlAndroidGitee').href = 'https://gitee.com/yty11167/horse-md/releases/download/v0.3.1/HorseMD-0.3.1.apk'
   .catch(() => { /* 静默回退到 releases 页 */ })
