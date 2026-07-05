@@ -147,10 +147,9 @@ fetch('https://api.github.com/repos/BND-1/horseMD/releases/latest')
     const macGuide = 'https://github.com/BND-1/horseMD#%E5%AE%89%E8%A3%85'
     document.getElementById('dlMacCn').href = CN + macGuide
   })
-
-// Android: APK 暂停在 v0.3.1（未同步桌面端），直接钉到该版本直链 ——
-// 不从 latest release 找 apk（latest 是桌面版 v0.5.0，无 APK）。
-// 发新 APK 时改这两行版本号即可。
-document.getElementById('dlAndroid').href = 'https://github.com/BND-1/horseMD/releases/download/v0.3.1/HorseMD-0.3.1.apk'
-document.getElementById('dlAndroidGitee').href = 'https://gitee.com/yty11167/horse-md/releases/download/v0.3.1/HorseMD-0.3.1.apk'
   .catch(() => { /* 静默回退到 releases 页 */ })
+
+// Android: 钉到最新 APK 直链(v0.5.2)。Gitee 未同步到 v0.5.2,国内加速走
+// ghfast.top 包 GitHub 直链(和桌面端国内加速一致)。发新 APK 时改这两行版本号。
+document.getElementById('dlAndroid').href = 'https://github.com/BND-1/horseMD/releases/download/v0.5.2/HorseMD-0.5.2.apk'
+document.getElementById('dlAndroidGitee').href = 'https://ghfast.top/https://github.com/BND-1/horseMD/releases/download/v0.5.2/HorseMD-0.5.2.apk'
