@@ -1932,6 +1932,17 @@ body.hm-full-width .editor-skeleton {
   /* Crepe clips the toolbar (overflow:hidden); allow our submenu to escape. */
   overflow: visible !important;
 }
+/* Crepe colors toolbar-item icons with --crepe-color-outline, which the app
+   maps to --border — a low-contrast border tone that makes the selection
+   toolbar icons near-invisible on the toolbar surface (issue #33: dark/Morandi
+   were worst, #3a3630 on #24201c ≈ 1.5:1). Use a real icon color (--icon is
+   defined for light + dark, inherited by the Morandi themes). Hover/active
+   keep Crepe's accent override via their more-specific selectors. */
+.milkdown .milkdown-toolbar .toolbar-item,
+.milkdown .milkdown-toolbar .toolbar-item svg {
+  color: var(--icon);
+  fill: var(--icon);
+}
 /* Slash (/) command menu: contain wheel scrolling so scrolling the list (or
    reaching its edge) never scrolls the editor body behind it. */
 .milkdown .milkdown-slash-menu,
