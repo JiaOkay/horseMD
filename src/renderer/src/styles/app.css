@@ -58,6 +58,7 @@ body.light {
   --text: #2a2620;
   --text-strong: #0f0d0a;
   --muted: #5a5650;
+  --icon: #5a5650;
   --faint: #8a867e;
 
   /* UI Elements */
@@ -108,6 +109,7 @@ body.dark {
   --text: #d0c8bc;
   --text-strong: #f2ebe0;
   --muted: #8a8378;
+  --icon: #a89f91;
   --faint: #6a655c;
 
   /* UI Elements */
@@ -1105,7 +1107,7 @@ button:focus-visible,
   width: 30px;
   height: 30px;
   border-radius: var(--radius-sm);
-  color: var(--muted);
+  color: var(--icon);
   transition: all 0.2s var(--ease-out);
 }
 .icon-btn:hover {
