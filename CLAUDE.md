@@ -169,6 +169,30 @@ docs/                  architecture / features / implementation-notes / developm
   TEXT at the viewport top (content-stable across rich/source); the restore effect
   scrolls to the same heading in the new mode (multi-pass for Crepe async fill),
   falling back to scroll-ratio if no heading found.
+- **Mode-switch caret** (`scrollAnchor.js` `capture*`/`restore*Caret`, #41): the
+  same switch also captures the CARET (nearest heading + text offset from it, or
+  a doc-length ratio for headingless docs) and restores it in the new mode after
+  the scroll settles. Rich side uses the editor-API `getView()` channel + **ProseMirror
+  `view.state.selection.head`** (NOT `selection.main.head` — that's CodeMirror's API;
+  ProseMirror's `Selection` has no `.main`). The restore effect's scroll branch keeps
+  #28's "ratio runs only when the heading anchor misses" semantics via a
+  `scrolledByAnchor` flag (an early `return` would skip the caret restore too).
+- **Outline in source mode** (`useOutline.js` + `scrollAnchor.parseSourceHeadings`,
+  #40): the outline used to blank in source mode. Now the list is regex-parsed from
+  the textarea (`parseSourceHeadings`, also used by `headingAtSourceTop` + the #41
+  caret helpers — single shared regex, constructed fresh per call to avoid a
+  stateful `g`-flag `lastIndex`), the scrollspy maps `scrollTop→char→nearest heading`,
+  and `jumpToHeading` scrolls the textarea via `scrollSourceToHeading`. A textarea
+  `input` listener (debounced) live-refreshes the list. Rich-mode paths are unchanged
+  (all source branches are `if (sourceMode)`-gated; the `richLoading` guard became
+  `!sourceMode && richLoading`, identical in rich mode).
+- **Code-block Tab at cursor** (`editor-codeblock-tab.js`, #39): Crepe's code-mirror
+  feature bundles `indentWithTab`, so Tab re-indented the whole line. Override =
+  `Prec.highest(keymap.of([{key:'Tab',run:insertTabAtCursor}]))` injected via the
+  `[CrepeFeature.CodeMirror]` featureConfig `extensions` field (the supported channel
+  — the feature pushes `config.extensions` AFTER `indentWithTab`). **No prototype mod,
+  no `editorViewOptionsCtx`/nodeView change** (those would clobber component node views).
+  Shift-Tab (dedent) untouched; prose Tab unaffected (CM-scoped only).
 - **Tab reorder** (`useFileOps.js` `reorderTabs`, #31): HTML5 drag in `Tabs.jsx`
   (draggable + onDragStart/Over/Drop/End). Close-button area cancels drag. Session
   persists tabs in array order (existing logic). Mobile skips draggable.
