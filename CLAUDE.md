@@ -255,7 +255,19 @@ docs/                  architecture / features / implementation-notes / developm
 - **Image host** (`ImageHostButton` + `image:upload` IPC): a Typora-style custom
   command. Renderer reads the file bytes and calls main, which writes a temp file,
   runs `<command> "<file>"`, and returns the last http(s) URL it prints. Empty
-  command ⇒ paste/drop isn't intercepted (no dead blob: URLs).
+  command ⇒ paste/drop isn't intercepted (no dead blob: URLs). PicGo-Core
+  (`picgo upload`) works directly as the command; the PicGo GUI app (no CLI) is
+  reached by entering `picgo` (→ its local server `127.0.0.1:36677/upload`, #35).
+  **Image-host URLs can be `http://`** (e.g. PicGo's `local-uploader` plugin returns
+  `http://127.0.0.1:<port>/...`), so the renderer CSP (`src/renderer/index.html`)
+  `img-src` MUST include `http:` — without it those images render as broken
+  (CSP-blocked), which presents as "pasted image doesn't display" even though the
+  upload succeeded.
+- **Renderer CSP** (`src/renderer/index.html`, the `Content-Security-Policy` meta):
+  `img-src 'self' data: https: http: blob:` — `http:` is intentional (local picbeds
+  / http image hosts, Typora-compatible). `script-src 'self'` (no `'unsafe-inline'`)
+  and `default-src 'self'` stay strict. There is NO main-process CSP header
+  override, so this meta is the single source — don't regress `http:` from img-src.
 - **Unsaved scratch tabs persist**: the session stores untitled (pathless) tabs
   whose content is dirty under `untitled: [{title, content}]`, and the mount
   restore recreates them (with `savedContent: ''` so they stay marked unsaved).
