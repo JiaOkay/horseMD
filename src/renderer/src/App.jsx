@@ -620,8 +620,12 @@ export default function App() {
   // Consolas rule. Empty font = no inline var, so the default stacks (and the
   // Windows Consolas fix) still apply. Cascades to the editor + the settings
   // preview, giving live feedback as the user types a name.
-  const fwStack = fontStack(settings.fontWrite, DEFAULT_FONT_WRITE)
-  const fmStack = fontStack(settings.fontMono, DEFAULT_FONT_MONO)
+  // Hover-preview (#38): while the cursor is over a font option in the picker,
+  // temporarily apply it so the preview + editor react live — no click needed.
+  // Cleared on leave/close; pick writes to settings (the persistent value).
+  const [hoverFont, setHoverFont] = useState({})
+  const fwStack = fontStack(hoverFont.write ?? settings.fontWrite, DEFAULT_FONT_WRITE)
+  const fmStack = fontStack(hoverFont.mono ?? settings.fontMono, DEFAULT_FONT_MONO)
   const appFontStyle = {
     ...(fwStack ? { '--font-write': fwStack } : {}),
     ...(fmStack ? { '--font-mono': fmStack } : {})
@@ -769,6 +773,7 @@ export default function App() {
             <SettingsView
               settings={settings}
               onUpdateSettings={updateSettings}
+              onHoverFont={setHoverFont}
               theme={theme}
               setTheme={pickBuiltinTheme}
               customThemes={customThemes}

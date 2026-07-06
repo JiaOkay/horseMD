@@ -7,7 +7,7 @@
 //
 // StatusBar quick-controls (排版/主题/语言) stay where they are — this is their
 // full-version home, not a replacement.
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useI18n, LANGS } from '../i18n.jsx'
 import { THEMES } from '../themes.js'
 import { isNewerVersion } from '../paths.js'
@@ -26,7 +26,7 @@ const round10 = (n) => Math.round(n / 10) * 10
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''
 
 export default function SettingsView({
-  settings, onUpdateSettings,
+  settings, onUpdateSettings, onHoverFont,
   theme, setTheme, customThemes = [], customTheme, onPickCustom,
   onOpenThemesFolder, onGetMoreThemes,
   lang, setLang
@@ -177,30 +177,29 @@ function TypographyControls({ settings, onUpdateSettings, t }) {
             inline CSS var updates live, so the preview + editor react as you
             type. The code font overrides the Windows Consolas rule too. */}
         <div className="settings-font-pickers">
-          <label className="settings-font-row">
-            <span className="settings-font-label">{t('settings.fontWrite')}</span>
-            <input
-              className="settings-input settings-font-input" type="text" spellCheck={false}
-              list="hm-font-families" onFocus={ensureFonts}
-              placeholder={t('settings.fontWritePlaceholder')}
-              value={settings.fontWrite || ''}
-              onChange={(e) => onUpdateSettings({ fontWrite: e.target.value })}
-            />
-          </label>
-          <label className="settings-font-row">
-            <span className="settings-font-label">{t('settings.fontMono')}</span>
-            <input
-              className="settings-input settings-font-input" type="text" spellCheck={false}
-              list="hm-font-families" onFocus={ensureFonts}
-              placeholder={t('settings.fontMonoPlaceholder')}
-              value={settings.fontMono || ''}
-              onChange={(e) => onUpdateSettings({ fontMono: e.target.value })}
-            />
-          </label>
+          <FontPicker
+            label={t('settings.fontWrite')}
+            value={settings.fontWrite || ''}
+            sample={t('settings.fontWriteSample')}
+            placeholder={t('settings.fontWritePlaceholder')}
+            fonts={fontFamilies}
+            onLoadFonts={ensureFonts}
+            onChange={(fontWrite) => onUpdateSettings({ fontWrite })}
+            onHover={(f) => onHoverFont((h) => ({ ...h, write: f }))}
+            t={t}
+          />
+          <FontPicker
+            label={t('settings.fontMono')}
+            value={settings.fontMono || ''}
+            sample={t('settings.fontMonoSample')}
+            placeholder={t('settings.fontMonoPlaceholder')}
+            fonts={fontFamilies}
+            onLoadFonts={ensureFonts}
+            onChange={(fontMono) => onUpdateSettings({ fontMono })}
+            onHover={(f) => onHoverFont((h) => ({ ...h, mono: f }))}
+            t={t}
+          />
           <p className="settings-font-hint">{t('settings.fontHint')}</p>
-          <datalist id="hm-font-families">
-            {(fontFamilies || []).map((f) => <option key={f} value={f} />)}
-          </datalist>
         </div>
         <AdjustGroup
           title={t('settings.fontSize')} valueLabel={fontSize + ' px'}
@@ -242,6 +241,106 @@ function TypographyControls({ settings, onUpdateSettings, t }) {
           </ul>
         </div>
       </div>
+    </div>
+  )
+}
+
+function FontPicker({ label, value, sample, placeholder, fonts, onLoadFonts, onChange, onHover, t }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const rootRef = useRef(null)
+  const searchRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) {
+      onHover?.(null) // menu closed (any way) → stop previewing
+      return
+    }
+    // A real click opened this — good user gesture for queryLocalFonts.
+    onLoadFonts()
+    setQ('')
+    requestAnimationFrame(() => searchRef.current?.focus())
+    const onDown = (e) => {
+      if (!rootRef.current?.contains(e.target)) setOpen(false)
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  // Search is DECOUPLED from the value: typing only filters the list, the value
+  // changes only when you pick (so the editor never tries to render a half-typed
+  // font name). Each option's sample is rendered in its own font for preview.
+  const query = q.trim().toLowerCase()
+  const list = (fonts || []).filter((f) => !query || f.toLowerCase().includes(query))
+  const shown = list.slice(0, 200)
+  const pick = (v) => {
+    onChange(v)
+    setOpen(false)
+    onHover?.(null)
+  }
+
+  return (
+    <div className="settings-font-row" ref={rootRef}>
+      <span className="settings-font-label">{label}</span>
+      <button
+        type="button"
+        className={`settings-font-field${open ? ' open' : ''}`}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="settings-font-now" style={{ fontFamily: value ? `'${value}'` : 'inherit' }}>
+          {value || placeholder}
+        </span>
+        <span className={`settings-font-caret${open ? ' up' : ''}`} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="settings-font-menu" onMouseLeave={() => onHover?.(null)}>
+          <input
+            ref={searchRef}
+            className="settings-font-search"
+            type="text"
+            spellCheck={false}
+            placeholder={t('settings.fontSearch')}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <div className="settings-font-list">
+            <button
+              type="button"
+              className={`settings-font-option${value ? '' : ' active'}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => onHover?.('')}
+              onClick={() => pick('')}
+            >
+              <span className="settings-font-sample">{sample}</span>
+              <span className="settings-font-name">{t('settings.fontDefault')}</span>
+            </button>
+            {shown.map((f) => (
+              <button
+                type="button"
+                key={f}
+                className={`settings-font-option${f === value ? ' active' : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={() => onHover?.(f)}
+                onClick={() => pick(f)}
+              >
+                <span className="settings-font-sample" style={{ fontFamily: `'${f}'` }}>{sample}</span>
+                <span className="settings-font-name">{f}</span>
+              </button>
+            ))}
+            {list.length > shown.length && (
+              <div className="settings-font-more">{t('settings.fontMore', { n: list.length - shown.length })}</div>
+            )}
+            {!list.length && <div className="settings-font-empty">{t('settings.fontEmpty')}</div>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
