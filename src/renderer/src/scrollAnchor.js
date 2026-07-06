@@ -16,24 +16,22 @@ import { TextSelection } from '@milkdown/prose/state'
 
 const HEADING_SEL = '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6'
 
-// ATX headings in raw markdown: `^#{1,6}\s+text$` at line start. Shared by the
-// source-mode outline (#40) and the source heading anchors below. (Source-mode
-// regex can't see inside fenced code blocks, so a `#` comment in a code block is
-// a false positive — acceptable, same limit the source anchor always had; rich
-// mode uses the DOM and is unaffected.)
-const SOURCE_HEADING_RE = /^(#{1,6})[ \t]+(.+)$/gm
-
-// Parse ATX headings from raw markdown → [{ level, text, charOffset }].
-// charOffset is the heading's index in the markdown string (for scrollTop→char
-// mapping in the source outline scrollspy + caret anchoring #41).
+// ATX headings in raw markdown: `^#{1,6}\s+text$` at line start. Used by the
+// source-mode outline (#40), the source heading anchors, and the caret anchors
+// (#41). (Source-mode regex can't see inside fenced code blocks, so a `#`
+// comment in a code block is a false positive — acceptable, same limit the
+// source anchor always had; rich mode uses the DOM and is unaffected.)
+//
+// Constructed fresh inside parseSourceHeadings (not a module-level `g`-flag
+// regex) so a stateful `lastIndex` can never leak between calls.
 export function parseSourceHeadings(md) {
   if (!md) return []
   const out = []
+  const re = /^(#{1,6})[ \t]+(.+)$/gm
   let m
-  while ((m = SOURCE_HEADING_RE.exec(md)) !== null) {
+  while ((m = re.exec(md)) !== null) {
     out.push({ level: m[1].length, text: m[2].trim(), charOffset: m.index })
   }
-  SOURCE_HEADING_RE.lastIndex = 0
   return out
 }
 
