@@ -375,3 +375,27 @@ Markdown 表格渲染更紧凑:去掉单元格内段落的上下 margin、收紧
 | 标题层级 / 正文 | `Ctrl+1`…`6` / `Ctrl+0` |
 
 > 注：`Ctrl+B` 现在固定用于切换侧边栏（不再触发加粗）；加粗请用选中工具条的 **B** 按钮或 `**文字**` 语法。
+
+---
+
+## 38. 文档 / 代码字体设置（#38）
+
+### 怎么用
+
+设置 → 排版 → 顶部两个选择器：**文档字体**（`--font-write`，影响正文 + 标题）和**代码字体**（`--font-mono`，影响代码块）。空 = 默认栈。
+
+### 交互
+
+- 点击字段 → 弹出**搜索 + 列表**，每个字体用它**自己的字形**渲染样例（文档显示"永和九年 Aa 123"，代码显示"const x = 'hi'"）—— 一眼看出字体长啥样。
+- **鼠标悬停** → 预览 + 编辑器**实时变成**那个字体（不用点击）。
+- 点击 → 设为该字体并关闭；空 = "默认"。
+- 列表底部有外部链接：文档字体 → [方正字库](https://www.foundertype.com/)（国内官方），代码字体 → [Nerd Fonts](https://www.nerdfonts.com/)。
+
+### 怎么实现
+
+- `settings.fontWrite` / `settings.fontMono` 存在 `localStorage`，通过 `fontStack(name, base)` 组合成 CSS font-family 栈。
+- 在 `App.jsx` 以 **inline CSS var** 设到 `.app` 根元素（`--font-write` / `--font-mono`），覆盖 `body.light/dark` 的默认值 + Windows 的 `.app.is-win` Consolas 覆盖。
+- **悬停预览**：`hoverFont` state 在 `App.jsx`，FontPicker 的 `onHover` 回调临时覆盖 settings 值 → 预览 + 编辑器实时变。
+- **queryLocalFonts**（Local Font Access API）枚举系统字体，权限在 `main/index.js` 的 `session.setPermissionRequestHandler` 授权。
+- **CodeMirror 字体修复**：CM 默认主题把 `.cm-content` 钉死 `monospace`，app.css 用高特异性规则 `.milkdown .cm-editor .cm-content { font-family: var(--font-mono) }` 覆盖 —— 这是 #34 弯引号 + #38 代码字体能生效的前提。
+- **设置预览**：`.settings-preview` 必须显式设 `font-family: var(--font-write)`（否则继承 body 的 `--font-ui` 界面字体，不反映文档字体变化）。

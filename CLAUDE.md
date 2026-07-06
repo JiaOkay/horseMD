@@ -262,6 +262,37 @@ docs/                  architecture / features / implementation-notes / developm
   use Electron's `net.fetch` (Chromium stack), not Node's global `fetch` (its
   c-ares resolver can abort an unsigned app under launchd).
 - **Don't commit `dist/` or `out/`** (gitignored). `build/icon.*` IS tracked.
+- **Font settings (#38)**: `settings.fontWrite` / `settings.fontMono` (empty =
+  default stack) are applied as inline CSS vars `--font-write` / `--font-mono` on
+  the `.app` root div (so they beat `body.light/dark` AND the `.app.is-win`
+  Consolas override). `fontStack(name, base)` in `settings.js` prepends the
+  user font (quoted) to the default stack. The settings **preview** must
+  explicitly use `var(--font-write)` (it inherits `body`'s `--font-ui` by
+  default, which is the CHROME font, not the document font — without the override
+  the preview silently ignores the document-font setting).
+- **CodeMirror `--font-mono` fix**: CodeMirror's default theme hard-codes
+  `.cm-content { font-family: monospace }`. Without an explicit override, the
+  `--font-mono` CSS var NEVER reaches fenced code blocks — which is why #34's
+  Windows Consolas override didn't fix curly quotes AND why a custom code font
+  wouldn't apply. The rule `.milkdown .cm-editor .cm-content, .cm-line {
+  font-family: var(--font-mono) }` (in app.css, specificity beats CM's default)
+  is the root fix — don't remove it.
+- **queryLocalFonts (Local Font Access API)**: the Settings font pickers
+  enumerate installed system fonts via `window.queryLocalFonts()` on first
+  focus/click (needs a user gesture). Permission is granted in `main/index.js`
+  via `session.defaultSession.setPermissionRequestHandler` + `setPermissionCheckHandler`
+  (grant-all — safe for a local editor; Markdown content isn't executed as JS).
+- **FontPicker** (inline in `SettingsView.jsx`): a button trigger showing the
+  current font in its own glyph + a popover with a search box + scrollable list
+  where each font is previewed in its own font. **Hover-preview**: `hoverFont`
+  state in `App.jsx` temporarily overrides `settings.fontWrite/fontMono` while
+  the cursor is over an option (cleared on leave/close/pick). Pinned footer at
+  the dropdown bottom links to font sites (doc → foundertype.com, code →
+  nerdfonts.com).
+- **`useColDrag` hook** (`hooks/useColDrag.js`): shared horizontal-drag helper
+  for the split-pane divider + the outline/file-tree resizer. Both used to
+  hand-roll the same mousemove/mouseup + body-class dance. onStart returns state
+  (e.g. mousedown x / start width) passed to onMove as 2nd arg.
 
 ## Testing
 
