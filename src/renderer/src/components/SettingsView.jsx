@@ -187,7 +187,7 @@ function TypographyControls({ settings, onUpdateSettings, onHoverFont, t }) {
             onChange={(fontWrite) => onUpdateSettings({ fontWrite })}
             onHover={(f) => onHoverFont((h) => ({ ...h, write: f }))}
             footer={
-              <button type="button" className="settings-font-footer-link" onClick={() => window.api.openExternal('https://horsemd.yangsir.net/fonts.html')}>
+              <button type="button" className="settings-font-footer-link" onClick={() => window.api.openExternal('https://www.foundertype.com/')}>
                 {t('settings.browseMoreFonts')} →
               </button>
             }
