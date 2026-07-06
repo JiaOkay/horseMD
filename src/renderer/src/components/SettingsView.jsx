@@ -38,7 +38,7 @@ export default function SettingsView({
         {/* Typography — sliders left, live preview right. */}
         <section className="settings-block">
           <h2 className="settings-block-title">{t('settings.typography')}</h2>
-          <TypographyControls settings={settings} onUpdateSettings={onUpdateSettings} t={t} />
+          <TypographyControls settings={settings} onUpdateSettings={onUpdateSettings} onHoverFont={onHoverFont} t={t} />
         </section>
 
         {/* Appearance. */}
@@ -144,7 +144,7 @@ export default function SettingsView({
 }
 
 // Typography: compact sliders (left) + live HorseMD-intro preview (right).
-function TypographyControls({ settings, onUpdateSettings, t }) {
+function TypographyControls({ settings, onUpdateSettings, onHoverFont, t }) {
   const { fontSize, lineHeight, paragraphSpacing, pageWidth } = settings
   const fontIdx = FONT_SIZE_PRESETS.findIndex((p) => p.size === fontSize)
   const lhIdx = LINE_HEIGHT_PRESETS.findIndex((p) => p.value === lineHeight)
