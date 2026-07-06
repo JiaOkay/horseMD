@@ -2722,6 +2722,7 @@ body.hm-full-width .source-editor {
    the Settings page updates this sample in real time. Fills its grid column so
    its base aligns with the last slider. */
 .settings-preview {
+  font-family: var(--font-write);
   font-size: var(--editor-font-size, 16px);
   line-height: var(--editor-line-height, 1.85);
   width: 100%;
@@ -2931,6 +2932,7 @@ body.hm-full-width .source-editor {
   border-bottom: 1px solid var(--border-soft);
 }
 .settings-font-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2940,11 +2942,142 @@ body.hm-full-width .source-editor {
   font-size: 12.5px;
   color: var(--muted);
 }
-.settings-font-input {
+/* The field is now a BUTTON (click → popover). Shows the current font NAME
+   rendered in that font (live preview) + a CSS caret. */
+.settings-font-field {
   flex: 1;
   min-width: 0;
-  /* A font NAME, not code — show in the UI font, not mono. */
-  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.14s var(--ease-out), box-shadow 0.14s var(--ease-out);
+}
+.settings-font-field:hover {
+  border-color: var(--accent);
+}
+.settings-font-field.open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.settings-font-now {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+}
+.settings-font-field:not(.has-value) .settings-font-now {
+  color: var(--faint);
+  font-weight: 400;
+}
+.settings-font-caret {
+  flex: 0 0 8px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--muted);
+  transition: transform 0.14s var(--ease-out), border-top-color 0.14s var(--ease-out);
+}
+.settings-font-field.open .settings-font-caret {
+  border-top-color: var(--accent-strong);
+}
+.settings-font-caret.up {
+  transform: rotate(180deg);
+}
+.settings-font-menu {
+  position: absolute;
+  z-index: 260;
+  top: calc(100% + 6px);
+  left: 94px; /* clear the 84px label + gap */
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  padding: 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-float);
+  animation: menuFadeIn 0.12s var(--ease-out);
+}
+.settings-font-search {
+  flex: 0 0 auto;
+  width: 100%;
+  padding: 7px 10px;
+  margin-bottom: 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12.5px;
+}
+.settings-font-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.settings-font-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.settings-font-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.settings-font-option:hover {
+  background: var(--hover);
+}
+.settings-font-option.active {
+  background: var(--accent-soft);
+}
+/* The sample string rendered in the candidate font (the actual preview). */
+.settings-font-sample {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  color: var(--text-strong);
+}
+.settings-font-option.active .settings-font-sample {
+  color: var(--accent-strong);
+}
+/* The font name, small + muted, in the UI font (readable regardless of the
+   sample font). */
+.settings-font-name {
+  flex: 0 0 auto;
+  max-width: 42%;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-font-more,
+.settings-font-empty {
+  padding: 10px 9px;
+  font-size: 11.5px;
+  color: var(--faint);
+  text-align: center;
 }
 .settings-font-hint {
   margin: 0;
