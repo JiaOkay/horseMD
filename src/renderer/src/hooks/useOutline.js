@@ -15,6 +15,7 @@
 //   home / sidebarOpen / sidebarMode / sourceMode / activeId / activeTab — view state
 //   isMobile / setSidebarOpen / setHome — drawer affordances for jumpToHeading
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { parseSourceHeadings, scrollSourceToHeading } from '../scrollAnchor.js'
 
 // Shared heading selector — used by jumpToHeading, the scrollspy, and the list
 // reader. Keeping it in one place ensures they all agree on what counts as a
@@ -22,7 +23,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const HEADING_SEL = '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6'
 const getHeadings = (host) => (host ? [...host.querySelectorAll(HEADING_SEL)] : [])
 
-export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sourceMode, activeId, activeTab, isMobile, setSidebarOpen, setHome }) {
+export function useOutline({ editorHostRef, sourceRef, home, sidebarOpen, sidebarMode, sourceMode, activeId, activeTab, isMobile, setSidebarOpen, setHome }) {
   const [activeHeading, setActiveHeading] = useState(-1)
   // Bumped when a chunked-loaded rich doc finishes streaming in (Editor's
   // onStructureChange) so the outline list + scrollspy refresh against the now-
@@ -31,6 +32,10 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
   const [richDocVersion, setRichDocVersion] = useState(0)
   const [richLoading, setRichLoading] = useState(false)
   const [outlineHeadings, setOutlineHeadings] = useState([])
+  // Bumped on source-mode textarea input so the heading list refreshes as the
+  // user types a new heading (rich mode re-reads the DOM on structure change;
+  // source mode has no such hook, so we listen to the textarea ourselves).
+  const [sourceOutlineVersion, setSourceOutlineVersion] = useState(0)
   // A jump requested while the editor was still loading (chunked parse). Held
   // here and executed once loading finishes — heading offsets aren't stable
   // mid-load, so jumping immediately would land wrong + fight the content stream.
@@ -94,6 +99,18 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
   const jumpToHeading = useCallback((index) => {
     setHome(false)
     if (isMobile) setSidebarOpen(false)
+    // Source mode: scroll the textarea to the heading by text (#40). No chunked
+    // load / async settle here, so no queue — just scroll + set active at once.
+    if (sourceMode) {
+      const ta = sourceRef.current
+      if (ta) {
+        const hs = parseSourceHeadings(ta.value || '')
+        const text = hs[index]?.text
+        if (text) scrollSourceToHeading(ta, ta.value || '', text)
+      }
+      setActiveHeading(index)
+      return
+    }
     if (richLoading) {
       pendingJumpRef.current = index
       return
@@ -109,7 +126,7 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
     requestAnimationFrame(() => {
       if (!doJump()) requestAnimationFrame(doJump)
     })
-  }, [setHome, isMobile, setSidebarOpen, richLoading])
+  }, [setHome, isMobile, setSidebarOpen, richLoading, sourceMode, sourceRef])
 
   // Drain a queued jump once the editor finishes loading. Uses the same
   // poll-and-stabilize logic as jumpToHeading (async content may still settle
@@ -124,13 +141,43 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
 
   // Outline scrollspy: highlight the heading you're currently viewing (the last
   // one scrolled past the top), mirroring how the file tree marks the open file.
-  // Rich editor only — editorHostRef is the active pane's .editor-scroll; in
-  // source mode it isn't attached, so the outline shows no active item there.
+  // Rich editor: reflow-free offset cache against the live DOM. Source mode
+  // (#40): no DOM headings, so map scrollTop→char and find the nearest heading
+  // via parseSourceHeadings (same ratio math as scrollAnchor.headingAtSourceTop).
   useEffect(() => {
-    if (home || !sidebarOpen || sidebarMode !== 'outline' || sourceMode) {
+    if (home || !sidebarOpen || sidebarMode !== 'outline') {
       setActiveHeading(-1)
       return
     }
+    // ----- source-mode spy -----
+    if (sourceMode) {
+      const ta = sourceRef.current
+      if (!ta) return
+      let raf = 0
+      let lastIdx = -1
+      const compute = () => {
+        raf = 0
+        const md = ta.value || ''
+        const hs = parseSourceHeadings(md)
+        if (!hs.length) { if (lastIdx !== -1) { lastIdx = -1; setActiveHeading(-1) } return }
+        const denom = ta.scrollHeight - ta.clientHeight
+        const approxChar = denom > 0 ? Math.round((ta.scrollTop / denom) * md.length) : 0
+        let idx = 0
+        for (let i = 0; i < hs.length; i++) {
+          if (hs[i].charOffset <= approxChar) idx = i
+          else break
+        }
+        if (idx !== lastIdx) { lastIdx = idx; setActiveHeading(idx) }
+      }
+      const schedule = () => { if (!raf) raf = requestAnimationFrame(compute) }
+      compute()
+      ta.addEventListener('scroll', schedule, { passive: true })
+      return () => {
+        if (raf) cancelAnimationFrame(raf)
+        ta.removeEventListener('scroll', schedule)
+      }
+    }
+    // ----- rich-mode spy -----
     const scroller = editorHostRef.current
     if (!scroller) return
 
@@ -215,11 +262,11 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
     }
   }, [home, sidebarOpen, sidebarMode, sourceMode, activeId, richDocVersion, editorHostRef])
 
-  // Outline heading list, taken from the RENDERED document (the editor's actual
-  // h1…h6 elements) — not regex'd from the markdown string. This matches how
-  // jumpToHeading finds them, so the two stay in sync, and it recognizes every
-  // heading the editor renders (ATX `#`, Setext, and HTML <h1>) regardless of
-  // how the source wrote it.
+  // Outline heading list. Rich mode: taken from the RENDERED document (the
+  // editor's actual h1…h6) — matches how jumpToHeading finds them, recognizes
+  // ATX/Setext/HTML headings. Source mode (#40): regex-parsed from the textarea
+  // via parseSourceHeadings. Both produce { level, text } so Outline.jsx renders
+  // either identically.
   useEffect(() => {
     if (home || !activeTab) {
       setOutlineHeadings([])
@@ -228,13 +275,22 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
     // During chunked load the DOM has only partial headings — wait for
     // richDocVersion bump (load finish) before reading, so the outline shows
     // the COMPLETE list (the loading skeleton covers the wait via richLoading).
-    if (richLoading) return
+    // Source mode is a plain textarea (no chunking) — skip this gate there.
+    if (!sourceMode && richLoading) return
     // Debounce: the effect re-runs on every content change (every keystroke).
     // On large docs the querySelectorAll scan is expensive. Wait 500ms after the
     // last edit before scanning — headings don't change mid-word.
     let timer = 0
     const read = () => {
       timer = 0
+      // Source mode: parse the textarea. sourceOutlineVersion bumps on input so
+      // a newly-typed heading refreshes the list (rich mode gets this free via
+      // richDocVersion; source mode has no structure-change hook).
+      if (sourceMode) {
+        const hs = parseSourceHeadings(sourceRef.current?.value || '')
+        setOutlineHeadings(hs.map((h) => ({ level: h.level, text: h.text })))
+        return
+      }
       const els = getHeadings(editorHostRef.current)
       // No editor mounted (e.g. just closed the file) → clear instead of
       // leaving the previous document's outline hanging (issue #20).
@@ -250,7 +306,23 @@ export function useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sour
     return () => {
       if (timer) clearTimeout(timer)
     }
-  }, [home, activeId, activeTab, sourceMode, richDocVersion, richLoading, editorHostRef])
+  }, [home, activeId, activeTab, sourceMode, richDocVersion, richLoading, sourceOutlineVersion, editorHostRef, sourceRef])
+
+  // Source-mode live refresh (#40): bump sourceOutlineVersion on textarea input
+  // (debounced) so the list re-parses when the user adds/edits a heading. Rich
+  // mode needs no listener (richDocVersion covers it).
+  useEffect(() => {
+    if (!sourceMode) return
+    const ta = sourceRef.current
+    if (!ta) return
+    let t = 0
+    const onInput = () => {
+      clearTimeout(t)
+      t = setTimeout(() => setSourceOutlineVersion((v) => v + 1), 500)
+    }
+    ta.addEventListener('input', onInput)
+    return () => { ta.removeEventListener('input', onInput); clearTimeout(t) }
+  }, [sourceMode, sourceRef, activeId])
 
   return {
     activeHeading,

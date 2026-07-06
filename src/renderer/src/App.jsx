@@ -483,7 +483,7 @@ export default function App() {
     setRichDocVersion,
     setRichLoading,
     jumpToHeading
-  } = useOutline({ editorHostRef, home, sidebarOpen, sidebarMode, sourceMode, activeId, activeTab, isMobile, setSidebarOpen, setHome })
+  } = useOutline({ editorHostRef, sourceRef, home, sidebarOpen, sidebarMode, sourceMode, activeId, activeTab, isMobile, setSidebarOpen, setHome })
 
   // ------------------------- menu / shortcuts ----------------------
   // Find & replace (issue #19) — hoisted above the handlers so createMenuHandlers
