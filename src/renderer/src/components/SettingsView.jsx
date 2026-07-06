@@ -7,7 +7,7 @@
 //
 // StatusBar quick-controls (排版/主题/语言) stay where they are — this is their
 // full-version home, not a replacement.
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useI18n, LANGS } from '../i18n.jsx'
 import { THEMES } from '../themes.js'
 import { isNewerVersion } from '../paths.js'
@@ -153,6 +153,22 @@ function TypographyControls({ settings, onUpdateSettings, t }) {
   const widthIdx = PAGE_WIDTH_PRESETS.findIndex((p) =>
     p.width === 'full' ? isFull : !isFull && pageWidth === p.width
   )
+  // Enumerate installed system fonts (Local Font Access API) so each font input
+  // shows a dropdown of the user's actual fonts (#38). Loaded once on first
+  // focus (queryLocalFonts needs a user gesture); cached. Falls back to a plain
+  // text input if the API is unavailable.
+  const fontsLoadedRef = useRef(false)
+  const [fontFamilies, setFontFamilies] = useState(null)
+  const ensureFonts = useCallback(async () => {
+    if (fontsLoadedRef.current || typeof window.queryLocalFonts !== 'function') return
+    fontsLoadedRef.current = true
+    try {
+      const all = await window.queryLocalFonts()
+      setFontFamilies([...new Set(all.map((f) => f.family))].sort((a, b) => a.localeCompare(b)))
+    } catch {
+      fontsLoadedRef.current = false // allow a retry on next focus
+    }
+  }, [])
   return (
     <div className="settings-typo">
       <div className="settings-typo-controls">
@@ -165,6 +181,7 @@ function TypographyControls({ settings, onUpdateSettings, t }) {
             <span className="settings-font-label">{t('settings.fontWrite')}</span>
             <input
               className="settings-input settings-font-input" type="text" spellCheck={false}
+              list="hm-font-families" onFocus={ensureFonts}
               placeholder={t('settings.fontWritePlaceholder')}
               value={settings.fontWrite || ''}
               onChange={(e) => onUpdateSettings({ fontWrite: e.target.value })}
@@ -174,12 +191,16 @@ function TypographyControls({ settings, onUpdateSettings, t }) {
             <span className="settings-font-label">{t('settings.fontMono')}</span>
             <input
               className="settings-input settings-font-input" type="text" spellCheck={false}
+              list="hm-font-families" onFocus={ensureFonts}
               placeholder={t('settings.fontMonoPlaceholder')}
               value={settings.fontMono || ''}
               onChange={(e) => onUpdateSettings({ fontMono: e.target.value })}
             />
           </label>
           <p className="settings-font-hint">{t('settings.fontHint')}</p>
+          <datalist id="hm-font-families">
+            {(fontFamilies || []).map((f) => <option key={f} value={f} />)}
+          </datalist>
         </div>
         <AdjustGroup
           title={t('settings.fontSize')} valueLabel={fontSize + ' px'}

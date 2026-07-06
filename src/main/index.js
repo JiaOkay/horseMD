@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell, net } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell, net, session } from 'electron'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join, basename, extname, resolve, sep } from 'node:path'
 import fs from 'node:fs/promises'
@@ -268,6 +268,12 @@ app.whenReady().then(() => {
   for (const d of launched.folders) if (!pendingLaunch.folders.includes(d)) pendingLaunch.folders.push(d)
   ensureThemesDir()
   buildMenu()
+  // Grant the Local Font Access API so the Settings font pickers can enumerate
+  // installed fonts via queryLocalFonts() (issue #38). This is a local editor —
+  // the renderer is trusted app code (Markdown content isn't executed as JS), so
+  // a permissive handler is safe; without it queryLocalFonts() is blocked.
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, cb) => cb(true))
+  session.defaultSession.setPermissionCheckHandler(() => true)
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
