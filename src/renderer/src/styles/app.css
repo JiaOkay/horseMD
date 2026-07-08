@@ -1992,6 +1992,13 @@ body.hm-full-width .editor-skeleton {
 .milkdown .milkdown-toolbar {
   /* Crepe clips the toolbar (overflow:hidden); allow our submenu to escape. */
   overflow: visible !important;
+  /* Fade out (set by editor-toolbar-autohide.js via .hm-toolbar-fading). Only
+     opacity transitions — never transform, so Milkdown's repositioning on
+     selection change stays instant. */
+  transition: opacity 0.5s ease;
+}
+.milkdown .milkdown-toolbar.hm-toolbar-fading {
+  opacity: 0;
 }
 /* Crepe colors toolbar-item icons with --crepe-color-outline, which the app
    maps to --border — a low-contrast border tone that makes the selection
