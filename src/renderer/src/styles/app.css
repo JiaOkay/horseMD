@@ -1799,7 +1799,10 @@ body.hm-col-resizing * {
 .editor-host {
   max-width: var(--editor-max-width, 800px);
   margin: 0 auto;
-  padding: 16px 60px 60vh;
+  /* 30vh bottom = "scroll past end" affordance (last line can scroll up to
+     roughly mid-viewport for comfortable writing, Typora/IDE-style). Was 60vh
+     — that left too much blank below the content. */
+  padding: 16px 60px 30vh;
 }
 /* Full-width preset: fill the pane (the CSS var can't express "no max-width"
    while the source editor centers via calc(), so a body class handles it). */
