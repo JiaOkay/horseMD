@@ -36,6 +36,7 @@ import {
   headingAtRichTop, headingAtSourceTop, scrollRichToHeading, scrollSourceToHeading,
   captureRichCaret, captureSourceCaret, restoreRichCaret, restoreSourceCaret
 } from './scrollAnchor.js'
+import { attachSourceCaret } from './components/editor-source-caret.js' // thick caret in source mode
 import { useFileOps } from './hooks/useFileOps.js'
 import { createMenuHandlers, useGlobalKeys, useCommands } from './lib/menuHandlers.js'
 import {
@@ -387,6 +388,22 @@ export default function App() {
       clearTimeout(t3)
     }
   }, [sourceMode])
+
+  // Thick custom caret for the source-mode textarea (native textarea carets can't
+  // be widened via CSS). Attaches after the textarea mounts; re-attaches on tab
+  // switch; detaches (restores the native caret) on leaving source mode.
+  useEffect(() => {
+    if (!sourceMode) return
+    let detach = () => {}
+    let cancelled = false
+    const tryAttach = () => {
+      if (cancelled) return
+      if (sourceRef.current) detach = attachSourceCaret(sourceRef.current)
+      else requestAnimationFrame(tryAttach)
+    }
+    requestAnimationFrame(tryAttach)
+    return () => { cancelled = true; detach() }
+  }, [sourceMode, activeId])
 
   // File operations (open/new/update/close/save/rename/dup/delete/export) +
   // workspace + watcher live in hooks/useFileOps.js (phase-2 US-5). Split ops

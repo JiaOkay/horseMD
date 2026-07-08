@@ -2316,6 +2316,28 @@ body.dark .hm-hl-swatch.hm-hl-blue { background: #4a78b8; }
      browser default is low-contrast on the warm bg. */
   caret-color: var(--accent);
 }
+/* When the custom thick caret is attached (editor-source-caret.js), hide the
+   native one so we don't draw two. Falls back to the accent caret above if the
+   custom one isn't attached. */
+.source-editor.hm-source-caret-on {
+  caret-color: transparent;
+}
+/* Custom thick caret bar (2px vs the native ~1px). Positioned fixed at the
+   caret's pixel coords by the mirror-div measurement. */
+.hm-source-caret {
+  position: fixed;
+  width: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 50;
+  border-radius: 1px;
+  animation: hm-caret-blink 1.06s steps(1, start) infinite;
+}
+@keyframes hm-caret-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+.hm-source-caret-mirror { /* invisible measuring div (positioned/styled inline) */ }
 body.hm-full-width .source-editor {
   padding-left: 60px;
   padding-right: 60px;
