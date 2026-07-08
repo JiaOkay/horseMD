@@ -34,6 +34,7 @@ import { inlineRichStyles } from './editor-copy.js'
 import { createMermaidPreviewRenderer, createMermaidSplitPlugin } from './editor-mermaid.js'
 import { tableBreakKeymap, tableCellBreakHandler, brToBreakRemarkPlugin } from './editor-tablebreak.js'
 import { mathPreviewPlugin } from './editor-math-preview.js' // #45: live KaTeX preview while typing inline math
+import { toolbarAutohidePlugin } from './editor-toolbar-autohide.js' // selection toolbar auto-hides after 3s of no hover
 import { attachMdPasteHandler } from './editor-md-paste.js'
 import { normalizeDisplayMath, createMathBlockPromotionPlugin } from './editor-math.js'
 import { splitMarkdown, CHUNK_THRESHOLD, CHUNK_SIZE, appendChunks } from './editor-chunked-parse.js'
@@ -573,6 +574,10 @@ export default function Editor({
         // typing regression. (Raw ProseMirror plugin → prosePluginsCtx, NOT
         // crepe.editor.use which is for Milkdown features.)
         mathPreviewPlugin(),
+        // Selection toolbar auto-hides after 3s if the mouse isn't over it.
+        // Toggles Milkdown's own `data-show` attr; Milkdown re-shows on the next
+        // selection change.
+        toolbarAutohidePlugin(),
         // Rich mode parses source-readable review markers, including right-margin
         // notes for highlighted comments, while the Markdown source stays raw.
         createReviewDecorationPlugin({
