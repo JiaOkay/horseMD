@@ -217,6 +217,16 @@ docs/                  architecture / features / implementation-notes / developm
   open…close run into one html node so the node view can render it. Block tags →
   `hm-html-block`, safe inline tags → `hm-html-inline`, everything else → escaped
   text. Sanitized (scripts/styles/on* handlers stripped).
+- **GFM autolink + non-ASCII** (`editor-autolink.js`): remark-gfm's
+  autolink-literal extends a `www.`/`http://` URL across non-ASCII text (Chinese,
+  full-width punctuation) because its terminator set is ASCII-only — so prose like
+  `www.caixuetang.cn，中文…1` became ONE bogus link whose URL had raw non-ASCII
+  chars, turning the sentence into a `[text](url)` visible in source mode.
+  `remarkUnwrapNonAsciiAutolinks` (parse-side, appended to `remarkPluginsCtx` so it
+  runs AFTER preset-gfm) replaces any link whose URL has non-ASCII chars with its
+  own text children. Valid ASCII autolinks (`www.example.com`, `https://`) keep an
+  ASCII URL → untouched. (Source mode then shows `www\.example.cn` — the `\.` is
+  remark's standard escape that prevents re-autolinking on re-parse; renders as `.`.)
 - **Layout settings** (`settings.js` + `LayoutControl.jsx`): font size, line
   height, paragraph spacing, and page width are CSS variables
   (`--editor-font-size` / `--editor-line-height` / `--editor-para-spacing` /
