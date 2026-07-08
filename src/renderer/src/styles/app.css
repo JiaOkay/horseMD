@@ -2311,6 +2311,10 @@ body.dark .hm-hl-swatch.hm-hl-blue { background: #4a78b8; }
   line-height: 1.75;
   padding: 40px max(60px, calc((100% - var(--editor-max-width, 800px)) / 2)) 60vh;
   user-select: text;
+  /* Visible caret (matches the rich editor's .ProseMirror caret-color) so the
+     blinking cursor is easy to spot after switching to source mode — the
+     browser default is low-contrast on the warm bg. */
+  caret-color: var(--accent);
 }
 body.hm-full-width .source-editor {
   padding-left: 60px;
