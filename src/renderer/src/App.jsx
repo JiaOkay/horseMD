@@ -535,7 +535,7 @@ export default function App() {
   // Find & replace (issue #19) — hoisted above the handlers so createMenuHandlers
   // (US-6) can close over setFind/findInputRef/replaceInputRef. Returns the same
   // names the findbar JSX uses.
-  const { find, setFind, findInputRef, replaceInputRef, replaceRef, runFind, stepFind, closeFind, applyReplace } =
+  const { find, setFind, findInputRef, replaceInputRef, replaceRef, runFind, stepFind, closeFind, applyReplace, openFind } =
     useFindReplace({ editorHostRef, sourceRef, editorApis, activeId, commitLive, liveContentRef })
 
   // In split view, target the pane you're actually editing (last focused), as
@@ -585,6 +585,7 @@ export default function App() {
     setFind,
     findInputRef,
     replaceInputRef,
+    openFind,
     review
   })
 

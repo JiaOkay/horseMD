@@ -55,12 +55,16 @@ export function useFindReplace({ editorHostRef, sourceRef, editorApis, activeId,
     clearFindHighlights()
     findRangesRef.current = []
     if (sourceRef.current) {
-      // Source textarea: live-count only (selecting would steal the find input's
-      // focus); Enter / next / prev jump to a match.
-      const hits = matchIndices(sourceRef.current.value, q)
+      const el = sourceRef.current
+      // Source textarea: live-count + SELECT the active match so find is visible.
+      // A textarea can't use the CSS Highlight API, so an (inactive/gray)
+      // selection is the only signal matches are being found — without it, source
+      // find showed just a count and looked broken.
+      const hits = matchIndices(el.value, q)
       findRangesRef.current = hits
       const i = hits.length ? Math.min(preferActive, hits.length - 1) : -1
       activeIdxRef.current = i
+      if (i >= 0 && q) el.setSelectionRange(hits[i], hits[i] + q.length)
       setFind((f) => ({ ...f, matches: hits.length, active: i + 1 }))
       return
     }
@@ -173,5 +177,28 @@ export function useFindReplace({ editorHostRef, sourceRef, editorApis, activeId,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
-  return { find, setFind, findInputRef, replaceInputRef, replaceRef, runFind, stepFind, closeFind, applyReplace }
+  // Open the find bar, pre-filled with the current selection (if any) — like VS
+  // Code / Typora. No selection → keep the previous query.
+  const openFind = useCallback((focusReplace = false) => {
+    let sel = ''
+    if (sourceRef.current) {
+      const ta = sourceRef.current
+      if (ta.selectionStart !== ta.selectionEnd) sel = ta.value.slice(ta.selectionStart, ta.selectionEnd)
+    } else {
+      const view = richView()
+      const s = view?.state?.selection
+      if (view && s && !s.empty) sel = view.state.doc.textBetween(s.from, s.to, '\n')
+    }
+    // Skip giant multi-line selections (would flood the input).
+    if (sel.length > 200) sel = ''
+    setFind((f) => ({ ...f, open: true, query: sel || f.query }))
+    if (sel) runFind(sel)
+    requestAnimationFrame(() => {
+      const ref = focusReplace ? replaceInputRef : findInputRef
+      ref.current?.focus()
+      ref.current?.select()
+    })
+  }, [runFind])
+
+  return { find, setFind, findInputRef, replaceInputRef, replaceRef, runFind, stepFind, closeFind, applyReplace, openFind }
 }

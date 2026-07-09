@@ -32,6 +32,7 @@ export function createMenuHandlers({
   tRef,
   setFind,
   findInputRef,
+  openFind,
   replaceInputRef,
   review
 }) {
@@ -77,15 +78,14 @@ export function createMenuHandlers({
     toggleTheme: cycleTheme,
     find: () => {
       // Leave the Home page so find acts on the visible document, not a hidden one.
+      // openFind pre-fills the search with the current selection (if any).
       setHome(false)
-      setFind((f) => ({ ...f, open: true }))
-      setTimeout(() => findInputRef.current?.focus(), 0)
+      openFind()
     },
     replace: () => {
       // Open the find bar and focus the replace field (Mod+Alt+F / palette).
       setHome(false)
-      setFind((f) => ({ ...f, open: true }))
-      setTimeout(() => replaceInputRef.current?.focus(), 0)
+      openFind(true)
     },
     reviewAdd: () => review.applyReviewMarkupToActive(REVIEW_KINDS.addition),
     reviewDelete: () => review.applyReviewMarkupToActive(REVIEW_KINDS.deletion),
