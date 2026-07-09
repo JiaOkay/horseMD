@@ -70,16 +70,16 @@ export function attachSourceCaret(textarea) {
       // Translate to screen, accounting for the textarea's own scroll + borders.
       const screenX = taRect.left + xInMirror - textarea.scrollLeft
       const screenY = taRect.top + yInMirror - textarea.scrollTop
-      // The marker span's rect top sits ~half the line-leading below the glyph
-      // top (line-box vs text-top), which made the bar look too low + too tall
-      // (full line height). Size to the glyph + nudge up by half the leading so
-      // the bar aligns with the text like the native caret.
+      // The marker span's rect top sits ~half the line-leading below the line-box
+      // top, so nudge up by half the leading. Make the bar span the full line
+      // height (top + bottom extend equally past the glyphs) — "上下都长",
+      // symmetric — rather than glyph-height which looked top-heavy.
       const fontPx = parseFloat(cs.fontSize) || 14
       const linePx = parseFloat(cs.lineHeight) || fontPx * 1.75
       const halfLead = Math.max(0, (linePx - fontPx) / 2)
       bar.style.left = Math.round(screenX) + 'px'
       bar.style.top = Math.round(screenY - halfLead) + 'px'
-      bar.style.height = Math.round(fontPx + 2) + 'px'
+      bar.style.height = Math.round(linePx) + 'px'
       bar.style.display = ''
     } catch {
       hide()
