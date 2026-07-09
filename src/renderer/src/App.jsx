@@ -111,6 +111,7 @@ export default function App() {
   const sourceTextareas = useRef({}) // textarea-backed editors by tab id
   const caretAnchorRef = useRef(null) // caret anchor (snippet/heading/ratio) to restore across a mode switch
   const viewportAnchorRef = useRef(null) // viewport-top text anchor (the reading position, separate from the caret)
+  const richViewportAnchorRef = useRef(null) // rich viewport anchor stashed across source mode, so the return-to-rich restore reuses the precise (content-stable) rich anchor instead of the lossy source one
   const richLoadingRef = useRef(false) // live mirror of richLoading (chunked large-doc load) for the mode-switch effect
   // Registry of each tab's editor API (by tab id). Several markdown editors can
   // be mounted at once (a tab stays mounted after its first activation), so a
@@ -322,11 +323,27 @@ export default function App() {
     commitAllLive() // flush textarea edits so the rich editor picks them up on switch
     const view = editorApis.current[activeIdRef.current]?.getView?.()
     if (sourceModeRef.current) {
+      // Leaving SOURCE → RICH: reuse the RICH viewport anchor captured when we
+      // left rich (stashed in richViewportAnchorRef). The rich anchor is a piece
+      // of visible TEXT, which is content-stable across the re-mount — so finding
+      // it in the freshly re-rendered rich DOM and aligning it to the top lands on
+      // the SAME screenful the user was reading, even though the re-render's image
+      // load + chunked parse made the layout non-deterministic. The freshly-
+      // captured SOURCE viewport anchor can't do this: the source ↔ rich height
+      // map is non-linear (image lines are 1 line in source, tall <img> in rich),
+      // so it lands a whole region off on image-dense docs.
+      // The caret is restored from the source position (no focus — see
+      // restoreRichCaret), so it doesn't fight the viewport.
       caretAnchorRef.current = captureSourceCaret(sourceRef.current)
-      viewportAnchorRef.current = captureSourceViewport(sourceRef.current)
+      viewportAnchorRef.current = richViewportAnchorRef.current
     } else {
+      // Leaving RICH → SOURCE: capture the rich anchors. Used now to set the
+      // source scroll, AND stashed so the return-to-rich restore (above) reuses
+      // the precise rich anchor instead of the lossy source one.
       caretAnchorRef.current = captureRichCaret(view)
-      viewportAnchorRef.current = captureRichViewport(editorHostRef.current, view)
+      const rv = captureRichViewport(editorHostRef.current, view)
+      viewportAnchorRef.current = rv
+      richViewportAnchorRef.current = rv
     }
     setSourceMode((v) => !v)
   }, [commitAllLive])
@@ -346,6 +363,10 @@ export default function App() {
         if (caret) restoreSourceCaret(sourceRef.current, caret)
         if (viewport) restoreSourceViewport(sourceRef.current, viewport)
       } else {
+        // Caret first (sets the selection to the viewport position + focuses),
+        // then viewport (sets scrollTop). Because the caret is anchored to the
+        // visible viewport position, the focus doesn't async-scroll away, so the
+        // viewport restore wins.
         if (caret) restoreRichCaret(view, caret)
         if (viewport) restoreRichViewport(editorHostRef.current, view, viewport)
       }

@@ -297,7 +297,13 @@ export function restoreRichCaret(view, anchor) {
     if (target == null) target = Math.round((anchor.ratio || 0) * size)
     const $pos = doc.resolve(Math.max(1, Math.min(target, size)))
     view.dispatch(view.state.tr.setSelection(TextSelection.near($pos)))
-    view.focus()
+    // Intentionally NOT focused: focusing a contenteditable that carries a
+    // selection makes the browser async-scroll to bring the caret into view, and
+    // that scroll fires after every multi-pass tick (each restoreRichCaret pass
+    // would re-focus + re-scroll), overriding the viewport anchor — the residual
+    // drift on large docs. The selection is still set, so the caret is where the
+    // user left it; the editor picks up focus when they click to type (a view
+    // toggle shouldn't steal focus anyway).
     return true
   } catch { return false }
 }
@@ -319,16 +325,27 @@ export function restoreRichCaret(view, anchor) {
 // anchor still uses PM (it needs precise selection math); the viewport anchor
 // only needs "show the same screenful of text", which DOM does best.
 
-// The topmost visible text node + char offset in `scroller`. caretPositionFromPoint
-// (top-center) gives the exact spot; when it hits an <img> (image-dense region)
-// or the editor padding it returns a non-text node, so a TreeWalker fallback
-// finds the first text node whose bottom crosses the top edge. null if none.
-const topTextNode = (scroller) => {
-  const doc = scroller.ownerDocument
-  const sr = scroller.getBoundingClientRect()
+// The .ProseMirror content element inside the scroller. All viewport text
+// walking is scoped to it (NOT the whole scroller, NOT caretPositionFromPoint's
+// arbitrary hit) so capture and restore see the SAME node set — otherwise the
+// captured snippet could come from an overlay/adjacent surface and never appear
+// in the restore buffer.
+const pmContent = (scroller) => (scroller && scroller.querySelector('.ProseMirror')) || null
+
+// The topmost visible text node + char offset, scoped to .ProseMirror. Prefers
+// caretPositionFromPoint (char-precise) but ONLY accepts it when the node is
+// inside .ProseMirror; otherwise a TreeWalker over .ProseMirror finds the first
+// text node whose bottom crosses the top edge (the first visible line).
+const topTextNode = (pm, sr) => {
+  const doc = pm.ownerDocument
   const cp = doc.caretPositionFromPoint ? doc.caretPositionFromPoint(sr.left + sr.width / 2, sr.top + 6) : null
-  if (cp && cp.offsetNode && cp.offsetNode.nodeType === 3) return { node: cp.offsetNode, off: cp.offset }
-  const w = doc.createTreeWalker(scroller, NodeFilter.SHOW_TEXT)
+  // Reject whitespace-only hits (list/block indentation at the viewport top):
+  // a whitespace snippet never matches on restore -> ratio fallback -> jump.
+  // Fall through to the TreeWalker, which skips whitespace-only nodes.
+  if (cp && cp.offsetNode && cp.offsetNode.nodeType === 3 && pm.contains(cp.offsetNode) && cp.offsetNode.nodeValue.replace(/\s/g, '')) {
+    return { node: cp.offsetNode, off: cp.offset }
+  }
+  const w = doc.createTreeWalker(pm, NodeFilter.SHOW_TEXT)
   while (w.nextNode()) {
     const tn = w.currentNode
     if (!tn.nodeValue.replace(/\s/g, '')) continue
@@ -338,40 +355,78 @@ const topTextNode = (scroller) => {
   return null
 }
 
-// `len` RAW chars starting at (node, off), reaching into FOLLOWING text nodes
-// when the start node is shorter. Crossing nodes is required because viewport-
-// top text is often split by inline marks (code, links): "。以 " | "skills" |
-// " 为例…" — a single-node slice would be the tiny "。以 ", which isn't unique.
-// Restore mirrors this with a concatenated buffer, so a cross-node snippet
-// still matches. RAW (no normalization) so capture and restore are byte-identical.
-const forwardDomText = (scroller, node, off, len) => {
+// `len` RAW chars starting at (node, off), reaching into FOLLOWING text nodes of
+// `pm` when the start node is shorter. Crossing nodes is required because
+// viewport-top text is often split by inline marks (code, links): "。以 " |
+// "skills" | " 为例…" — a single-node slice would be the tiny "。以 ", which
+// isn't unique. Restore mirrors this with a concatenated buffer over the same
+// `pm`, so a cross-node snippet still matches. RAW (no normalization) so capture
+// and restore are byte-identical.
+const forwardDomText = (pm, node, off, len) => {
   let s = node.nodeValue.slice(off)
   if (s.length < len) {
-    const w = scroller.ownerDocument.createTreeWalker(scroller, NodeFilter.SHOW_TEXT)
+    const w = pm.ownerDocument.createTreeWalker(pm, NodeFilter.SHOW_TEXT)
     w.currentNode = node
     while (s.length < len && w.nextNode()) s += w.currentNode.nodeValue
   }
   return s.slice(0, len)
 }
 
+// Advance (node, off) past leading whitespace — within the node, then into the
+// following text nodes — so the snippet starts on real text. The viewport top of
+// a list / indented block is often indentation whitespace; a whitespace snippet
+// matches the first whitespace run in the doc (near the top) and yanks the
+// restore there.
+const skipLeadingWs = (pm, node, off) => {
+  const doc = pm.ownerDocument
+  while (node) {
+    const v = node.nodeValue
+    while (off < v.length && /\s/.test(v[off])) off++
+    if (off < v.length) return { node, off } // found a non-ws char
+    const w = doc.createTreeWalker(pm, NodeFilter.SHOW_TEXT)
+    w.currentNode = node
+    node = w.nextNode()
+    off = 0
+  }
+  return null
+}
+
 export function captureRichViewport(scroller, _view) {
   if (!scroller) return null
   const denom = scroller.scrollHeight - scroller.clientHeight
   const ratio = denom > 0 ? scroller.scrollTop / denom : 0
-  const top = topTextNode(scroller)
-  if (!top) return { snippet: null, ratio }
-  const snippet = forwardDomText(scroller, top.node, top.off, VIEWPORT_LEN) || null
+  const pm = pmContent(scroller)
+  if (!pm) return { snippet: null, ratio }
+  const top = topTextNode(pm, scroller.getBoundingClientRect())
+  const real = top ? skipLeadingWs(pm, top.node, top.off) : null
+  if (!real) return { snippet: null, ratio }
+  const snippet = forwardDomText(pm, real.node, real.off, VIEWPORT_LEN) || null
   return { snippet, ratio }
 }
+
+// ----- textarea char ↔ pixel -----
+// A textarea exposes no char↔pixel API and its line height is NON-uniform (long
+// lines wrap; an image line `![1.00](url)` is one short source line but renders
+// as a tall rich <img>), so the source viewport anchor is inherently less
+// precise than the rich (DOM) side. We use char-ratio + a snippet; the rich side
+// (pure DOM) carries the precision. (A mirror-div measurement was tried but its
+// wrapping width doesn't match the textarea's scroll-reduced content width, so
+// the cumulative char-Y error across a 100k-char doc was worse than ratio.)
 
 export function captureSourceViewport(textarea) {
   if (!textarea) return null
   const md = textarea.value || ''
   const denom = textarea.scrollHeight - textarea.clientHeight
-  const approx = denom > 0 ? Math.round((textarea.scrollTop / denom) * md.length) : 0
-  // Strip syntax so the snippet matches the rich doc's visible text.
-  const snippet = stripMdForSnippet(md.slice(approx, approx + 80)).replace(/\s+/g, ' ').trim().slice(0, VIEWPORT_LEN) || null
   const ratio = denom > 0 ? textarea.scrollTop / denom : 0
+  // Approx the char at the viewport top (linear ratio). Skip past image/URL
+  // syntax so we anchor on prose that exists in the rich rendering — a viewport
+  // top landing on `![alt](url)` would otherwise capture the URL, which has no
+  // rich counterpart and never matches.
+  let pos = denom > 0 ? Math.round(ratio * md.length) : 0
+  const ahead = md.slice(pos, pos + 120)
+  const imgRel = ahead.search(/!\[[^\]]*\]\([^)]*\)/)
+  if (imgRel >= 0 && imgRel < 30) pos += imgRel + ahead.slice(imgRel).match(/!\[[^\]]*\]\([^)]*\)/)[0].length
+  const snippet = stripMdForSnippet(md.slice(pos, pos + 80)).replace(/\s+/g, ' ').trim().slice(0, VIEWPORT_LEN) || null
   return { snippet, ratio }
 }
 
@@ -384,8 +439,14 @@ export function captureSourceViewport(textarea) {
 // fallback when the snippet isn't found.
 export function restoreRichViewport(scroller, _view, anchor) {
   if (!scroller || !anchor) return false
+  const pm = pmContent(scroller)
+  if (!pm) {
+    const denom0 = scroller.scrollHeight - scroller.clientHeight
+    if (denom0 > 0) scroller.scrollTop = (anchor.ratio || 0) * denom0
+    return true
+  }
   try {
-    const doc = scroller.ownerDocument
+    const doc = pm.ownerDocument
     const sr = scroller.getBoundingClientRect()
     const denom = scroller.scrollHeight - scroller.clientHeight
     if (!anchor.snippet) {
@@ -393,9 +454,10 @@ export function restoreRichViewport(scroller, _view, anchor) {
       return true
     }
     const snip = anchor.snippet
-    // Concatenate all text-node values into one buffer; remember each node's
+    // Concatenate .ProseMirror text-node values into one buffer (same scope as
+    // capture, so the snippet is guaranteed findable); remember each node's
     // [start, len) so a buffer index maps back to (node, char offset).
-    const w = doc.createTreeWalker(scroller, NodeFilter.SHOW_TEXT)
+    const w = doc.createTreeWalker(pm, NodeFilter.SHOW_TEXT)
     let buf = ''
     const segs = [] // { node, start, len }
     while (w.nextNode()) {

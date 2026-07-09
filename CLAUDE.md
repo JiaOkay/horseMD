@@ -205,16 +205,31 @@ docs/                  architecture / features / implementation-notes / developm
   remount; PLUS a settle-aware tail (re-applies every 300ms up to ~3s while
   `richLoading` OR `scrollHeight` is still changing — the latter catches the
   hundreds of remote `<img>` re-fetching/re-laying-out on the source→rich re-
-  render — then one final pass once the height stabilizes). **Product behavior
-  (deliberate):** the viewport-top anchor wins — if the caret was off-screen
-  before the toggle (user scrolled away to read), it stays off-screen after; the
-  caret is restored to its TEXT but NOT scrolled into view. This is what makes
-  pure-viewing not drift. **Known limit:** `EditorArea.jsx` (~L85
-  `usesTextarea = … || (sourceMode && isLeft)`) UNMOUNTS the Crepe and mounts the
-  textarea on source toggle, so every toggle re-parses the whole doc + reloads
-  its images; on an extreme doc (100k+ chars, 100s of remote images) that re-
-  render is non-deterministic, so the viewport lands within ~0–2 lines (usually
-  exact) rather than pixel-perfect. A full fix would keep Crepe mounted across
+  render — then one final pass once the height stabilizes).
+  **Cross-mode anchor reuse (the key fix for large/image-dense docs):** the rich
+  viewport anchor captured at rich→source is STASHED (`richViewportAnchorRef`) and
+  REUSED to restore rich on the source→rich return — NOT the freshly-captured
+  source viewport anchor. The rich anchor is visible TEXT, content-stable across
+  the re-mount, so finding it in the re-rendered rich DOM and aligning it to the
+  top lands on the SAME screenful. The source anchor can't: the source ↔ rich
+  height map is non-linear (image lines are 1 line in source, tall `<img>` in
+  rich), so it lands a region off. `captureRichViewport` also skips leading
+  whitespace (list/block indentation at the viewport top would yield a whitespace
+  snippet matching the doc's first whitespace run → yank to top).
+  **`restoreRichCaret` does NOT focus** (`view.focus` omitted): focusing a
+  contenteditable that carries a selection makes the browser async-scroll the
+  caret into view EVERY multi-pass tick, overriding the viewport anchor — the
+  residual drift on large docs. The selection is still set (caret preserved in PM
+  state); the editor gets focus when the user clicks to type (a view toggle
+  shouldn't steal focus anyway).
+  **Product behavior (deliberate):** the viewport-top anchor wins — if the caret
+  was off-screen before the toggle (user scrolled away to read), it stays
+  off-screen after. CDP-verified on a 7.5万字 / 183-image doc: 11/11 regions
+  round-trip with the same viewport-top text; small docs (incl.
+  table/list/heading/image/prose) exact. **Known limit:** the source→rich caret
+  isn't focused (a click moves it on edit). A full fix would keep Crepe mounted
+  across the toggle (no re-mount → focus is safe) — a larger Editor refactor
+  (`EditorArea.jsx` ~L85 unmounts Crepe on source mode today).
   the toggle (display:none, sync only on source edit) — a larger Editor refactor. **Key files:** `scrollAnchor.js`
   (`capture/restore Rich/Source Caret/Viewport`, `posAtText`/`nearestIndexOf`
   nearest-occurrence, `visibleOccurrences`, `stripMdForSnippet`,
