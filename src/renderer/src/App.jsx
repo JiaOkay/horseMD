@@ -346,9 +346,17 @@ export default function App() {
     scrollRatioRef.current = null
     caretAnchorRef.current = null
     const apply = () => {
-      // Scroll: heading anchor first — text is content-stable across modes (#28).
-      // Ratio runs ONLY if the heading anchor didn't find a match (otherwise it
-      // would override a successful heading scroll).
+      // #41: restore the caret FIRST. Its focus() makes the browser scroll the
+      // caret into view, so doing the scroll restore AFTER (below) lets the
+      // viewport land on the #28 anchor instead of being yanked to the caret —
+      // otherwise the caret's focus-scroll overrides the scroll restore and the
+      // view lands somewhere different each switch.
+      if (caret) {
+        if (sourceMode) restoreSourceCaret(sourceRef.current, caret)
+        else restoreRichCaret(editorApis.current[activeIdRef.current]?.getView?.(), caret)
+      }
+      // Scroll LAST so it wins over the caret's focus-scroll. Heading anchor
+      // first (#28); ratio only if the heading anchor didn't match.
       let scrolledByAnchor = false
       if (anchor) {
         if (sourceMode) {
@@ -363,13 +371,6 @@ export default function App() {
           const denom = el.scrollHeight - el.clientHeight
           if (denom > 0) el.scrollTop = ratio * denom
         }
-      }
-      // #41: restore the caret after the scroll. Best-effort — the new mode's
-      // editor may still be mounting on the early passes (Crepe refills async),
-      // so this naturally retries across the passes below and lands once it's up.
-      if (caret) {
-        if (sourceMode) restoreSourceCaret(sourceRef.current, caret)
-        else restoreRichCaret(editorApis.current[activeIdRef.current]?.getView?.(), caret)
       }
     }
     // Apply immediately, then again as async layout settles — the rich editor

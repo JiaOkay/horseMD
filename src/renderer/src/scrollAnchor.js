@@ -217,7 +217,9 @@ export function restoreSourceCaret(textarea, anchor) {
     }
     if (target == null) target = Math.round((anchor.ratio || 0) * md.length)
     textarea.setSelectionRange(target, target)
-    textarea.focus()
+    // preventScroll: focus without scrolling, so the caret restore doesn't fight
+    // the #28 scroll restore (which runs after + sets the viewport).
+    textarea.focus({ preventScroll: true })
     return true
   } catch { return false }
 }
