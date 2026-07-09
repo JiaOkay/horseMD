@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell, net, session } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell, net, session, clipboard } from 'electron'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join, basename, extname, resolve, sep } from 'node:path'
 import fs from 'node:fs/promises'
@@ -634,25 +634,36 @@ ipcMain.handle('themes:reveal', async () => {
 // Typora-style custom uploader: write the image bytes to a temp file, run the
 // user's command with the file path appended as an argument, and return the URL
 // it prints to stdout. PicGo-Core (`picgo upload`) and most uploaders print the
-// final URL on its own line; we take the last http(s) URL in the output.
+// final URL on its own line. We parse STDOUT ONLY for the URL — stderr carries
+// warnings/errors (e.g. the AWS SDK v2 deprecation notice, whose a.co blog link
+// would otherwise be wrongly matched as the upload URL). The PicGo desktop app
+// (PicGo.exe) prints nothing useful to stdout but writes `![](url)` to the
+// clipboard — the caller falls back to that (see image:upload).
 function runUploadCommand(command, file) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const full = `${command} "${file}"`
     exec(
       full,
       { timeout: 60000, maxBuffer: 16 * 1024 * 1024, windowsHide: true },
       (err, stdout, stderr) => {
-        const out = `${stdout || ''}\n${stderr || ''}`
-        // Many uploaders exit non-zero but still print the URL; only treat it as a
-        // failure if there's no URL anywhere in the output.
-        if (err && !/https?:\/\//i.test(out)) {
-          reject(new Error((stderr || err.message || '').slice(0, 500)))
-          return
-        }
-        resolve(out)
+        resolve({
+          url: parseUploadedUrl(stdout || ''),
+          stdout: stdout || '',
+          stderr: stderr || '',
+          error: err ? (err.message || String(err)) : '',
+        })
       }
     )
   })
+}
+
+// PicGo desktop (and uploaders that don't print to stdout) write the result to
+// the clipboard — either as `![](url)` markdown or a bare URL. Extract the first
+// http(s) URL from the clipboard text.
+function extractClipboardUrl(text) {
+  if (!text) return null
+  const m = String(text).match(/https?:\/\/[^\s)"'<>]+/i)
+  return m ? m[0].replace(/[)\]"'.,]+$/, '') : null
 }
 
 function parseUploadedUrl(out) {
@@ -717,16 +728,25 @@ ipcMain.handle('image:upload', async (_e, command, name, bytes) => {
       return { ok: false, error: e?.message || String(e) }
     }
   }
+  // Snapshot the clipboard BEFORE the upload — the PicGo desktop app (PicGo.exe)
+  // writes `![](url)` to the clipboard instead of stdout, so if stdout has no URL
+  // we read the clipboard + only trust it if it CHANGED during the upload (avoids
+  // returning stale clipboard content for uploaders that don't touch it).
+  const beforeClip = clipboard.readText()
   let dir
   try {
     dir = await fs.mkdtemp(join(tmpdir(), 'horsemd-img-'))
     const safe = (name || 'image.png').replace(/[\\/:*?"<>|]/g, '_') || 'image.png'
     const file = join(dir, safe)
     await fs.writeFile(file, Buffer.from(bytes))
-    const out = await runUploadCommand(String(command).trim(), file)
-    const url = parseUploadedUrl(out)
+    const res = await runUploadCommand(String(command).trim(), file)
+    let url = res.url
+    if (!url) {
+      const afterClip = clipboard.readText()
+      if (afterClip && afterClip !== beforeClip) url = extractClipboardUrl(afterClip)
+    }
     if (url) return { ok: true, url }
-    return { ok: false, error: out.slice(-500) || 'No URL in command output.' }
+    return { ok: false, error: (res.stderr || res.stdout || res.error || '').slice(-500) || 'No URL in command output or clipboard.' }
   } catch (e) {
     return { ok: false, error: e?.message || String(e) }
   } finally {
