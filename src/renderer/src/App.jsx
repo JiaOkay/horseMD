@@ -34,7 +34,8 @@ import { useAppLifecycle } from './hooks/useAppLifecycle.js'
 import { useColDrag } from './hooks/useColDrag.js'
 import {
   captureRichCaret, captureSourceCaret, restoreRichCaret, restoreSourceCaret,
-  captureRichViewport, captureSourceViewport, restoreRichViewport, restoreSourceViewport
+  captureRichViewport, captureSourceViewport, restoreRichViewport, restoreSourceViewport,
+  isRichCaretVisible, isSourceCaretVisible
 } from './scrollAnchor.js'
 import { attachSourceCaret } from './components/editor-source-caret.js' // thick caret in source mode
 import { useFileOps } from './hooks/useFileOps.js'
@@ -112,6 +113,7 @@ export default function App() {
   const caretAnchorRef = useRef(null) // caret anchor (snippet/heading/ratio) to restore across a mode switch
   const viewportAnchorRef = useRef(null) // viewport-top text anchor (the reading position, separate from the caret)
   const richViewportAnchorRef = useRef(null) // rich viewport anchor stashed across source mode, so the return-to-rich restore reuses the precise (content-stable) rich anchor instead of the lossy source one
+  const caretFollowRef = useRef(false) // was the caret visible at toggle time? visible = editing (follow caret), off-screen = reading (keep viewport)
   const richLoadingRef = useRef(false) // live mirror of richLoading (chunked large-doc load) for the mode-switch effect
   // Registry of each tab's editor API (by tab id). Several markdown editors can
   // be mounted at once (a tab stays mounted after its first activation), so a
@@ -310,36 +312,28 @@ export default function App() {
     setCustomTheme(null)
   }, [])
 
-  // Toggle source/rich mode. Capture TWO independent anchors before the switch:
-  //   - caret   : the text the caret sits on (restored as the selection).
-  //   - viewport: the text at the top of the scroll area (the READING position —
-  //               distinct from the caret when the user scrolled away to read).
-  // On restore the caret is set WITHOUT scrolling, then the viewport scroll is
-  // restored to its own anchor — so neither yanks the other (the failure of both
-  // the old #28 dual system, where a coarse scroll anchor fought a precise caret,
-  // AND the v0.5.25 caret-only + scrollIntoView, which yanked the viewport to an
-  // off-screen caret and made the content "drift" while reading).
+  // Toggle source/rich mode. Two strategies, picked by whether the caret was
+  // VISIBLE at toggle time (caretFollowRef):
+  //   - caret VISIBLE   (user was editing): the caret stays where it was AND the
+  //     viewport follows it (scrollIntoView / focus). The caret is in-viewport
+  //     here, so following it can't drift.
+  //   - caret OFF-SCREEN (user was reading): the caret selection is still set, but
+  //     the VIEWPORT is restored to its own anchor and the caret is NOT followed
+  //     (no focus) — so reading doesn't jump. (Following an off-screen caret is
+  //     exactly the v0.5.25 "content drift" bug.)
   const toggleSource = useCallback(() => {
     commitAllLive() // flush textarea edits so the rich editor picks them up on switch
     const view = editorApis.current[activeIdRef.current]?.getView?.()
     if (sourceModeRef.current) {
-      // Leaving SOURCE → RICH: reuse the RICH viewport anchor captured when we
-      // left rich (stashed in richViewportAnchorRef). The rich anchor is a piece
-      // of visible TEXT, which is content-stable across the re-mount — so finding
-      // it in the freshly re-rendered rich DOM and aligning it to the top lands on
-      // the SAME screenful the user was reading, even though the re-render's image
-      // load + chunked parse made the layout non-deterministic. The freshly-
-      // captured SOURCE viewport anchor can't do this: the source ↔ rich height
-      // map is non-linear (image lines are 1 line in source, tall <img> in rich),
-      // so it lands a whole region off on image-dense docs.
-      // The caret is restored from the source position (no focus — see
-      // restoreRichCaret), so it doesn't fight the viewport.
+      // Leaving SOURCE → RICH.
+      caretFollowRef.current = isSourceCaretVisible(sourceRef.current)
       caretAnchorRef.current = captureSourceCaret(sourceRef.current)
+      // Reuse the rich viewport anchor stashed when we left rich (content-stable
+      // across the re-mount). Only used in the reading (!follow) branch.
       viewportAnchorRef.current = richViewportAnchorRef.current
     } else {
-      // Leaving RICH → SOURCE: capture the rich anchors. Used now to set the
-      // source scroll, AND stashed so the return-to-rich restore (above) reuses
-      // the precise rich anchor instead of the lossy source one.
+      // Leaving RICH → SOURCE.
+      caretFollowRef.current = isRichCaretVisible(view, editorHostRef.current)
       caretAnchorRef.current = captureRichCaret(view)
       const rv = captureRichViewport(editorHostRef.current, view)
       viewportAnchorRef.current = rv
@@ -351,24 +345,27 @@ export default function App() {
   useLayoutEffect(() => {
     const caret = caretAnchorRef.current
     const viewport = viewportAnchorRef.current
+    const follow = caretFollowRef.current
     if (caret == null && viewport == null) return
     caretAnchorRef.current = null
     viewportAnchorRef.current = null
-    // Restore the CARET first (no scroll), then the VIEWPORT (scroll). Order
-    // matters: the viewport scroll runs last so it wins outright — the caret
-    // restore's incidental focus-scroll can't override the reading position.
+    caretFollowRef.current = false
+    // follow = caret was visible (user editing): restore the caret AND follow it
+    //   (scrollIntoView/focus) — the viewport goes to the caret; no separate
+    //   viewport restore (the caret is the target, and it's in-viewport so
+    //   following can't drift).
+    // !follow = caret was off-screen (user reading): set the caret selection
+    //   WITHOUT following, then restore the viewport anchor — the reading
+    //   position holds; no focus (a focus would async-scroll to the off-screen
+    //   caret and drift).
     const apply = () => {
       const view = editorApis.current[activeIdRef.current]?.getView?.()
       if (sourceMode) {
-        if (caret) restoreSourceCaret(sourceRef.current, caret)
-        if (viewport) restoreSourceViewport(sourceRef.current, viewport)
+        if (caret) restoreSourceCaret(sourceRef.current, caret, follow)
+        if (!follow && viewport) restoreSourceViewport(sourceRef.current, viewport)
       } else {
-        // Caret first (sets the selection to the viewport position + focuses),
-        // then viewport (sets scrollTop). Because the caret is anchored to the
-        // visible viewport position, the focus doesn't async-scroll away, so the
-        // viewport restore wins.
-        if (caret) restoreRichCaret(view, caret)
-        if (viewport) restoreRichViewport(editorHostRef.current, view, viewport)
+        if (caret) restoreRichCaret(view, caret, follow)
+        if (!follow && viewport) restoreRichViewport(editorHostRef.current, view, viewport)
       }
     }
     // Apply immediately, then again as async layout settles — the rich editor

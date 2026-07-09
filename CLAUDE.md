@@ -216,20 +216,27 @@ docs/                  architecture / features / implementation-notes / developm
   rich), so it lands a region off. `captureRichViewport` also skips leading
   whitespace (list/block indentation at the viewport top would yield a whitespace
   snippet matching the doc's first whitespace run → yank to top).
-  **`restoreRichCaret` does NOT focus** (`view.focus` omitted): focusing a
-  contenteditable that carries a selection makes the browser async-scroll the
-  caret into view EVERY multi-pass tick, overriding the viewport anchor — the
-  residual drift on large docs. The selection is still set (caret preserved in PM
-  state); the editor gets focus when the user clicks to type (a view toggle
-  shouldn't steal focus anyway).
-  **Product behavior (deliberate):** the viewport-top anchor wins — if the caret
-  was off-screen before the toggle (user scrolled away to read), it stays
-  off-screen after. CDP-verified on a 7.5万字 / 183-image doc: 11/11 regions
-  round-trip with the same viewport-top text; small docs (incl.
-  table/list/heading/image/prose) exact. **Known limit:** the source→rich caret
-  isn't focused (a click moves it on edit). A full fix would keep Crepe mounted
-  across the toggle (no re-mount → focus is safe) — a larger Editor refactor
-  (`EditorArea.jsx` ~L85 unmounts Crepe on source mode today).
+  **Dual strategy by caret visibility** (the final design): at toggle time we
+  record whether the caret was VISIBLE (`isRichCaretVisible` via PM
+  `coordsAtPos` / `isSourceCaretVisible` via a single-point mirror div).
+    - caret VISIBLE (user was editing): `restoreRichCaret(follow=true)` does
+      `setSelection` + `scrollIntoView` + `focus` — the caret stays AND the
+      viewport follows it (caret in-viewport, so following can't drift). No
+      separate viewport restore (the caret is the target).
+    - caret OFF-SCREEN (user was reading): `restoreRichCaret(follow=false)` sets
+      only the selection (NO scrollIntoView / NO focus), then the viewport anchor
+      is restored — the reading position holds. (Following an off-screen caret is
+      exactly the v0.5.25 drift bug.)
+  This unifies the two intents cleanly and avoids the focus paradox: focus only
+  runs in the editing branch where the caret is already in-viewport.
+  **Product behavior:** editing toggles keep the caret + follow it; reading
+  toggles keep the viewport. CDP-verified: reading 6/6 on a 7.5万字/183-image
+  doc + 3/3 on small docs; editing (real click) 3/3 on small docs. Big-doc
+  editing caret-follow is best-effort (snippet matching across 120k chars can
+  pick a wrong occurrence for ambiguous phrases). **Known limit:** a full fix for
+  big-doc editing would keep Crepe mounted across the toggle (no re-mount →
+  deterministic) — a larger Editor refactor (`EditorArea.jsx` ~L85 unmounts Crepe
+  on source mode today).
   the toggle (display:none, sync only on source edit) — a larger Editor refactor. **Key files:** `scrollAnchor.js`
   (`capture/restore Rich/Source Caret/Viewport`, `posAtText`/`nearestIndexOf`
   nearest-occurrence, `visibleOccurrences`, `stripMdForSnippet`,

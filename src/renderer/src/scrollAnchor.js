@@ -140,10 +140,69 @@ const nearestIndexOf = (hay, needle, nearestTo = -1) => {
 }
 
 // ---------------------------------- #41 caret ----------------------------------
-// Capture/restore the CARET across rich↔source. The caret restore sets ONLY the
-// selection — it does NOT scroll (the viewport anchor owns scroll). Anchor order
-// on restore: SNIPPET (nearest expected pos) → heading → ratio. Returns null
-// when there's nothing to anchor (caller skips the caret restore).
+// Capture/restore the CARET across rich↔source. Two strategies, picked by whether
+// the caret was VISIBLE at toggle time (isRichCaretVisible / isSourceCaretVisible):
+//   - caret visible (user was editing): restore the caret AND follow it —
+//     scrollIntoView + focus (rich) / focus-scroll (source). The viewport goes to
+//     the caret; the caret stays where the user was typing.
+//   - caret off-screen (user was reading): restore the caret selection WITHOUT
+//     scrolling/focusing; the viewport anchor owns scroll. (A focus here would
+//     async-scroll to the off-screen caret and drift on large docs.)
+// Anchor order on restore: SNIPPET (nearest expected pos) → heading → ratio.
+
+// Is the rich caret inside the scroller's visible viewport? (PM coordsAtPos.)
+// This is the "was the user editing or reading" signal: a visible caret means
+// the user just placed it to type; an off-screen caret means they scrolled away
+// to read.
+export function isRichCaretVisible(view, scroller) {
+  if (!view || !scroller) return false
+  try {
+    const c = view.coordsAtPos(view.state.selection.head)
+    const sr = scroller.getBoundingClientRect()
+    return c.bottom > sr.top + 4 && c.top < sr.bottom - 4
+  } catch { return false }
+}
+
+// The pixel Y (content-top relative, incl. padding) of a source char, via a
+// single-point mirror div (same idea as editor-source-caret.js). Single-point,
+// so the textarea's scrollbar-reduced wrapping width doesn't compound the way a
+// full-doc mirror would.
+const sourceCaretY = (textarea, charIdx) => {
+  const doc = textarea.ownerDocument
+  const cs = doc.defaultView.getComputedStyle(textarea)
+  const STYLES = [
+    'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing',
+    'line-height', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+    'border-top-width', 'border-left-width', 'box-sizing', 'white-space',
+    'word-wrap', 'word-break', 'overflow-wrap', 'tab-size', 'text-indent', 'width'
+  ]
+  let css = ''
+  for (const k of STYLES) css += `${k}:${cs.getPropertyValue(k)};`
+  css += 'position:absolute;visibility:hidden;white-space:pre-wrap;top:0;left:0;'
+  const m = doc.createElement('div')
+  m.style.cssText = css
+  m.textContent = (textarea.value || '').slice(0, charIdx)
+  const marker = doc.createElement('span')
+  marker.textContent = '​'
+  m.appendChild(marker)
+  doc.body.appendChild(m)
+  let y = -1
+  try { y = marker.getBoundingClientRect().top - m.getBoundingClientRect().top } catch {}
+  m.remove()
+  return y
+}
+
+// Is the source caret inside the textarea's visible viewport? (single-point
+// mirror Y vs scrollTop range.) Conservative: on any measurement failure, treat
+// as visible (follow the caret) so editing isn't disrupted.
+export function isSourceCaretVisible(textarea) {
+  if (!textarea) return true
+  try {
+    const y = sourceCaretY(textarea, textarea.selectionStart)
+    if (y < 0) return true
+    return y >= textarea.scrollTop && y <= textarea.scrollTop + textarea.clientHeight
+  } catch { return true }
+}
 
 // Build a { snippet, snipOff } caret anchor for the current textblock, where
 // snipOff = the caret's visible-char offset from the snippet START.
@@ -235,9 +294,10 @@ export function captureSourceCaret(textarea) {
 }
 
 // ? → Source: caret at snippetStart + snipOff (nearest expected occurrence), else
-// heading, else ratio. Sets the selection WITHOUT scrolling (preventScroll) — the
-// viewport anchor owns scroll.
-export function restoreSourceCaret(textarea, anchor) {
+// heading, else ratio. `follow` = true (user was editing): focus scrolls the
+// textarea to the caret (viewport follows). `follow` = false (user was reading):
+// preventScroll — the viewport anchor owns scroll.
+export function restoreSourceCaret(textarea, anchor, follow = false) {
   if (!textarea || !anchor) return false
   try {
     const md = textarea.value || ''
@@ -262,15 +322,21 @@ export function restoreSourceCaret(textarea, anchor) {
     }
     if (target == null) target = Math.round((anchor.ratio || 0) * md.length)
     textarea.setSelectionRange(target, target)
-    textarea.focus({ preventScroll: true })
+    textarea.focus({ preventScroll: !follow })
     return true
   } catch { return false }
 }
 
 // ? → Rich: caret at snippetStart + snipOff (nearest expected occurrence), else
 // heading, else ratio. TextSelection.near snaps to the closest valid text
-// position. Sets the selection WITHOUT scrolling — the viewport anchor owns scroll.
-export function restoreRichCaret(view, anchor) {
+// position. `follow` selects the strategy:
+//   - true  (user was editing — caret was visible): scrollIntoView + focus so the
+//     viewport FOLLOWS the caret (caret stays visible, ready to type). The caret
+//     is in-viewport here, so focusing can't yank the viewport elsewhere.
+//   - false (user was reading — caret was off-screen): set the selection only,
+//     NO scrollIntoView / NO focus. The viewport anchor owns scroll; a focus here
+//     would async-scroll to the off-screen caret and drift on large docs.
+export function restoreRichCaret(view, anchor, follow = false) {
   if (!view || !anchor) return false
   try {
     const doc = view.state.doc
@@ -296,14 +362,10 @@ export function restoreRichCaret(view, anchor) {
     }
     if (target == null) target = Math.round((anchor.ratio || 0) * size)
     const $pos = doc.resolve(Math.max(1, Math.min(target, size)))
-    view.dispatch(view.state.tr.setSelection(TextSelection.near($pos)))
-    // Intentionally NOT focused: focusing a contenteditable that carries a
-    // selection makes the browser async-scroll to bring the caret into view, and
-    // that scroll fires after every multi-pass tick (each restoreRichCaret pass
-    // would re-focus + re-scroll), overriding the viewport anchor — the residual
-    // drift on large docs. The selection is still set, so the caret is where the
-    // user left it; the editor picks up focus when they click to type (a view
-    // toggle shouldn't steal focus anyway).
+    const tr = view.state.tr.setSelection(TextSelection.near($pos))
+    if (follow) tr.scrollIntoView()
+    view.dispatch(tr)
+    if (follow) view.focus()
     return true
   } catch { return false }
 }
