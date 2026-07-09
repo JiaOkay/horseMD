@@ -143,7 +143,7 @@ export function useOutline({ editorHostRef, sourceRef, home, sidebarOpen, sideba
   // one scrolled past the top), mirroring how the file tree marks the open file.
   // Rich editor: reflow-free offset cache against the live DOM. Source mode
   // (#40): no DOM headings, so map scrollTop→char and find the nearest heading
-  // via parseSourceHeadings (same ratio math as scrollAnchor.headingAtSourceTop).
+  // via parseSourceHeadings (scrollTop→char ratio, nearest-heading match).
   useEffect(() => {
     if (home || !sidebarOpen || sidebarMode !== 'outline') {
       setActiveHeading(-1)

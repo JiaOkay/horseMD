@@ -111,6 +111,7 @@ export default function App() {
   const sourceTextareas = useRef({}) // textarea-backed editors by tab id
   const caretAnchorRef = useRef(null) // caret anchor (snippet/heading/ratio) to restore across a mode switch
   const viewportAnchorRef = useRef(null) // viewport-top text anchor (the reading position, separate from the caret)
+  const richLoadingRef = useRef(false) // live mirror of richLoading (chunked large-doc load) for the mode-switch effect
   // Registry of each tab's editor API (by tab id). Several markdown editors can
   // be mounted at once (a tab stays mounted after its first activation), so a
   // single ref would get stuck on whichever editor mounted last; keying by tab
@@ -352,16 +353,35 @@ export default function App() {
     // Apply immediately, then again as async layout settles — the rich editor
     // (Crepe) fills its content over a few frames after it remounts, growing
     // scrollHeight, so a single pass would land short. The 4th pass (450ms)
-    // covers large docs where Crepe takes longer to fill.
+    // covers ordinary docs where Crepe takes longer to fill.
     const raf = requestAnimationFrame(apply)
     const t1 = setTimeout(apply, 90)
     const t2 = setTimeout(apply, 220)
     const t3 = setTimeout(apply, 450)
+    // Chunked large docs (richLoading) keep streaming content past 450ms, which
+    // would drift the viewport anchor after the last fixed pass. Re-apply until
+    // the load settles (capped at ~2s) so the reading position holds on big docs
+    // too. `cancelled` lets cleanup short-circuit an in-flight tail tick. Only the
+    // rich branch needs this — source mode is plain text (no async fill).
+    let cancelled = false
+    const tailCleans = []
+    const tail = (delay) => {
+      if (cancelled) return
+      const h = setTimeout(() => {
+        if (cancelled) return
+        apply()
+        if (!sourceMode && richLoadingRef.current && delay < 2000) tail(delay + 300)
+      }, delay)
+      tailCleans.push(h)
+    }
+    tail(700)
     return () => {
+      cancelled = true
       cancelAnimationFrame(raf)
       clearTimeout(t1)
       clearTimeout(t2)
       clearTimeout(t3)
+      tailCleans.forEach(clearTimeout)
     }
   }, [sourceMode])
 
@@ -505,6 +525,7 @@ export default function App() {
     setRichLoading,
     jumpToHeading
   } = useOutline({ editorHostRef, sourceRef, home, sidebarOpen, sidebarMode, sourceMode, activeId, activeTab, isMobile, setSidebarOpen, setHome })
+  richLoadingRef.current = richLoading // mirror so the mode-switch effect can read it without a dep that re-runs it
 
   // ------------------------- menu / shortcuts ----------------------
   // Find & replace (issue #19) — hoisted above the handlers so createMenuHandlers

@@ -117,7 +117,7 @@ const posAtText = (doc, snippet, nearestTo = -1) => {
 }
 
 // Char index of the `needle` occurrence in `hay` nearest `nearestTo` (last one
-// when no hint). Source-side twin of posAfterText for the textarea.
+// when no hint). Source-side twin of posAtText for the textarea.
 const nearestIndexOf = (hay, needle, nearestTo = -1) => {
   if (!needle) return -1
   const occ = []

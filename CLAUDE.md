@@ -165,39 +165,52 @@ docs/                  architecture / features / implementation-notes / developm
   scrollspy's active heading during the poll (the `tops` cache may be stale mid-settle).
   Large-doc chunked-load: `richLoading` gates the outline list (skeleton during load)
   + queues the jump until `richDocVersion` bumps.
-- **Mode-switch caret + viewport** (`scrollAnchor.js` + `App.jsx`, #28/#41 — **OPEN BUG,
-  needs Ralph loop**): when toggling rich↔source, the CARET position should be
-  preserved AND visible (viewport follows the caret). Current approach (v0.5.25):
-  toggleSource captures the caret anchor (snippet → heading → ratio); a
-  `[sourceMode]` effect (multi-pass: rAF + 90/220/450ms) restores it via
-  `restoreRichCaret`/`restoreSourceCaret`, which **scroll the caret into view**
-  (ProseMirror `tr.scrollIntoView()` / textarea `focus()`). **History of what was
-  tried (all failed to fully fix):** (1) #28 dual system — separate scroll-restore
-  (heading/ratio) + caret-restore — they fought: scroll landed on heading, caret
-  elsewhere → off-screen → "caret moved". (2) snippet within-textblock anchor —
-  fixed caret precision but viewport still fought. (3) reorder (caret→scroll) +
-  `preventScroll` — mitigated but didn't resolve. (4) v0.5.25 root fix: removed
-  the dual system entirely, caret is the single target + scrollIntoView. **User
-  still reports drift on v0.5.25** — CDP tests show caret MATCHES at multiple
-  positions (50/100/200/300 in caixuetang text) + is visible, so the remaining
-  issue may be: large-doc Crepe async fill timing (>450ms, caret set on incomplete
-  doc then shifts), a real-world scenario CDP can't reproduce, or the user is on
-  an older build. **Ralph should:** reproduce with the user's exact doc + scenario;
-  check if the caret drifts on LARGE docs (>5000 chars, multi-paragraph with
-  headings + links + code); verify the multi-pass timing covers Crepe's fill;
-  consider bumping to more passes or waiting for richDocVersion. **Key files:**
-  `scrollAnchor.js` (`captureRichCaret`/`captureSourceCaret`/`restoreRichCaret`/
-  `restoreSourceCaret`/`posAfterText`/`stripMdForSnippet`/`parseSourceHeadings`),
-  `App.jsx` `toggleSource` (~L315, capture) + `[sourceMode]` effect (~L327,
-  multi-pass restore). **Key API details:** PM `view.state.selection.head` (no
-  `.main`); `editorApis.current[activeId]?.getView?.()` for the PM view;
-  `sourceRef.current` for the textarea; snippet = ~24 visible chars within the
-  current textblock (`$head.start()` for rich, current source line for source);
-  `stripMdForSnippet` strips structural markers (heading/list/blockquote) BEFORE
-  emphasis (else `\*` eats a bullet `*`); `posAfterText` walks text nodes +
-  `lastIndexOf`. **CDP testing gotcha:** N tabs = N mounted editors —
-  `querySelector('.ProseMirror')` may hit a hidden one; use `offsetParent` or
-  filter by content.
+- **Mode-switch caret + viewport** (`scrollAnchor.js` + `App.jsx`, #28/#41 —
+  **FIXED v0.5.26, dual anchor**): toggling rich↔source preserves BOTH the caret
+  AND the reading position (viewport top) with no drift, in both pure-viewing and
+  while-editing, across plain text / links / code / lists / tables / images /
+  headings. **The root insight:** reading position and caret are TWO INDEPENDENT
+  user intents — capture and restore each on its own precise-snippet anchor.
+  `toggleSource` captures both: a CARET anchor (`captureRichCaret`/
+  `captureSourceCaret`) and a VIEWPORT anchor (`captureRichViewport`/
+  `captureSourceViewport` = the ~24 visible chars at the scroll-area top, via
+  `caretPositionFromPoint` + a TreeWalker fallback). The `[sourceMode]` effect
+  restores CARET first (selection only — NO `scrollIntoView`; textarea uses
+  `focus({preventScroll:true})`), then VIEWPORT (sets scrollTop to the viewport
+  anchor's text). Because the two restores are independent operations (set
+  selection, then set scrollTop), they CANNOT fight — which is what defeated the
+  earlier attempts: #28's dual system fought (coarse heading/ratio scroll vs
+  precise snippet caret), and v0.5.25's caret-only + `scrollIntoView` yanked the
+  viewport to an off-screen caret while reading ("content drift"). **Caret
+  anchor:** short textblocks (a table cell "九十五", a heading) use the FULL block
+  text + caret offset within it (`$head.parent.textContent`, `headOffset =
+  $head.pos - $head.start()`); long blocks use the ≤24-char before-caret window.
+  Source capture detects a GFM table row (`/^\|.*\|\s*$/`) and anchors on the
+  CURRENT cell (a row-prefix snippet "| … | 九" has pipes/spaces that don't exist
+  in the rich rendering, so it never matched). Matching picks the occurrence
+  NEAREST the expected position (`ratio*size` / `ratio*len`) — not `lastIndexOf`
+  — so a short snippet like "九" no longer collides with the "九" in "九十分".
+  Restore order per anchor: snippet → heading → ratio. **Multi-pass** (rAF +
+  90/220/450ms) because Crepe fills rich content async after remount; PLUS a
+  `richLoadingRef`-gated tail (re-applies every 300ms up to ~2s while a chunked
+  large doc is still streaming) so the viewport holds on big docs too. **Product
+  behavior (deliberate):** the viewport-top anchor wins — if the caret was
+  off-screen before the toggle (user scrolled away to read), it stays off-screen
+  after; the caret is restored to its TEXT but NOT scrolled into view. This is
+  what makes pure-viewing not drift. **Key files:** `scrollAnchor.js`
+  (`capture/restore Rich/Source Caret/Viewport`, `posAtText`/`nearestIndexOf`
+  nearest-occurrence, `visibleOccurrences`, `stripMdForSnippet`,
+  `parseSourceHeadings`, `scrollSourceToHeading`); `App.jsx` `toggleSource`
+  (~L320, captures both anchors) + `[sourceMode]` effect (~L336, caret-then-
+  viewport, multi-pass + richLoading tail) + `richLoadingRef`. **Key API:** PM
+  `view.state.selection.head` (no `.main`); `$head.parent.textContent` for the
+  textblock (NOT `$head.end()` — for a table cell it resolves to the whole
+  table); `view.posAtDOM`/`view.domAtPos` for the viewport text↔DOM mapping;
+  `editorHostRef.current` = `.editor-scroll` (the rich scroller), `sourceRef.current`
+  = the textarea (the source scroller). **CDP gotcha:** N tabs = N mounted editors
+  — `querySelector('.ProseMirror')` may hit a hidden one; filter by `offsetParent`.
+  Repro harness: `scripts/test-drift-measure.mjs` (round-trips each content type,
+  measures caret context + scrollTop before/after).
 - **Outline in source mode** (`useOutline.js` + `scrollAnchor.parseSourceHeadings`,
   #40): the outline used to blank in source mode. Now the list is regex-parsed from
   the textarea (`parseSourceHeadings`, also used by `headingAtSourceTop` + the #41
