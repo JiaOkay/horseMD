@@ -37,11 +37,10 @@ import {
   captureRichViewport, captureSourceViewport, restoreRichViewport, restoreSourceViewport,
   isRichCaretVisible, isSourceCaretVisible
 } from './scrollAnchor.js'
-import { attachSourceCaret } from './components/editor-source-caret.js' // thick caret in source mode
 import { useFileOps } from './hooks/useFileOps.js'
 import { createMenuHandlers, useGlobalKeys, useCommands } from './lib/menuHandlers.js'
 import {
-  isAbsolutePath, loadSession
+  isAbsolutePath, isHeavyDoc, loadSession
 } from './paths.js'
 import { createReviewActions } from './lib/reviewActions.js'
 
@@ -112,8 +111,11 @@ export default function App() {
   const sourceTextareas = useRef({}) // textarea-backed editors by tab id
   const caretAnchorRef = useRef(null) // caret anchor (snippet/heading/ratio) to restore across a mode switch
   const viewportAnchorRef = useRef(null) // viewport-top text anchor (the reading position, separate from the caret)
+  const richCaretAnchorRef = useRef(null) // rich-side caret anchor retained while source is open, so unchanged source returns through the more precise rich mapping
   const richViewportAnchorRef = useRef(null) // rich viewport anchor stashed across source mode, so the return-to-rich restore reuses the precise (content-stable) rich anchor instead of the lossy source one
   const caretFollowRef = useRef(false) // was the caret visible at toggle time? visible = editing (follow caret), off-screen = reading (keep viewport)
+  const preserveRichCaretFollowRef = useRef(false) // source was not edited/moved, so keep the still-mounted rich selection exactly
+  const sourceEnteredWithCaretFollowRef = useRef(false) // rich→source editing/reading intent; reused when source was not touched
   const richLoadingRef = useRef(false) // live mirror of richLoading (chunked large-doc load) for the mode-switch effect
   // Registry of each tab's editor API (by tab id). Several markdown editors can
   // be mounted at once (a tab stays mounted after its first activation), so a
@@ -175,8 +177,10 @@ export default function App() {
     if (timer) clearTimeout(timer)
     liveTimersRef.current.delete(id)
     liveContentRef.current.delete(id)
+    const current = tabsRef.current.find((t) => t.id === id)
+    if (current?.content === content) return
     tabsRef.current = tabsRef.current.map((t) => (t.id === id ? { ...t, content } : t))
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, content } : t)))
+    setTabs((prev) => prev.map((t) => (t.id === id && t.content !== content ? { ...t, content } : t)))
   }, [])
   const commitAllLive = useCallback(() => {
     for (const id of [...liveContentRef.current.keys()]) commitLive(id)
@@ -312,6 +316,33 @@ export default function App() {
     setCustomTheme(null)
   }, [])
 
+  const syncSourceToRich = useCallback((id) => {
+    const sourceEl = sourceTextareas.current[id]
+    if (!sourceEl) return false
+    const next = sourceEl.value || ''
+    const baseline = sourceEl.__horsemdSourceBaseline ?? ''
+    if (next === baseline) return false
+
+    const api = editorApis.current[id]
+    if (api?.replaceMarkdown?.(next)) {
+      sourceEl.__horsemdSourceBaseline = next
+      return true
+    }
+
+    // If the rich editor has not finished creating yet, force the next rich
+    // mount to consume the already-committed source text instead of keeping the
+    // stale initialContent captured before source editing.
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? { ...t, reloadNonce: t.reloadNonce + 1, heavy: isHeavyDoc(next) }
+          : t
+      )
+    )
+    sourceEl.__horsemdSourceBaseline = next
+    return true
+  }, [setTabs])
+
   // Toggle source/rich mode. Two strategies, picked by whether the caret was
   // VISIBLE at toggle time (caretFollowRef):
   //   - caret VISIBLE   (user was editing): the caret stays where it was AND the
@@ -323,33 +354,63 @@ export default function App() {
   //     exactly the v0.5.25 "content drift" bug.)
   const toggleSource = useCallback(() => {
     commitAllLive() // flush textarea edits so the rich editor picks them up on switch
-    const view = editorApis.current[activeIdRef.current]?.getView?.()
+    const id = activeIdRef.current
+    const view = editorApis.current[id]?.getView?.()
     if (sourceModeRef.current) {
       // Leaving SOURCE → RICH.
-      caretFollowRef.current = isSourceCaretVisible(sourceRef.current)
-      caretAnchorRef.current = captureSourceCaret(sourceRef.current)
-      // Reuse the rich viewport anchor stashed when we left rich (content-stable
-      // across the re-mount). Only used in the reading (!follow) branch.
-      viewportAnchorRef.current = richViewportAnchorRef.current
+      const sourceEl = sourceRef.current
+      const sourceTextChanged = !!sourceEl && (sourceEl.value || '') !== (sourceEl.__horsemdSourceBaseline ?? '')
+      const sourceSelection = sourceEl ? `${sourceEl.selectionStart}:${sourceEl.selectionEnd}` : ''
+      const sourceSelectionChanged = !!sourceEl && !!sourceEl.__horsemdSourceSelectionBaseline && sourceSelection !== sourceEl.__horsemdSourceSelectionBaseline
+      const sourceSelectionUser = !!sourceEl && sourceEl.__horsemdSourceSelectionUser === true
+      const sourceViewportMoved = !!sourceEl && sourceEl.__horsemdSourceViewportMoved === true
+      const preserveRichCaret = !sourceTextChanged && !sourceSelectionChanged && !sourceSelectionUser && !sourceViewportMoved
+      const hasSourceCaretIntent = sourceTextChanged || sourceSelectionChanged || sourceSelectionUser
+      const followSourceCaret = hasSourceCaretIntent && (sourceSelectionUser && !sourceViewportMoved ? true : isSourceCaretVisible(sourceEl))
+      caretFollowRef.current = preserveRichCaret ? sourceEnteredWithCaretFollowRef.current : followSourceCaret
+      preserveRichCaretFollowRef.current = preserveRichCaret
+      if (preserveRichCaret) {
+        // Source was only viewed. The rich editor stayed mounted the whole time,
+        // so its PM selection and scrollTop are already the exact source of
+        // truth. Restoring a text anchor here can only introduce drift at table
+        // or heading boundaries.
+        caretAnchorRef.current = null
+        viewportAnchorRef.current = null
+      } else if (!hasSourceCaretIntent && sourceViewportMoved) {
+        caretAnchorRef.current = null
+        viewportAnchorRef.current = captureSourceViewport(sourceEl)
+      } else {
+        caretAnchorRef.current = captureSourceCaret(sourceEl)
+        viewportAnchorRef.current = followSourceCaret ? null : captureSourceViewport(sourceEl)
+      }
+      syncSourceToRich(id)
     } else {
       // Leaving RICH → SOURCE.
+      preserveRichCaretFollowRef.current = false
       caretFollowRef.current = isRichCaretVisible(view, editorHostRef.current)
-      caretAnchorRef.current = captureRichCaret(view)
+      sourceEnteredWithCaretFollowRef.current = caretFollowRef.current
+      const richCaret = captureRichCaret(view)
+      const rawOffset = editorApis.current[id]?.markdownOffsetFromSelection?.()
+      if (richCaret && Number.isFinite(rawOffset)) richCaret.rawOffset = rawOffset
+      caretAnchorRef.current = richCaret
+      richCaretAnchorRef.current = richCaret
       const rv = captureRichViewport(editorHostRef.current, view)
       viewportAnchorRef.current = rv
       richViewportAnchorRef.current = rv
     }
     setSourceMode((v) => !v)
-  }, [commitAllLive])
+  }, [commitAllLive, syncSourceToRich])
 
   useLayoutEffect(() => {
     const caret = caretAnchorRef.current
     const viewport = viewportAnchorRef.current
     const follow = caretFollowRef.current
-    if (caret == null && viewport == null) return
+    const preserveRichCaretFollow = preserveRichCaretFollowRef.current
+    if (caret == null && viewport == null && !preserveRichCaretFollow) return
     caretAnchorRef.current = null
     viewportAnchorRef.current = null
     caretFollowRef.current = false
+    preserveRichCaretFollowRef.current = false
     // follow = caret was visible (user editing): restore the caret AND follow it
     //   (scrollIntoView/focus) — the viewport goes to the caret; no separate
     //   viewport restore (the caret is the target, and it's in-viewport so
@@ -361,10 +422,26 @@ export default function App() {
     const apply = () => {
       const view = editorApis.current[activeIdRef.current]?.getView?.()
       if (sourceMode) {
-        if (caret) restoreSourceCaret(sourceRef.current, caret, follow)
-        if (!follow && viewport) restoreSourceViewport(sourceRef.current, viewport)
+        if (caret) {
+          restoreSourceCaret(sourceRef.current, caret, follow)
+          const sourceEl = sourceRef.current
+          if (sourceEl) {
+            sourceEl.__horsemdSourceSelectionBaseline = `${sourceEl.selectionStart}:${sourceEl.selectionEnd}`
+            sourceEl.__horsemdSourceSelectionUser = false
+            sourceEl.__horsemdSourceViewportMoved = false
+          }
+        }
+        if (!follow && viewport) {
+          restoreSourceViewport(sourceRef.current, viewport)
+          if (sourceRef.current) sourceRef.current.__horsemdSourceViewportMoved = false
+        }
       } else {
-        if (caret) restoreRichCaret(view, caret, follow)
+        if (caret) {
+          const api = editorApis.current[activeIdRef.current]
+          const restored = Number.isFinite(caret.rawOffset) && api?.restoreMarkdownOffset?.(caret.rawOffset, follow)
+          if (!restored) restoreRichCaret(view, caret, follow)
+        }
+        else if (preserveRichCaretFollow && follow) view?.focus()
         if (!follow && viewport) restoreRichViewport(editorHostRef.current, view, viewport)
       }
     }
@@ -416,21 +493,9 @@ export default function App() {
     }
   }, [sourceMode])
 
-  // Thick custom caret for the source-mode textarea (native textarea carets can't
-  // be widened via CSS). Attaches after the textarea mounts; re-attaches on tab
-  // switch; detaches (restores the native caret) on leaving source mode.
-  useEffect(() => {
-    if (!sourceMode) return
-    let detach = () => {}
-    let cancelled = false
-    const tryAttach = () => {
-      if (cancelled) return
-      if (sourceRef.current) detach = attachSourceCaret(sourceRef.current)
-      else requestAnimationFrame(tryAttach)
-    }
-    requestAnimationFrame(tryAttach)
-    return () => { cancelled = true; detach() }
-  }, [sourceMode, activeId])
+  // Source mode uses the browser-native textarea caret. A previous custom thick
+  // caret used mirror-div pixel math, but on large wrapped documents it could
+  // lag behind programmatic scroll restoration and draw over unrelated text.
 
   // File operations (open/new/update/close/save/rename/dup/delete/export) +
   // workspace + watcher live in hooks/useFileOps.js (phase-2 US-5). Split ops

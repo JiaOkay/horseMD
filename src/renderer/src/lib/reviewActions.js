@@ -48,13 +48,15 @@ export function createReviewActions({ pickEditableId, tabsRef, sourceTextareas, 
     setHome(false)
     const sourceEl = sourceTextareas.current[tab.id]
     if (sourceEl) {
-      const result = wrapReviewSelection(tab.content, sourceEl.selectionStart, sourceEl.selectionEnd, kind)
+      const result = wrapReviewSelection(sourceEl.value || '', sourceEl.selectionStart, sourceEl.selectionEnd, kind)
       if (result.error === 'multiline') {
         fireToast(tRef.current('review.inlineOnly'))
         return
       }
       const editedEl = sourceEl
-      updateContent(tab.id, normalizeReviewMarkupMarkdown(result.text), false)
+      const next = normalizeReviewMarkupMarkdown(result.text)
+      editedEl.value = next
+      updateContent(tab.id, next, false)
       requestAnimationFrame(() => {
         if (sourceTextareas.current[tab.id] === editedEl) {
           editedEl.focus()

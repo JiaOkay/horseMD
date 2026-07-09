@@ -11,6 +11,7 @@ import {
   parserCtx,
   remarkCtx
 } from '@milkdown/kit/core'
+import { replaceAll } from '@milkdown/utils'
 import { imageBlockConfig } from '@milkdown/kit/component/image-block'
 import { inlineImageConfig } from '@milkdown/kit/component/image-inline'
 import { codeBlockConfig } from '@milkdown/kit/component/code-block'
@@ -18,7 +19,7 @@ import './editor-codeblock-eager.js' // side effect: root-fix #25 — eager, non
 import { tabAtCursorKeymap } from './editor-codeblock-tab.js' // #39 — Tab inserts at cursor, not re-indent line
 import { inlineCodeSchema } from '@milkdown/kit/preset/commonmark'
 import { LanguageDescription, LanguageSupport, StreamLanguage } from '@codemirror/language'
-import { TextSelection, Plugin } from '@milkdown/prose/state'
+import { TextSelection, NodeSelection, Plugin } from '@milkdown/prose/state'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
 import '@milkdown/crepe/theme/common/link-tooltip.css'
@@ -39,6 +40,7 @@ import { toolbarAutohidePlugin } from './editor-toolbar-autohide.js' // selectio
 import { attachMdPasteHandler } from './editor-md-paste.js'
 import { normalizeDisplayMath, createMathBlockPromotionPlugin } from './editor-math.js'
 import { splitMarkdown, CHUNK_THRESHOLD, CHUNK_SIZE, appendChunks } from './editor-chunked-parse.js'
+import { markdownOffsetToPmPos, pmPosToMarkdownOffset } from './editor-source-map.js'
 import { createToolbarScanner } from './editor-toolbar.js'
 import { createBlockControls } from './editor-block-controls.js'
 import remarkFrontmatter from 'remark-frontmatter'
@@ -372,6 +374,7 @@ export default function Editor({
   // background after create(). `chunks` is null for normal-sized docs.
   const chunks = (initialContent?.length || 0) > CHUNK_THRESHOLD ? splitMarkdown(initialContent, CHUNK_SIZE) : null
   const firstContent = chunks ? chunks[0] : initialContent || ''
+  const lastMarkdownRef = useRef(normalizeReviewMarkupMarkdown(normalizeDisplayMath(initialContent || '')))
 
   useEffect(() => {
     const host = hostRef.current
@@ -453,6 +456,12 @@ export default function Editor({
       return fileToDataUrl(file)
     }
 
+    let userEditUntil = 0
+    const markUserEdit = (ttl = 8000) => {
+      userEditUntil = Date.now() + ttl
+    }
+    const hasRecentUserEdit = () => Date.now() <= userEditUntil
+
     // Insert an image at the caret (used by paste / drop of image files). Persists
     // the file first, then drops an inline image node with the resulting src.
     const insertUploadedImage = async (file, fromClipboard = false) => {
@@ -462,6 +471,7 @@ export default function Editor({
       const imgType = v.state.schema.nodes.image
       if (!imgType) return
       const node = imgType.create({ src: url, alt: file.name || '' })
+      markUserEdit()
       v.dispatch(v.state.tr.replaceSelectionWith(node, false).scrollIntoView())
     }
 
@@ -703,7 +713,10 @@ export default function Editor({
     let appending = false
     crepe.on((api) => {
       api.markdownUpdated((_ctx, md) => {
-        if (ready && !appending) onChange?.(normalizeReviewMarkupMarkdown(md), false)
+        if (ready && !appending && hasRecentUserEdit()) {
+          onChange?.(normalizeReviewMarkupMarkdown(md), false)
+          userEditUntil = Date.now() + 1000
+        }
       })
     })
 
@@ -761,6 +774,7 @@ export default function Editor({
         flushSync(() => setLoaded(true))
 
         const onKeydown = (e) => {
+          markUserEdit()
           if (!(e.ctrlKey || e.metaKey) || e.altKey) return
           if (e.key >= '1' && e.key <= '6') {
             e.preventDefault()
@@ -799,9 +813,24 @@ export default function Editor({
         }
 
         if (view) {
+          const onUserEditIntent = () => markUserEdit()
           view.dom.addEventListener('keydown', onKeydown)
+          view.dom.addEventListener('beforeinput', onUserEditIntent, true)
+          view.dom.addEventListener('input', onUserEditIntent, true)
+          view.dom.addEventListener('paste', onUserEditIntent, true)
+          view.dom.addEventListener('drop', onUserEditIntent, true)
+          view.dom.addEventListener('cut', onUserEditIntent, true)
+          view.dom.addEventListener('compositionend', onUserEditIntent, true)
+          view.dom.addEventListener('mousedown', onUserEditIntent, true)
           view.dom.addEventListener('contextmenu', onContextMenu)
           cleanups.push(() => view.dom.removeEventListener('keydown', onKeydown))
+          cleanups.push(() => view.dom.removeEventListener('beforeinput', onUserEditIntent, true))
+          cleanups.push(() => view.dom.removeEventListener('input', onUserEditIntent, true))
+          cleanups.push(() => view.dom.removeEventListener('paste', onUserEditIntent, true))
+          cleanups.push(() => view.dom.removeEventListener('drop', onUserEditIntent, true))
+          cleanups.push(() => view.dom.removeEventListener('cut', onUserEditIntent, true))
+          cleanups.push(() => view.dom.removeEventListener('compositionend', onUserEditIntent, true))
+          cleanups.push(() => view.dom.removeEventListener('mousedown', onUserEditIntent, true))
           cleanups.push(() => view.dom.removeEventListener('contextmenu', onContextMenu))
           // Show/hide and reposition the level badge with focus and scrolling.
           const onBlur = () => setLevel(null)
@@ -1186,7 +1215,64 @@ export default function Editor({
           }
           return result.ok
         }
-        apiRef.current = { setBlock, getDocHTML, getMarkdown, toggleHighlight, applyReviewMarkup }
+        const replaceMarkdown = (md) => {
+          if (destroyed || !crepeRef.current) return false
+          try {
+            const next = normalizeReviewMarkupMarkdown(normalizeDisplayMath(md || ''))
+            lastMarkdownRef.current = next
+            crepe.editor.action(replaceAll(next))
+            onStructureChange?.()
+            return true
+          } catch (err) {
+            console.error('Replace markdown failed', err)
+            return false
+          }
+        }
+        const restoreMarkdownOffset = (rawOffset, follow = false) => {
+          const v = viewRef.current
+          if (!v || !crepeRef.current) return false
+          try {
+            const remark = crepe.editor.ctx.get(remarkCtx)
+            const target = markdownOffsetToPmPos(lastMarkdownRef.current || '', rawOffset, v.state.doc, remark)
+            const pos = typeof target === 'number' ? target : target?.pos
+            if (!Number.isFinite(pos)) return false
+            const size = v.state.doc.content.size
+            const safePos = Math.max(1, Math.min(pos, size))
+            let selection
+            if (target?.atom) {
+              try {
+                selection = NodeSelection.create(v.state.doc, Math.max(0, Math.min(pos, size - 1)))
+              } catch {
+                selection = TextSelection.near(v.state.doc.resolve(safePos), 1)
+              }
+            } else {
+              selection = TextSelection.near(v.state.doc.resolve(safePos))
+            }
+            const tr = v.state.tr.setSelection(selection)
+            if (follow) tr.scrollIntoView()
+            v.dispatch(tr)
+            if (follow) v.focus()
+            return true
+          } catch {
+            return false
+          }
+        }
+        const markdownOffsetFromSelection = () => {
+          const v = viewRef.current
+          if (!v || !crepeRef.current) return null
+          try {
+            let head = v.state.selection.head
+            const sel = v.dom.ownerDocument.getSelection()
+            if (sel && sel.rangeCount && sel.isCollapsed && v.dom.contains(sel.anchorNode)) {
+              head = v.posAtDOM(sel.anchorNode, sel.anchorOffset)
+            }
+            const remark = crepe.editor.ctx.get(remarkCtx)
+            return pmPosToMarkdownOffset(lastMarkdownRef.current || '', head, v.state.doc, remark)
+          } catch {
+            return null
+          }
+        }
+        apiRef.current = { setBlock, getDocHTML, getMarkdown, toggleHighlight, applyReviewMarkup, replaceMarkdown, restoreMarkdownOffset, markdownOffsetFromSelection }
         // DEV-only CDP test hook (scripts/test-substitution.mjs). Exposes the
         // active editor so the harness can drive the REAL 替换 command, read
         // markdown, and simulate a markdown paste (parser + remark plugins, so
@@ -1251,7 +1337,10 @@ export default function Editor({
           getDocHTML,
           getMarkdown,
           toggleHighlight,
-          applyReviewMarkup
+          applyReviewMarkup,
+          replaceMarkdown,
+          restoreMarkdownOffset,
+          markdownOffsetFromSelection
         })
 
         // Append the remaining chunks of a huge doc in the background so the open

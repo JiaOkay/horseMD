@@ -214,7 +214,9 @@ function MobileMore({
         <div className="block-switch-menu hm-status-sheet">
           <button
             className={`block-menu-item hm-sheet-save${dirty ? ' dirty' : ''}`}
+            disabled={!dirty}
             onClick={() => {
+              if (!dirty) return
               onSave?.()
               setOpen(false)
             }}

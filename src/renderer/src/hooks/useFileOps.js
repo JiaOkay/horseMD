@@ -175,9 +175,12 @@ export function useFileOps({
         if (isInitial) {
           // Rebaseline a clean doc against Crepe's normalized output; keep the
           // existing baseline if the doc already had unsaved edits.
+          if (t.content === md && t.savedContent === md) return t
           if (t.content === t.savedContent) return { ...t, content: md, savedContent: md }
+          if (t.content === md) return t
           return { ...t, content: md }
         }
+        if (t.content === md) return t
         return { ...t, content: md }
       })
     )

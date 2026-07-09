@@ -78,42 +78,78 @@ export default function EditorArea({
         const paneFlex = split && isLeft ? `0 0 calc(${(splitRatio * 100).toFixed(2)}% - 3px)` : undefined
 
         // Plain-text docs always use the textarea; "heavy" Markdown docs do
-        // too until the user opts into rich (avoids a multi-second freeze);
-        // the active pane also uses it in global source mode. The right pane
-        // never shows global source mode.
+        // too until the user opts into rich (avoids a multi-second freeze).
+        // In global source mode the active Markdown pane shows a textarea too,
+        // but its already-mounted Crepe editor stays mounted underneath. That
+        // avoids a full re-parse/image reload when switching back to rich.
         const heavyAsSource = tab.heavy && !richForced.has(tab.id)
-        const usesTextarea = isPlainTextDoc(tab) || heavyAsSource || (sourceMode && isLeft)
+        const plainText = isPlainTextDoc(tab)
+        const sourceForActiveRich = sourceMode && isLeft && !plainText && !heavyAsSource
+        const usesTextarea = plainText || heavyAsSource || sourceForActiveRich
         // content-visibility virtualization (see .hm-cv in app.css) kicks in
         // only for genuinely large RICH documents — small docs and the
         // textarea path are untouched. ~20k chars ≈ hundreds of blocks,
         // the range where software-composited scrolling starts to struggle.
-        const largeRich = !usesTextarea && (tab.content?.length || 0) >= 20000
-        if (usesTextarea) {
-          if (!inView) return null
+        const richEligible = !plainText && !heavyAsSource
+        const largeRich = richEligible && (tab.content?.length || 0) >= 20000
+        const nodes = []
+
+        if (usesTextarea && inView) {
           const setSourceTextareaRef = (el) => {
             if (el) {
               sourceTextareas.current[tab.id] = el
               if (isLeft) sourceRef.current = el
+              if (el.__horsemdSourceBaseline == null) el.__horsemdSourceBaseline = el.value || ''
+              if (el.__horsemdSourceSelectionBaseline == null) {
+                el.__horsemdSourceSelectionBaseline = `${el.selectionStart || 0}:${el.selectionEnd || 0}`
+              }
+              if (el.__horsemdSourceViewportMoved == null) el.__horsemdSourceViewportMoved = false
               return
             }
             const existing = sourceTextareas.current[tab.id]
             delete sourceTextareas.current[tab.id]
             if (isLeft && (!existing || sourceRef.current === existing)) sourceRef.current = null
           }
-          return (
+          nodes.push(
             <textarea
-              key={`${tab.id}:${tab.reloadNonce}`}
+              key={`source:${tab.id}:${tab.reloadNonce}`}
               ref={setSourceTextareaRef}
               className={`source-editor${paneClass}`}
               defaultValue={tab.content}
               spellCheck={false}
               style={{ order, flex: paneFlex }}
               onFocus={onPaneFocus}
-              onMouseDown={onPaneFocus}
+              onMouseDown={(e) => {
+                onPaneFocus()
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.__horsemdSourceSelectionUser = true
+                e.currentTarget.__horsemdSourceViewportMoved = false
+                e.currentTarget.__horsemdSourceSelectionAt = performance.now()
+              }}
+              onKeyUp={(e) => {
+                if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
+                  e.currentTarget.__horsemdSourceSelectionUser = true
+                  e.currentTarget.__horsemdSourceViewportMoved = false
+                  e.currentTarget.__horsemdSourceSelectionAt = performance.now()
+                }
+              }}
+              onSelect={(e) => {
+                e.currentTarget.__horsemdSourceSelectionUser = true
+                e.currentTarget.__horsemdSourceViewportMoved = false
+                e.currentTarget.__horsemdSourceSelectionAt = performance.now()
+              }}
+              onScroll={(e) => {
+                const selectedAt = e.currentTarget.__horsemdSourceSelectionAt || 0
+                if (performance.now() - selectedAt > 250) e.currentTarget.__horsemdSourceViewportMoved = true
+              }}
               onChange={(e) => {
                 // Uncontrolled: stash the edit and debounce-commit it, so
                 // typing never re-renders App or re-sets a multi-MB value per
                 // keystroke. commitAllLive() flushes before save/close/etc.
+                e.target.__horsemdSourceSelectionUser = true
+                e.target.__horsemdSourceViewportMoved = false
+                e.target.__horsemdSourceSelectionAt = performance.now()
                 const v = e.target.value
                 liveContentRef.current.set(tab.id, v)
                 const prev = liveTimersRef.current.get(tab.id)
@@ -126,37 +162,40 @@ export default function EditorArea({
         // Lazy mount: don't create a Crepe editor for a tab the user hasn't
         // opened yet (keeps session-restore of many tabs fast). Panes in
         // view always mount; visited tabs stay mounted.
-        if (!inView && !mountedIds.has(tab.id)) return null
-        return (
-          <div
-            // Include reloadNonce so an external-edit reload remounts the
-            // Crepe editor with the new content (the create effect only
-            // runs on mount). tab switches keep the same key → stay mounted.
-            key={`${tab.id}:${tab.reloadNonce}`}
-            className={`editor-scroll${paneClass}${largeRich ? ' hm-cv' : ''}`}
-            ref={isLeft && !sourceMode ? editorHostRef : undefined}
-            style={{ display: inView ? undefined : 'none', order, flex: paneFlex }}
-            onFocusCapture={onPaneFocus}
-            onMouseDownCapture={onPaneFocus}
-          >
-            <Editor
-              tabId={`${tab.id}:${tab.reloadNonce}`}
-              initialContent={tab.content}
-              docPath={tab.path}
-              imageUploadCommand={imageUploadCommand}
-              spellcheck={spellcheck}
-              onChange={(md, isInitial) => updateContent(tab.id, md, isInitial)}
-              onReady={(api) => {
-                editorApis.current[tab.id] = api
-              }}
-              onActiveBlock={(id) => {
-                if (tab.id === activeIdRef.current) setActiveBlock(id)
-              }}
-              onStructureChange={() => setRichDocVersion((v) => v + 1)}
-              onLoadingChange={setRichLoading}
-            />
-          </div>
-        )
+        if (richEligible && (inView || mountedIds.has(tab.id))) {
+          nodes.push(
+            <div
+              // Include reloadNonce so an external-edit reload remounts the
+              // Crepe editor with the new content (the create effect only
+              // runs on mount). tab switches keep the same key → stay mounted.
+              key={`rich:${tab.id}:${tab.reloadNonce}`}
+              className={`editor-scroll${paneClass}${largeRich ? ' hm-cv' : ''}`}
+              ref={isLeft ? editorHostRef : undefined}
+              style={{ display: inView && !sourceForActiveRich ? undefined : 'none', order, flex: paneFlex }}
+              onFocusCapture={onPaneFocus}
+              onMouseDownCapture={onPaneFocus}
+            >
+              <Editor
+                tabId={`${tab.id}:${tab.reloadNonce}`}
+                initialContent={tab.content}
+                docPath={tab.path}
+                imageUploadCommand={imageUploadCommand}
+                spellcheck={spellcheck}
+                onChange={(md, isInitial) => updateContent(tab.id, md, isInitial)}
+                onReady={(api) => {
+                  editorApis.current[tab.id] = api
+                }}
+                onActiveBlock={(id) => {
+                  if (tab.id === activeIdRef.current) setActiveBlock(id)
+                }}
+                onStructureChange={() => setRichDocVersion((v) => v + 1)}
+                onLoadingChange={setRichLoading}
+              />
+            </div>
+          )
+        }
+
+        return nodes.length ? nodes : null
       })}
 
       {/* Heavy-doc notice: this Markdown file is shown as plain source to

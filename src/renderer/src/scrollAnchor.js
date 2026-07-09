@@ -15,12 +15,11 @@
 // selection (no scroll), the viewport restore only sets scrollTop. Order in the
 // caller: caret first, then viewport (so the viewport scroll wins outright).
 //
-// Anchor text is VISIBLE text (markdown syntax stripped on the source side) so
-// the same landmark matches in both modes even when a link / code fence / list
-// marker makes raw char offsets diverge. When the snippet occurs more than once,
-// we pick the occurrence NEAREST the expected position (ratio*size) — not the
-// last one — so a short snippet inside a table cell ("九") lands on the right
-// cell instead of the last match.
+// The primary caret coordinate is a GLOBAL VISIBLE-CHAR index: markdown syntax
+// is stripped on the source side, and PM text nodes are counted on the rich side.
+// That avoids using text snippets as the normal path, so repeated words do not
+// confuse caret restore. Snippets/context remain only as a fallback for parser
+// edge cases where the visible streams cannot be aligned exactly.
 import { TextSelection } from '@milkdown/prose/state'
 
 const SNIPPET_LEN = 24 // ~24 visible chars: long enough to be unique, short enough to stay in-block
@@ -139,6 +138,205 @@ const nearestIndexOf = (hay, needle, nearestTo = -1) => {
   return best
 }
 
+const appendInlineVisible = (out, raw, base = 0) => {
+  let i = 0
+  const push = (ch, rawIndex) => {
+    out.text += ch
+    out.map.push(rawIndex)
+  }
+  while (i < raw.length) {
+    if (raw.startsWith('![', i)) {
+      const close = raw.indexOf(']', i + 2)
+      if (close >= 0 && raw[close + 1] === '(') {
+        const end = raw.indexOf(')', close + 2)
+        if (end >= 0) {
+          for (let j = i + 2; j < close; j++) push(raw[j], base + j)
+          i = end + 1
+          continue
+        }
+      }
+    }
+    if (raw[i] === '[') {
+      const close = raw.indexOf(']', i + 1)
+      if (close >= 0 && raw[close + 1] === '(') {
+        const end = raw.indexOf(')', close + 2)
+        if (end >= 0) {
+          for (let j = i + 1; j < close; j++) push(raw[j], base + j)
+          i = end + 1
+          continue
+        }
+      }
+    }
+    if (raw[i] === '`') {
+      i++
+      continue
+    }
+    if (raw[i] === '<') {
+      const end = raw.indexOf('>', i + 1)
+      if (end >= 0) {
+        i = end + 1
+        continue
+      }
+    }
+    if ((raw[i] === '*' || raw[i] === '_' || raw[i] === '~') && raw[i + 1] === raw[i]) {
+      i += 2
+      continue
+    }
+    if (raw[i] === '*' || raw[i] === '_' || raw[i] === '~') {
+      i++
+      continue
+    }
+    push(raw[i], base + i)
+    i++
+  }
+}
+
+// Markdown source does not have the same text stream as ProseMirror: table pipes,
+// heading hashes, list markers, link URLs and emphasis markers exist only in
+// source. Build a lightweight "visible source text" buffer plus a visible-char →
+// raw-char map so a rich caret snippet can land on the textarea char that renders
+// that same visible text.
+const sourceVisibleIndex = (md) => {
+  const out = { text: '', map: [] }
+  if (!md) return out
+  const lines = md.split(/(\n)/)
+  let rawPos = 0
+  let inFence = false
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (line === '\n') {
+      rawPos += 1
+      continue
+    }
+    const lineStart = rawPos
+    rawPos += line.length
+    const fence = line.match(/^\s*(```|~~~)/)
+    if (fence) {
+      inFence = !inFence
+      continue
+    }
+    if (inFence) {
+      appendInlineVisible(out, line, lineStart)
+      continue
+    }
+    if (/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line)) continue
+    const tableLike = /^\s*\|.*\|\s*$/.test(line)
+    if (tableLike) {
+      let cursor = 0
+      const cells = line.split('|')
+      for (const cell of cells) {
+        const cellRawStart = cursor
+        cursor += cell.length + 1
+        const leading = cell.match(/^\s*/)?.[0].length || 0
+        const trailing = cell.match(/\s*$/)?.[0].length || 0
+        const core = cell.slice(leading, Math.max(leading, cell.length - trailing))
+        if (core) appendInlineVisible(out, core, lineStart + cellRawStart + leading)
+      }
+      continue
+    }
+    const marker = line.match(/^(\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+|\d+\.\s+))/)
+    const offset = marker ? marker[0].length : 0
+    appendInlineVisible(out, line.slice(offset), lineStart + offset)
+  }
+  return out
+}
+
+const visibleSourcePosition = (md, snippet, snipOff = 0, nearestTo = -1) => {
+  if (!md || !snippet) return -1
+  const idx = sourceVisibleIndex(md)
+  const occ = []
+  let from = 0
+  for (;;) {
+    const i = idx.text.indexOf(snippet, from)
+    if (i < 0) break
+    const rawStart = idx.map[i]
+    const rawTarget = idx.map[Math.min(i + snipOff, idx.map.length - 1)]
+    if (rawStart != null && rawTarget != null) occ.push({ rawStart, rawTarget })
+    from = i + 1
+  }
+  if (!occ.length) return -1
+  let best = occ[0]
+  let bd = Infinity
+  for (const o of occ) {
+    const d = nearestTo >= 0 ? Math.abs(o.rawStart - nearestTo) : 0
+    if (d < bd) { bd = d; best = o }
+  }
+  return best.rawTarget
+}
+
+const sourceVisiblePositionAtRaw = (md, rawPos) => {
+  const idx = sourceVisibleIndex(md)
+  const map = idx.map
+  if (!map.length) return { visibleIndex: 0, visibleAffinity: 'forward' }
+  const raw = Math.max(0, Math.min(rawPos || 0, md.length))
+  let lo = 0
+  let hi = map.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (map[mid] < raw) lo = mid + 1
+    else hi = mid
+  }
+  return {
+    visibleIndex: lo,
+    visibleAffinity: map[lo] === raw ? 'forward' : 'backward'
+  }
+}
+
+const sourceRawFromVisibleIndex = (md, visibleIndex, affinity = 'forward') => {
+  const idx = sourceVisibleIndex(md)
+  const map = idx.map
+  if (!map.length) return 0
+  const v = Math.max(0, Math.min(Math.round(visibleIndex || 0), map.length))
+  if (affinity === 'backward' && v > 0) return Math.min(md.length, map[v - 1] + 1)
+  if (v < map.length) return map[v]
+  return Math.min(md.length, map[map.length - 1] + 1)
+}
+
+const richVisiblePositionAtPos = (doc, pmPos) => {
+  let acc = 0
+  let found = null
+  doc.descendants((node, pos) => {
+    if (found) return false
+    if (!node.isText) return true
+    const len = node.text.length
+    if (pmPos <= pos) {
+      found = { visibleIndex: acc, visibleAffinity: 'forward' }
+    } else if (pmPos < pos + len) {
+      found = { visibleIndex: acc + (pmPos - pos), visibleAffinity: 'forward' }
+    } else if (pmPos === pos + len) {
+      found = { visibleIndex: acc + len, visibleAffinity: 'backward' }
+    }
+    acc += len
+    return false
+  })
+  return found || { visibleIndex: acc, visibleAffinity: 'backward' }
+}
+
+const richPosFromVisibleIndex = (doc, visibleIndex, affinity = 'forward') => {
+  const v = Math.max(0, Math.round(visibleIndex || 0))
+  let acc = 0
+  let fallback = 1
+  let target = null
+  doc.descendants((node, pos) => {
+    if (target != null) return false
+    if (!node.isText) return true
+    const len = node.text.length
+    if (v < acc + len) {
+      target = pos + (v - acc)
+    } else if (v === acc + len) {
+      if (affinity === 'forward') {
+        fallback = pos + len
+      } else {
+        target = pos + len
+      }
+    }
+    acc += len
+    fallback = pos + len
+    return false
+  })
+  return target != null ? target : fallback
+}
+
 // ---------------------------------- #41 caret ----------------------------------
 // Capture/restore the CARET across rich↔source. Two strategies, picked by whether
 // the caret was VISIBLE at toggle time (isRichCaretVisible / isSourceCaretVisible):
@@ -148,7 +346,8 @@ const nearestIndexOf = (hay, needle, nearestTo = -1) => {
 //   - caret off-screen (user was reading): restore the caret selection WITHOUT
 //     scrolling/focusing; the viewport anchor owns scroll. (A focus here would
 //     async-scroll to the off-screen caret and drift on large docs.)
-// Anchor order on restore: SNIPPET (nearest expected pos) → heading → ratio.
+// Anchor order on restore: visible-char index → context/snippet fallback →
+// heading → ratio.
 
 // Is the rich caret inside the scroller's visible viewport? (PM coordsAtPos.)
 // This is the "was the user editing or reading" signal: a visible caret means
@@ -156,10 +355,35 @@ const nearestIndexOf = (hay, needle, nearestTo = -1) => {
 // to read.
 export function isRichCaretVisible(view, scroller) {
   if (!view || !scroller) return false
+  const sr = scroller.getBoundingClientRect()
   try {
     const c = view.coordsAtPos(view.state.selection.head)
-    const sr = scroller.getBoundingClientRect()
-    return c.bottom > sr.top + 4 && c.top < sr.bottom - 4
+    if (c.bottom > sr.top + 4 && c.top < sr.bottom - 4) return true
+  } catch {
+    /* fall through to DOM fallback */
+  }
+  try {
+    const at = view.domAtPos(view.state.selection.head)
+    const base = at.node.nodeType === 1 ? at.node : at.node.parentElement
+    const el = base?.closest?.('p,h1,h2,h3,h4,h5,h6,li,td,th,blockquote,pre')
+    if (el && view.dom.contains(el)) {
+      const er = el.getBoundingClientRect()
+      if (er.bottom > sr.top + 4 && er.top < sr.bottom - 4) return true
+    }
+  } catch {
+    /* fall through to DOM selection fallback */
+  }
+  try {
+    const sel = scroller.ownerDocument.getSelection()
+    if (!sel || !sel.rangeCount || !view.dom.contains(sel.anchorNode)) return false
+    const range = sel.getRangeAt(0)
+    const rects = Array.from(range.getClientRects())
+    const rect = rects.find((r) => r.height > 0 && r.width >= 0)
+    if (rect && rect.bottom > sr.top + 4 && rect.top < sr.bottom - 4) return true
+    const el = (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement)?.closest?.('p,h1,h2,h3,h4,h5,h6,li,td,th,blockquote,pre')
+    if (!el || !view.dom.contains(el)) return false
+    const er = el.getBoundingClientRect()
+    return er.bottom > sr.top + 4 && er.top < sr.bottom - 4
   } catch { return false }
 }
 
@@ -223,9 +447,17 @@ const richBlockAnchor = (doc, $head) => {
   // never match the source — so the caret always fell back to ratio and drifted.
   const blockText = ($head.parent && $head.parent.textContent) || ''
   const offsetInBlock = headOffset($head) // visible chars from block start → caret
-  if (blockText.length <= SNIPPET_LEN) return { snippet: blockText, snipOff: offsetInBlock }
+  const ctxBefore = blockText.slice(Math.max(0, offsetInBlock - SNIPPET_LEN), offsetInBlock)
+  const ctxAfter = blockText.slice(offsetInBlock, offsetInBlock + SNIPPET_LEN)
+  const context = ctxBefore + ctxAfter
+  const contextOff = ctxBefore.length
+  if (blockText.length <= SNIPPET_LEN) return { snippet: blockText, snipOff: offsetInBlock, context, contextOff }
   const snip = blockText.slice(Math.max(0, offsetInBlock - SNIPPET_LEN), offsetInBlock)
-  return { snippet: snip, snipOff: snip.length }
+  if (!snip.replace(/\s/g, '')) {
+    const after = blockText.slice(offsetInBlock, offsetInBlock + SNIPPET_LEN)
+    if (after.replace(/\s/g, '')) return { snippet: after, snipOff: 0, context, contextOff }
+  }
+  return { snippet: snip, snipOff: snip.length, context, contextOff }
 }
 
 // Visible-char offset of the caret from its textblock start. PM positions map
@@ -234,13 +466,58 @@ const richBlockAnchor = (doc, $head) => {
 // between, in which case it's off by one (acceptable for a caret anchor).
 const headOffset = ($head) => $head.pos - $head.start()
 
+const domCaretAnchor = (view) => {
+  try {
+    const sel = view.dom.ownerDocument.getSelection()
+    if (!sel || !sel.rangeCount) return null
+    const range = sel.getRangeAt(0)
+    if (!range.collapsed || !view.dom.contains(range.startContainer)) return null
+    const node = range.startContainer
+    if (node.nodeType !== 3) return null
+    const text = node.nodeValue || ''
+    const offset = range.startOffset || 0
+    let before = text.slice(Math.max(0, offset - SNIPPET_LEN), offset)
+    let after = text.slice(offset, offset + SNIPPET_LEN)
+    const doc = view.dom.ownerDocument
+    if (before.length < SNIPPET_LEN) {
+      const w = doc.createTreeWalker(view.dom, NodeFilter.SHOW_TEXT)
+      let prev = null
+      while (w.nextNode()) {
+        if (w.currentNode === node) break
+        if ((w.currentNode.nodeValue || '').replace(/\s/g, '')) prev = w.currentNode
+      }
+      if (prev) before = (prev.nodeValue || '').slice(-(SNIPPET_LEN - before.length)) + before
+    }
+    if (after.length < SNIPPET_LEN) {
+      const w = doc.createTreeWalker(view.dom, NodeFilter.SHOW_TEXT)
+      w.currentNode = node
+      const next = w.nextNode()
+      if (next) after += (next.nodeValue || '').slice(0, SNIPPET_LEN - after.length)
+    }
+    const context = before + after
+    if (!context.replace(/\s/g, '')) return null
+    if (before.replace(/\s/g, '')) return { snippet: before, snipOff: before.length, context, contextOff: before.length }
+    return { snippet: after, snipOff: 0, context, contextOff: 0 }
+  } catch { return null }
+}
+
 export function captureRichCaret(view) {
   if (!view) return null
   try {
-    const head = view.state.selection.head // ProseMirror: .head directly (no .main)
     const doc = view.state.doc
+    let head = view.state.selection.head // ProseMirror: .head directly (no .main)
+    try {
+      const sel = view.dom.ownerDocument.getSelection()
+      if (sel && sel.rangeCount && sel.isCollapsed && view.dom.contains(sel.anchorNode)) {
+        head = view.posAtDOM(sel.anchorNode, sel.anchorOffset)
+      }
+    } catch {
+      /* use PM selection */
+    }
     const $head = doc.resolve(head)
-    const { snippet, snipOff } = richBlockAnchor(doc, $head)
+    const blockAnchor = richBlockAnchor(doc, $head)
+    const { snippet, snipOff, context, contextOff } = blockAnchor
+    const { visibleIndex, visibleAffinity } = richVisiblePositionAtPos(doc, head)
     const heads = []
     doc.descendants((node, pos) => {
       if (node.type.name === 'heading') { heads.push({ pos, text: node.textContent }); return false }
@@ -248,12 +525,13 @@ export function captureRichCaret(view) {
     })
     let pick = null
     for (const h of heads) { if (h.pos <= head) pick = h; else break }
+    const size = doc.content.size
+    const ratio = size > 0 ? head / size : 0
     if (pick) {
       const offset = doc.textBetween(pick.pos, head, '\n').length
-      return { heading: pick.text, offset, snippet, snipOff }
+      return { heading: pick.text, offset, ratio, snippet, snipOff, context, contextOff, pmPos: head, visibleIndex, visibleAffinity }
     }
-    const size = doc.content.size
-    return size > 0 ? { ratio: head / size, snippet, snipOff } : null
+    return size > 0 ? { ratio: head / size, snippet, snipOff, context, contextOff, pmPos: head, visibleIndex, visibleAffinity } : null
   } catch { return null }
 }
 
@@ -270,6 +548,7 @@ export function captureSourceCaret(textarea) {
   const lineEnd = lineEndRel < 0 ? md.length : lineEndRel
   const fullLine = md.slice(lineStart, lineEnd)
   let snippet, snipOff
+  let context, contextOff
   if (/^\|.*\|\s*$/.test(fullLine)) {
     // Table row: anchor on the CURRENT cell only.
     const col = start - lineStart
@@ -279,23 +558,41 @@ export function captureSourceCaret(textarea) {
     const cell = fullLine.slice(cellStart, cellEnd)
     snippet = stripMdForSnippet(cell).trim()
     snipOff = stripMdForSnippet(fullLine.slice(cellStart, col)).trim().length
+    const before = stripMdForSnippet(cell.slice(0, col - cellStart)).trim().slice(-SNIPPET_LEN)
+    const after = stripMdForSnippet(cell.slice(col - cellStart)).trim().slice(0, SNIPPET_LEN)
+    context = before + after
+    contextOff = before.length
   } else {
     const stripped = stripMdForSnippet(md.slice(lineStart, start))
+    const strippedAfter = stripMdForSnippet(md.slice(start, Math.min(md.length, lineEnd)))
+    const before = stripped.slice(-SNIPPET_LEN)
+    const after = strippedAfter.slice(0, SNIPPET_LEN)
+    context = before + after
+    contextOff = before.length
     snippet = stripped.length <= SNIPPET_LEN ? stripped : stripped.slice(-SNIPPET_LEN)
     snipOff = snippet.length
+    if (!snippet.replace(/\s/g, '')) {
+      const after = stripMdForSnippet(md.slice(start, Math.min(md.length, start + SNIPPET_LEN * 4))).replace(/^\s+/, '')
+      if (after) {
+        snippet = after.slice(0, SNIPPET_LEN)
+        snipOff = 0
+      }
+    }
   }
   let pick = null
   for (const h of parseSourceHeadings(md)) {
     if (h.charOffset <= start) pick = h
     else break
   }
-  if (pick) return { heading: pick.text, offset: start - pick.charOffset, snippet, snipOff }
-  return md ? { ratio: start / md.length, snippet, snipOff } : null
+  const ratio = md ? start / md.length : 0
+  const { visibleIndex, visibleAffinity } = sourceVisiblePositionAtRaw(md, start)
+  if (pick) return { heading: pick.text, offset: start - pick.charOffset, ratio, snippet, snipOff, context, contextOff, visibleIndex, visibleAffinity, rawOffset: start }
+  return md ? { ratio, snippet, snipOff, context, contextOff, visibleIndex, visibleAffinity, rawOffset: start } : null
 }
 
-// ? → Source: caret at snippetStart + snipOff (nearest expected occurrence), else
-// heading, else ratio. `follow` = true (user was editing): focus scrolls the
-// textarea to the caret (viewport follows). `follow` = false (user was reading):
+// ? → Source: caret at global visible-char index first, then snippet fallback,
+// heading, ratio. `follow` = true (user was editing): focus scrolls the textarea
+// to the caret (viewport follows). `follow` = false (user was reading):
 // preventScroll — the viewport anchor owns scroll.
 export function restoreSourceCaret(textarea, anchor, follow = false) {
   if (!textarea || !anchor) return false
@@ -303,11 +600,34 @@ export function restoreSourceCaret(textarea, anchor, follow = false) {
     const md = textarea.value || ''
     const hint = anchor.ratio != null ? anchor.ratio * md.length : -1
     let target
-    if (anchor.snippet) {
+    if (Number.isFinite(anchor.rawOffset)) {
+      target = Math.max(0, Math.min(anchor.rawOffset, md.length))
+    }
+    if (target == null && Number.isFinite(anchor.visibleIndex)) {
+      target = sourceRawFromVisibleIndex(md, anchor.visibleIndex, anchor.visibleAffinity)
+    }
+    if (target == null && anchor.context) {
+      const idx = nearestIndexOf(md, anchor.context, hint)
+      if (idx >= 0) {
+        const off = anchor.contextOff != null ? anchor.contextOff : 0
+        target = Math.min(idx + off, md.length)
+      }
+      if (target == null) {
+        const off = anchor.contextOff != null ? anchor.contextOff : 0
+        const visibleTarget = visibleSourcePosition(md, anchor.context, off, hint)
+        if (visibleTarget >= 0) target = Math.min(visibleTarget, md.length)
+      }
+    }
+    if (target == null && anchor.snippet) {
       const idx = nearestIndexOf(md, anchor.snippet, hint)
       if (idx >= 0) {
         const off = anchor.snipOff != null ? anchor.snipOff : anchor.snippet.length
         target = Math.min(idx + off, md.length)
+      }
+      if (target == null) {
+        const off = anchor.snipOff != null ? anchor.snipOff : anchor.snippet.length
+        const visibleTarget = visibleSourcePosition(md, anchor.snippet, off, hint)
+        if (visibleTarget >= 0) target = Math.min(visibleTarget, md.length)
       }
     }
     if (target == null && anchor.heading) {
@@ -327,8 +647,8 @@ export function restoreSourceCaret(textarea, anchor, follow = false) {
   } catch { return false }
 }
 
-// ? → Rich: caret at snippetStart + snipOff (nearest expected occurrence), else
-// heading, else ratio. TextSelection.near snaps to the closest valid text
+// ? → Rich: caret at global visible-char index first, then snippet fallback,
+// heading, ratio. TextSelection.near snaps to the closest valid text
 // position. `follow` selects the strategy:
 //   - true  (user was editing — caret was visible): scrollIntoView + focus so the
 //     viewport FOLLOWS the caret (caret stays visible, ready to type). The caret
@@ -343,7 +663,20 @@ export function restoreRichCaret(view, anchor, follow = false) {
     const size = doc.content.size
     const hint = anchor.ratio != null ? anchor.ratio * size : -1
     let target
-    if (anchor.snippet) {
+    if (Number.isFinite(anchor.pmPos) && anchor.pmPos > 0 && anchor.pmPos <= size) {
+      target = anchor.pmPos
+    }
+    if (target == null && Number.isFinite(anchor.visibleIndex)) {
+      target = richPosFromVisibleIndex(doc, anchor.visibleIndex, anchor.visibleAffinity)
+    }
+    if (target == null && anchor.context) {
+      const s = posAtText(doc, anchor.context, hint)
+      if (s >= 0) {
+        const off = anchor.contextOff != null ? anchor.contextOff : 0
+        target = Math.min(s + off, size)
+      }
+    }
+    if (target == null && anchor.snippet) {
       const s = posAtText(doc, anchor.snippet, hint)
       if (s >= 0) {
         const off = anchor.snipOff != null ? anchor.snipOff : anchor.snippet.length
