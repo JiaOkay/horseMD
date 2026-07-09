@@ -666,6 +666,25 @@ function extractClipboardUrl(text) {
   return m ? m[0].replace(/[)\]"'.,]+$/, '') : null
 }
 
+// PicGo desktop (PicGo.exe) writes the URL to the clipboard ASYNCHRONOUSLY after
+// the upload — the `PicGo.exe upload` command returns to the prompt before the
+// upload finishes, and the clipboard is written slightly later. So a single read
+// right after the command exits races + misses it. Poll the clipboard for a
+// short window until it changes to something with a URL.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+async function waitForClipboardUrl(beforeText, timeoutMs = 6000, intervalMs = 250) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const clip = clipboard.readText()
+    if (clip && clip !== beforeText) {
+      const url = extractClipboardUrl(clip)
+      if (url) return url
+    }
+    await sleep(intervalMs)
+  }
+  return null
+}
+
 function parseUploadedUrl(out) {
   const lines = String(out)
     .split(/\r?\n/)
@@ -741,10 +760,9 @@ ipcMain.handle('image:upload', async (_e, command, name, bytes) => {
     await fs.writeFile(file, Buffer.from(bytes))
     const res = await runUploadCommand(String(command).trim(), file)
     let url = res.url
-    if (!url) {
-      const afterClip = clipboard.readText()
-      if (afterClip && afterClip !== beforeClip) url = extractClipboardUrl(afterClip)
-    }
+    // PicGo.exe writes the URL to the clipboard async (after the command
+    // returns), so poll for it instead of a single read (which races).
+    if (!url) url = await waitForClipboardUrl(beforeClip)
     if (url) return { ok: true, url }
     return { ok: false, error: (res.stderr || res.stdout || res.error || '').slice(-500) || 'No URL in command output or clipboard.' }
   } catch (e) {
