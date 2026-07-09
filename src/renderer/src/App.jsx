@@ -32,7 +32,10 @@ import { useFindReplace } from './hooks/useFindReplace.js'
 import { useOutline } from './hooks/useOutline.js'
 import { useAppLifecycle } from './hooks/useAppLifecycle.js'
 import { useColDrag } from './hooks/useColDrag.js'
-import { captureRichCaret, captureSourceCaret, restoreRichCaret, restoreSourceCaret } from './scrollAnchor.js'
+import {
+  captureRichCaret, captureSourceCaret, restoreRichCaret, restoreSourceCaret,
+  captureRichViewport, captureSourceViewport, restoreRichViewport, restoreSourceViewport
+} from './scrollAnchor.js'
 import { attachSourceCaret } from './components/editor-source-caret.js' // thick caret in source mode
 import { useFileOps } from './hooks/useFileOps.js'
 import { createMenuHandlers, useGlobalKeys, useCommands } from './lib/menuHandlers.js'
@@ -107,6 +110,7 @@ export default function App() {
   const sourceRef = useRef(null) // active source-mode <textarea>
   const sourceTextareas = useRef({}) // textarea-backed editors by tab id
   const caretAnchorRef = useRef(null) // caret anchor (snippet/heading/ratio) to restore across a mode switch
+  const viewportAnchorRef = useRef(null) // viewport-top text anchor (the reading position, separate from the caret)
   // Registry of each tab's editor API (by tab id). Several markdown editors can
   // be mounted at once (a tab stays mounted after its first activation), so a
   // single ref would get stuck on whichever editor mounted last; keying by tab
@@ -304,39 +308,51 @@ export default function App() {
     setCustomTheme(null)
   }, [])
 
-  // Toggle source/rich mode. The CARET is the single anchor: capture it before
-  // the switch, restore it (snippet → heading → ratio) after, and scroll the
-  // caret into view so the viewport follows. This replaces the old dual system
-  // (#28 scroll-anchor + #41 caret) that fought each other — the scroll landed
-  // on a heading/ratio while the caret was elsewhere, so the user saw the wrong
-  // content and thought the caret "moved".
+  // Toggle source/rich mode. Capture TWO independent anchors before the switch:
+  //   - caret   : the text the caret sits on (restored as the selection).
+  //   - viewport: the text at the top of the scroll area (the READING position —
+  //               distinct from the caret when the user scrolled away to read).
+  // On restore the caret is set WITHOUT scrolling, then the viewport scroll is
+  // restored to its own anchor — so neither yanks the other (the failure of both
+  // the old #28 dual system, where a coarse scroll anchor fought a precise caret,
+  // AND the v0.5.25 caret-only + scrollIntoView, which yanked the viewport to an
+  // off-screen caret and made the content "drift" while reading).
   const toggleSource = useCallback(() => {
     commitAllLive() // flush textarea edits so the rich editor picks them up on switch
-    caretAnchorRef.current = sourceModeRef.current
-      ? captureSourceCaret(sourceRef.current)
-      : captureRichCaret(editorApis.current[activeIdRef.current]?.getView?.())
+    const view = editorApis.current[activeIdRef.current]?.getView?.()
+    if (sourceModeRef.current) {
+      caretAnchorRef.current = captureSourceCaret(sourceRef.current)
+      viewportAnchorRef.current = captureSourceViewport(sourceRef.current)
+    } else {
+      caretAnchorRef.current = captureRichCaret(view)
+      viewportAnchorRef.current = captureRichViewport(editorHostRef.current, view)
+    }
     setSourceMode((v) => !v)
   }, [commitAllLive])
 
   useLayoutEffect(() => {
     const caret = caretAnchorRef.current
-    if (caret == null) return
+    const viewport = viewportAnchorRef.current
+    if (caret == null && viewport == null) return
     caretAnchorRef.current = null
-    // Restore the caret (snippet → heading → ratio). The caret restore itself
-    // scrolls the caret into view (ProseMirror scrollIntoView / textarea focus),
-    // so the viewport ALWAYS shows the caret — no separate scroll restore that
-    // could land on a different viewport + leave the caret off-screen (the
-    // "position changed" complaint). The old heading/ratio scroll fought the
-    // caret; now there's one unified target: the caret.
+    viewportAnchorRef.current = null
+    // Restore the CARET first (no scroll), then the VIEWPORT (scroll). Order
+    // matters: the viewport scroll runs last so it wins outright — the caret
+    // restore's incidental focus-scroll can't override the reading position.
     const apply = () => {
-      if (sourceMode) restoreSourceCaret(sourceRef.current, caret)
-      else restoreRichCaret(editorApis.current[activeIdRef.current]?.getView?.(), caret)
+      const view = editorApis.current[activeIdRef.current]?.getView?.()
+      if (sourceMode) {
+        if (caret) restoreSourceCaret(sourceRef.current, caret)
+        if (viewport) restoreSourceViewport(sourceRef.current, viewport)
+      } else {
+        if (caret) restoreRichCaret(view, caret)
+        if (viewport) restoreRichViewport(editorHostRef.current, view, viewport)
+      }
     }
     // Apply immediately, then again as async layout settles — the rich editor
     // (Crepe) fills its content over a few frames after it remounts, growing
     // scrollHeight, so a single pass would land short. The 4th pass (450ms)
-    // covers large docs where Crepe takes longer to fill (reduces the
-    // §1.3→§1.5 drift on big, image/code-heavy docs).
+    // covers large docs where Crepe takes longer to fill.
     const raf = requestAnimationFrame(apply)
     const t1 = setTimeout(apply, 90)
     const t2 = setTimeout(apply, 220)
