@@ -38,14 +38,25 @@ src/main/index.js      main process: window, IPC (fs/dialog/watch), menu, file w
 src/preload/index.js   contextBridge → window.api (whitelisted IPC)
 src/renderer/src/
   App.jsx              shell: tabs, state, session, split, theme, lang, editor routing
-  components/Editor.jsx  Crepe wrapper + block controls + enhancements
+  components/Editor.jsx        lifecycle orchestrator (~578 lines): Crepe create/destroy,
+                          onReady API, chunk-append, new-doc H1 init, lightbox + block-menu JSX.
+                          (The heavy logic was split into the editor-* modules below — see
+                          docs/editor-feature-inventory.md for the full map.)
   components/{Sidebar,Tabs,Outline,CommandPalette,StatusBar,icons}.jsx
   components/LayoutControl.jsx  the "排版" popover (font size · line height · paragraph spacing · page width); uses the shared ui/AdjustGroup
   components/SaveFab.jsx       floating Save button (shown only while the active tab is dirty)
   components/SettingsView.jsx  full-tab Settings page (typography + live preview · spell-check · theme · language · image host · about)
   components/ui/{Toggle,AdjustGroup}.jsx  shared switch + segmented/slider adjuster (reused by SettingsView + LayoutControl)
   components/{Welcome,WindowControls,UpdateToast,RenameModal,ImageHostButton}.jsx  leaf views split out of App
-  components/editor-{html,images,copy,highlight,mermaid,tablebreak}.js  Editor helpers: HTML node view · img paths · rich-copy · ==highlight== mark · mermaid preview · table-cell <br>
+  components/editor-crepe-setup.js     Crepe featureConfigs + Milkdown ctx + remark/prose plugins + HTML/frontmatter node views + Mermaid/LaTeX/code-block/review/highlight/table-break wiring
+  components/editor-dom-bindings.js    ProseMirror DOM behavior: shortcuts, context menu, selection sync, rich-copy, image paste/drop + relative-path resolve, lightbox trigger, caption focus, code-block copy feedback, selection-toolbar scan, slash-menu bounds
+  components/editor-api.js             onReady API surface: export markdown/html, review apply, replaceMarkdown, restoreMarkdownOffset, markdownOffsetFromSelection
+  components/editor-source-map.js      markdown raw-offset ↔ ProseMirror block-level mapping (the mode-switch caret anchor)
+  components/editor-image-persistence.js  image paste/drop → local save / image-host / data-URL fallback
+  components/editor-lightbox.js        image/Mermaid lightbox (Esc / Ctrl-wheel zoom / drag-pan)
+  components/editor-criticmarkup-plugins.js  CriticMarkup substitution rebuild + IME compositionend + strike guard
+  components/editor-review.js          review decorations + accept/reject + comment widgets (large; split candidate)
+  components/editor-{html,images,copy,highlight,mermaid,tablebreak,math,math-preview,autolink,frontmatter,md-paste,toolbar,toolbar-autohide,block-controls,chunked-parse,codeblock-eager,codeblock-tab,source-caret,link-labels}.js  other Editor helpers
   hooks/usePopover.js   shared button→popover hook (closes on outside click / Esc)
   {paths,find,ui,settings,customThemes}.js  pure helpers: session · find · toast · prefs (page width / font / line height / paragraph spacing / image host) · custom-theme injection
   {blocks,themes,i18n,onboarding}.{js,jsx}
@@ -169,92 +180,34 @@ docs/                  architecture / features / implementation-notes / developm
   scrollspy's active heading during the poll (the `tops` cache may be stale mid-settle).
   Large-doc chunked-load: `richLoading` gates the outline list (skeleton during load)
   + queues the jump until `richDocVersion` bumps.
-- **Mode-switch caret + viewport** (`scrollAnchor.js` + `App.jsx`, #28/#41 —
-  **FIXED v0.5.26, dual anchor**): toggling rich↔source preserves BOTH the caret
-  AND the reading position (viewport top) with no drift, in both pure-viewing and
-  while-editing, across plain text / links / code / lists / tables / images /
-  headings. **The root insight:** reading position and caret are TWO INDEPENDENT
-  user intents — capture and restore each on its own precise-snippet anchor.
-  `toggleSource` captures both: a CARET anchor (`captureRichCaret`/
-  `captureSourceCaret`) and a VIEWPORT anchor (`captureRichViewport`/
-  `captureSourceViewport` = the ~24 visible chars at the scroll-area top, via
-  `caretPositionFromPoint` + a TreeWalker fallback). The `[sourceMode]` effect
-  restores CARET first (selection only — NO `scrollIntoView`; textarea uses
-  `focus({preventScroll:true})`), then VIEWPORT (sets scrollTop to the viewport
-  anchor's text). Because the two restores are independent operations (set
-  selection, then set scrollTop), they CANNOT fight — which is what defeated the
-  earlier attempts: #28's dual system fought (coarse heading/ratio scroll vs
-  precise snippet caret), and v0.5.25's caret-only + `scrollIntoView` yanked the
-  viewport to an off-screen caret while reading ("content drift"). **Caret
-  anchor:** short textblocks (a table cell "九十五", a heading) use the FULL block
-  text + caret offset within it (`$head.parent.textContent`, `headOffset =
-  $head.pos - $head.start()`); long blocks use the ≤24-char before-caret window.
-  Source capture detects a GFM table row (`/^\|.*\|\s*$/`) and anchors on the
-  CURRENT cell (a row-prefix snippet "| … | 九" has pipes/spaces that don't exist
-  in the rich rendering, so it never matched). Matching picks the occurrence
-  NEAREST the expected position (`ratio*size` / `ratio*len`) — not `lastIndexOf`
-  — so a short snippet like "九" no longer collides with the "九" in "九十分".
-  Restore order per anchor: snippet → heading → ratio. **The VIEWPORT anchor is
-  pure DOM (NOT ProseMirror)** — `captureRichViewport` reads the text node at the
-  scroller top (`caretPositionFromPoint` + a TreeWalker fallback for when the top
-  is an `<img>`), and `restoreRichViewport` finds that text in a concatenated
-  buffer of ALL text nodes (with an index→node map) and aligns it to the top.
-  Pure DOM is deliberate: on a large, image-dense doc (hundreds of remote `<img>`,
-  100k+ chars) the PM doc ↔ DOM mapping drifts, but the DOM text itself is stable.
-  The snippet crosses text-node boundaries (viewport-top prose is often split by
-  inline code/link marks), so single-`nodeValue.includes` matching misses it —
-  hence the buffer. If the full snippet isn't found (a re-render split a mark
-  differently), it retries a half-length prefix (longer=precise, shorter=robust).
-  **Multi-pass** (rAF + 90/220/450ms) because Crepe fills rich content async after
-  remount; PLUS a settle-aware tail (re-applies every 300ms up to ~3s while
-  `richLoading` OR `scrollHeight` is still changing — the latter catches the
-  hundreds of remote `<img>` re-fetching/re-laying-out on the source→rich re-
-  render — then one final pass once the height stabilizes).
-  **Cross-mode anchor reuse (the key fix for large/image-dense docs):** the rich
-  viewport anchor captured at rich→source is STASHED (`richViewportAnchorRef`) and
-  REUSED to restore rich on the source→rich return — NOT the freshly-captured
-  source viewport anchor. The rich anchor is visible TEXT, content-stable across
-  the re-mount, so finding it in the re-rendered rich DOM and aligning it to the
-  top lands on the SAME screenful. The source anchor can't: the source ↔ rich
-  height map is non-linear (image lines are 1 line in source, tall `<img>` in
-  rich), so it lands a region off. `captureRichViewport` also skips leading
-  whitespace (list/block indentation at the viewport top would yield a whitespace
-  snippet matching the doc's first whitespace run → yank to top).
-  **Dual strategy by caret visibility** (the final design): at toggle time we
-  record whether the caret was VISIBLE (`isRichCaretVisible` via PM
-  `coordsAtPos` / `isSourceCaretVisible` via a single-point mirror div).
-    - caret VISIBLE (user was editing): `restoreRichCaret(follow=true)` does
-      `setSelection` + `scrollIntoView` + `focus` — the caret stays AND the
-      viewport follows it (caret in-viewport, so following can't drift). No
-      separate viewport restore (the caret is the target).
-    - caret OFF-SCREEN (user was reading): `restoreRichCaret(follow=false)` sets
-      only the selection (NO scrollIntoView / NO focus), then the viewport anchor
-      is restored — the reading position holds. (Following an off-screen caret is
-      exactly the v0.5.25 drift bug.)
-  This unifies the two intents cleanly and avoids the focus paradox: focus only
-  runs in the editing branch where the caret is already in-viewport.
-  **Product behavior:** editing toggles keep the caret + follow it; reading
-  toggles keep the viewport. CDP-verified: reading 6/6 on a 7.5万字/183-image
-  doc + 3/3 on small docs; editing (real click) 3/3 on small docs. Big-doc
-  editing caret-follow is best-effort (snippet matching across 120k chars can
-  pick a wrong occurrence for ambiguous phrases). **Known limit:** a full fix for
-  big-doc editing would keep Crepe mounted across the toggle (no re-mount →
-  deterministic) — a larger Editor refactor (`EditorArea.jsx` ~L85 unmounts Crepe
-  on source mode today).
-  the toggle (display:none, sync only on source edit) — a larger Editor refactor. **Key files:** `scrollAnchor.js`
-  (`capture/restore Rich/Source Caret/Viewport`, `posAtText`/`nearestIndexOf`
-  nearest-occurrence, `visibleOccurrences`, `stripMdForSnippet`,
-  `parseSourceHeadings`, `scrollSourceToHeading`); `App.jsx` `toggleSource`
-  (~L320, captures both anchors) + `[sourceMode]` effect (~L336, caret-then-
-  viewport, multi-pass + richLoading tail) + `richLoadingRef`. **Key API:** PM
-  `view.state.selection.head` (no `.main`); `$head.parent.textContent` for the
-  textblock (NOT `$head.end()` — for a table cell it resolves to the whole
-  table); `view.posAtDOM`/`view.domAtPos` for the viewport text↔DOM mapping;
-  `editorHostRef.current` = `.editor-scroll` (the rich scroller), `sourceRef.current`
-  = the textarea (the source scroller). **CDP gotcha:** N tabs = N mounted editors
-  — `querySelector('.ProseMirror')` may hit a hidden one; filter by `offsetParent`.
-  Repro harness: `scripts/test-drift-measure.mjs` (round-trips each content type,
-  measures caret context + scrollTop before/after).
+- **Mode-switch (rich↔source)** — keep-mounted + block-level offset mapping; the
+  design that ended the drift on large/image-dense docs (#28/#41):
+  - **Crepe stays mounted in source mode** (`EditorArea.jsx`): the source
+    `<textarea>` overlays a `display:none` Crepe, so switching back does NOT
+    re-parse the doc or reload its images — the rich selection/scroll is retained.
+  - **Source edits sync only when real** (`App.jsx` `syncSourceToRich` → Editor
+    `replaceMarkdown`): a source buffer equal to baseline is a no-op, so a pure
+    view-toggle never dirties the doc or rebuilds Crepe. `sourceEditedIds` is the
+    "edited?" signal; `sourceModeIds` makes source/rich **per-tab** (#42).
+  - **Caret anchor = markdown raw-offset ↔ ProseMirror block mapping**
+    (`editor-source-map.js` `markdownOffsetToPmPos` / `pmPosToMarkdownOffset`,
+    via Editor `markdownOffsetFromSelection` / `restoreMarkdownOffset`). It first
+    locates the BLOCK (by visible text + occurrence index), then converts the
+    in-block char offset — robust against repeated words and against image/link
+    atoms that make global visible-char indices diverge between modes.
+  - **Follow vs keep by caret visibility** (`App.jsx` `toggleSource` + effect,
+    `scrollAnchor.js` `isRichCaretVisible` / `isSourceCaretVisible`): caret
+    visible (editing) → restore caret + follow it (scrollIntoView/focus); caret
+    off-screen (reading) → keep the viewport. The textarea carries
+    `__horsemdSource*` flags (selectionUser / viewportMoved / selectionAt) so a
+    programmatic scroll isn't mistaken for a user scroll. `#50` keeps source
+    scrollTop stable across Enter.
+  - `scrollAnchor.js` caret/viewport capture-restore + visible-text helpers remain
+    as the fallback path. Full post-mortem + design: `docs/handoff-mode-switch.md`
+    (2026-07-09 entry) and `docs/editor-feature-inventory.md` §8. **CDP gotcha:** N
+    tabs = N mounted editors — filter `.ProseMirror` by `offsetParent`; place
+    carets with real `Input.dispatchMouseEvent` (a raw DOM selection doesn't sync
+    PM state).
 - **Outline in source mode** (`useOutline.js` + `scrollAnchor.parseSourceHeadings`,
   #40): the outline used to blank in source mode. Now the list is regex-parsed from
   the textarea (`parseSourceHeadings`, also used by `headingAtSourceTop` + the #41
