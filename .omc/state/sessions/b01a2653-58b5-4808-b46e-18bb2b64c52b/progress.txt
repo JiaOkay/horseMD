@@ -1,5 +1,0 @@
-# Ralph progress — 5 issues (#30/#微信/#28/#29/#31)
-
-## Iteration 0
-- PRD: 5 stories A(#30)→B(大纲跳转)→C(#28)→D(#29)→E(#31)。
-- 根因已初步排查(见 PRD),Ralph 复核+定方案+修。

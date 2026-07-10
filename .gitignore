@@ -25,6 +25,10 @@ android/key.properties
 # local test fixtures (generated)
 test-articles/
 
+# local agent/browser runtime state
+.omc/
+.playwright-mcp/
+
 # scratch/preview images and design references
 build/_*.png
 *参考*.html
