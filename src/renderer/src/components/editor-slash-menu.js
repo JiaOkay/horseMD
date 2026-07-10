@@ -35,6 +35,7 @@ import {
 } from '@milkdown/kit/preset/commonmark'
 import { createTable } from '@milkdown/kit/preset/gfm'
 import { Plugin, PluginKey, TextSelection } from '@milkdown/prose/state'
+import { pinyin as toPinyin } from 'pinyin-pro'
 
 const KEY = new PluginKey('hm-slash-menu')
 
@@ -175,6 +176,29 @@ const LANGUAGES = [
 // prefix it just doesn't match and is filtered out by scoring. Scoring ranks an
 // exact-keyword hit ("/java") above a prefix hit ("/j"→javascript), so the most
 // precise match wins.
+// Pinyin matching: for a CJK label, also match its full pinyin + initial-letter
+// pinyin (so "/bt" → 标题, "/bg" → 表格, "/wxlb" → 无序列表, "/biaoti" → 标题).
+// Non-CJK labels pass through pinyin-pro unchanged (harmless, already covered by
+// their English keywords). Cached per label — buildItems runs on every keystroke.
+const PY_CACHE = new Map()
+function pinyinKeywords(label) {
+  if (!label) return []
+  const cached = PY_CACHE.get(label)
+  if (cached) return cached
+  const out = new Set()
+  try {
+    const full = toPinyin(label, { toneType: 'none', type: 'array' }).join('').replace(/\s+/g, '').toLowerCase()
+    const first = toPinyin(label, { pattern: 'first', toneType: 'none', type: 'array' }).join('').replace(/\s+/g, '').toLowerCase()
+    if (full && /[a-z]/.test(full)) out.add(full)
+    if (first && /[a-z]/.test(first) && first !== full) out.add(first)
+  } catch {
+    /* pinyin-pro shouldn't throw on any string, but never let matching crash the menu */
+  }
+  const arr = [...out]
+  PY_CACHE.set(label, arr)
+  return arr
+}
+
 function languageItemsFor(t, query) {
   const q = (query || '').trim().toLowerCase()
   if (!q) return []
@@ -219,7 +243,7 @@ function buildItems(t, query) {
     { id: 'table', group: 'advanced', label: t('slash.table'), icon: ICON.table, keywords: kw('table'), run: RUN.table },
     { id: 'math', group: 'advanced', label: t('slash.math'), icon: ICON.math, keywords: kw('math'), run: RUN.math },
     ...languageItemsFor(t, query)
-  ]
+  ].map((it) => ({ ...it, keywords: [...it.keywords, ...pinyinKeywords(it.label)] }))
 }
 
 // Relevance score for a query against an item. Higher = better. -1 = no match.
