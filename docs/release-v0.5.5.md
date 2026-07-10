@@ -45,8 +45,7 @@
 |---|---|---|
 | macOS（Apple Silicon） | `HorseMD-0.5.5-arm64.dmg` | arm64 |
 | macOS（Intel） | `HorseMD-0.5.5.dmg` | x64 |
-| Windows | `HorseMD.Setup.0.5.5.exe` | x64 |
-| Android | `HorseMD-0.5.5.apk` | 通用 |
+| Windows | `HorseMD-Setup-0.5.5.exe` | x64 |
 
 > ⚠️ 构建未签名：Windows SmartScreen 选「更多信息 → 仍要运行」；macOS 右键 → 打开（或 `xattr -dr com.apple.quarantine /Applications/HorseMD.app`）；安卓安装 APK 允许「未知来源」。
 
