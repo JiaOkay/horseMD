@@ -149,6 +149,10 @@ export function mountEditorDomBindings({
       e.preventDefault()
       e.stopPropagation()
       window.api.openExternal(href)
+    } else if (/^file:/i.test(href) && window.api.openFileUrl) {
+      e.preventDefault()
+      e.stopPropagation()
+      window.api.openFileUrl(href)
     }
   }
 

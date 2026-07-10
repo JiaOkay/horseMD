@@ -557,6 +557,17 @@ ipcMain.handle('watch:unfile', async (_e, path) => {
 })
 
 ipcMain.handle('shell:openExternal', async (_e, url) => shell.openExternal(url))
+ipcMain.handle('shell:openFileUrl', async (_e, url) => {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'file:') return { ok: false, error: 'Only file:// URLs are supported.' }
+    const targetPath = fileURLToPath(parsed)
+    const error = await shell.openPath(targetPath)
+    return error ? { ok: false, error } : { ok: true }
+  } catch (e) {
+    return { ok: false, error: e?.message || 'Invalid file URL.' }
+  }
+})
 ipcMain.handle('shell:showInFolder', async (_e, path) => shell.showItemInFolder(path))
 
 // ----------------------------- custom themes -------------------------------

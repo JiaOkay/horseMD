@@ -35,6 +35,7 @@ const api = {
 
   // shell
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  openFileUrl: (url) => ipcRenderer.invoke('shell:openFileUrl', url),
   showInFolder: (path) => ipcRenderer.invoke('shell:showInFolder', path),
 
   // image host: write the bytes to a temp file, run the user's upload command on
