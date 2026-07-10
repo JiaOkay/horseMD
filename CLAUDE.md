@@ -86,21 +86,21 @@ docs/                  architecture / features / implementation-notes / developm
   - launch args: `extractArgs()` in `main/index.js` splits argv into markdown
     **files** (→ `open-paths`, tabs) and **folders** (→ `open-folder`, workspace
     — from the Explorer "Open with HorseMD" folder entry). Keep both handled.
-- **Multi-workspace** (`useFileOps.js` + `paths.js` + `Sidebar.jsx`): a workspace
-  is a named bag of folder roots (`workspaces:[{id,name,folderRoots:[abs],createdAt}]`
-  + `activeWorkspaceId`, persisted in session). The sidebar head shows「工作区」 +
-  the active workspace name + a switcher popover (list/new/switch/rename/delete);
-  the file tree is **multi-root** (each `folderRoot` a synthetic top-level folder
-  node reusing `renderNode`). "Open Folder…" (dialog, `Cmd/Ctrl+Shift+O`, or the
-  Explorer folder launch) **adds** a folder to the active workspace (creates one
-  if none) — it does NOT replace it. `loadWorkspacesFromSession` migrates the
-  legacy single-`{workspace:{rootPath,rootName}}` session losslessly. The watcher
-  starts one `watch:start` per root (main's `watchers` Map is per-dir, so it
-  reuses the crash-proof guards). `addFolderToWorkspace`/`deleteWorkspace` use
-  functional setState; `folderRoots.join('\n')` is the stable effect dep so the
-  watcher/files effects don't re-run every render. A workspace may have zero
-  roots (freshly created) → sidebar shows an "add folder" empty state, not "no
-  folder open".
+- **Workspace** (`useFileOps.js` + `paths.js` + `Sidebar.jsx`): a SINGLE, UNNAMED
+  workspace — just a bag of folder roots (`folderRoots: [abs,…]`, persisted in
+  session). No name, no multi-workspace, no switching (one workspace is enough for
+  a writing app; users add/remove folders within it). The sidebar head shows a
+  FIXED「工作区」label (never the folder name); the file tree is **multi-root**
+  (each `folderRoot` a synthetic top-level folder node reusing `renderNode`).
+  "Open Folder…" (dialog, `Cmd/Ctrl+Shift+O`, or the Explorer folder launch)
+  **adds** a folder — it does NOT replace; right-click a root node → "remove from
+  workspace". `loadFolderRootsFromSession` migrates the prior multi-workspace
+  shape (`workspaces:[{folderRoots}]`, merged) and the legacy single-`{workspace:
+  {rootPath}}` shape losslessly. The watcher starts one `watch:start` per root
+  (main's `watchers` Map is per-dir → reuses the crash-proof guards);
+  `folderRoots.join('\n')` is the stable effect dep so the watcher/files effects
+  don't re-run every render. Zero roots → sidebar shows an "add folder" empty
+  state.
 - **Markdown vs plain text.** Supported extensions are centralized:
   `MD_EXTS`/`MD_RE` in `main/index.js` (open dialog + folder scan), and
   `MD_DOC_RE` in `App.jsx`. `.md/.markdown/.mdx` open in the Crepe rich editor;
@@ -389,7 +389,7 @@ docs/                  architecture / features / implementation-notes / developm
   watches **absolute** paths and refuses restricted roots (`isRestrictedRoot`:
   `/`, `.`, `..`, relative, `/dev`, `/System/Volumes`, …), ignores system trees,
   sets `followSymlinks:false`, and every watcher has an `'error'` handler; the
-  renderer drops non-absolute/restricted folder roots (`sanitizeWorkspaces` +
+  renderer drops non-absolute/restricted folder roots (`sanitizeFolderRoots` +
   `isRestrictedPath` in `paths.js`, mirroring main's `isRestrictedRoot`); and a
   process-level `unhandledRejection`/`uncaughtException` guard in `main/index.js`
   is the final safety net. Don't remove these. Also: main-process network calls
