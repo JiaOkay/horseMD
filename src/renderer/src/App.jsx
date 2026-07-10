@@ -438,8 +438,8 @@ export default function App() {
       } else {
         if (caret) {
           const api = editorApis.current[activeIdRef.current]
-          const restored = Number.isFinite(caret.rawOffset) && api?.restoreMarkdownOffset?.(caret.rawOffset, follow)
-          if (!restored) restoreRichCaret(view, caret, follow)
+          const restored = restoreRichCaret(view, caret, follow)
+          if (!restored && Number.isFinite(caret.rawOffset)) api?.restoreMarkdownOffset?.(caret.rawOffset, follow)
         }
         else if (preserveRichCaretFollow && follow) view?.focus()
         if (!follow && viewport) restoreRichViewport(editorHostRef.current, view, viewport)

@@ -191,6 +191,13 @@ const appendInlineVisible = (out, raw, base = 0) => {
   }
 }
 
+const appendRawVisible = (out, raw, base = 0) => {
+  for (let i = 0; i < raw.length; i++) {
+    out.text += raw[i]
+    out.map.push(base + i)
+  }
+}
+
 // Markdown source does not have the same text stream as ProseMirror: table pipes,
 // heading hashes, list markers, link URLs and emphasis markers exist only in
 // source. Build a lightweight "visible source text" buffer plus a visible-char →
@@ -205,6 +212,10 @@ const sourceVisibleIndex = (md) => {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (line === '\n') {
+      if (inFence) {
+        out.text += line
+        out.map.push(rawPos)
+      }
       rawPos += 1
       continue
     }
@@ -216,7 +227,7 @@ const sourceVisibleIndex = (md) => {
       continue
     }
     if (inFence) {
-      appendInlineVisible(out, line, lineStart)
+      appendRawVisible(out, line, lineStart)
       continue
     }
     if (/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line)) continue
@@ -310,6 +321,67 @@ const richVisiblePositionAtPos = (doc, pmPos) => {
     return false
   })
   return found || { visibleIndex: acc, visibleAffinity: 'backward' }
+}
+
+const richDomVisiblePositionAtSelection = (view) => {
+  try {
+    const root = view?.dom
+    const doc = root?.ownerDocument
+    const win = doc?.defaultView
+    const sel = doc?.getSelection?.()
+    if (!root || !doc || !win || !sel || !sel.rangeCount || !sel.isCollapsed || !root.contains(sel.anchorNode)) return null
+    const cm = sel.anchorNode.nodeType === 1
+      ? sel.anchorNode.closest?.('.cm-editor')
+      : sel.anchorNode.parentElement?.closest?.('.cm-editor')
+    if (!cm) return null
+    const codeBlock = cm.closest('.milkdown-code-block')
+    if (!codeBlock) return null
+    const textOffsetIn = (container, target, targetOffset) => {
+      const walker = doc.createTreeWalker(container, win.NodeFilter.SHOW_TEXT)
+      let offset = 0
+      let node
+      while ((node = walker.nextNode())) {
+        if (node === target) return offset + Math.max(0, Math.min(targetOffset || 0, node.nodeValue.length))
+        offset += node.nodeValue.length
+      }
+      return offset
+    }
+    const lines = [...cm.querySelectorAll('.cm-content .cm-line')]
+    let local = 0
+    let found = false
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      if (line.contains(sel.anchorNode)) {
+        local += textOffsetIn(line, sel.anchorNode, sel.anchorOffset)
+        found = true
+        break
+      }
+      local += line.textContent.length
+      if (i < lines.length - 1) local += 1
+    }
+    if (!found) return null
+    const blockPos = view.posAtDOM(codeBlock, 0)
+    const base = richVisiblePositionAtPos(view.state.doc, blockPos + 1)
+    return { visibleIndex: base.visibleIndex + local, visibleAffinity: 'forward' }
+  } catch {
+    return null
+  }
+}
+
+const richPointerVisiblePosition = (view) => {
+  try {
+    const pointer = view?.dom?.__horsemdLastPointerDown
+    if (!pointer || Date.now() - pointer.at > 2500) return null
+    const doc = view.dom.ownerDocument
+    const hit = doc.elementFromPoint(pointer.left, pointer.top)
+    if (!hit || !view.dom.contains(hit)) return null
+    if (!hit.closest?.('td,th')) return null
+    const at = view.posAtCoords({ left: pointer.left, top: pointer.top })
+    if (!at || !Number.isFinite(at.pos)) return null
+    return richVisiblePositionAtPos(view.state.doc, at.pos)
+  } catch {
+    return null
+  }
 }
 
 const richPosFromVisibleIndex = (doc, visibleIndex, affinity = 'forward') => {
@@ -517,7 +589,9 @@ export function captureRichCaret(view) {
     const $head = doc.resolve(head)
     const blockAnchor = richBlockAnchor(doc, $head)
     const { snippet, snipOff, context, contextOff } = blockAnchor
-    const { visibleIndex, visibleAffinity } = richVisiblePositionAtPos(doc, head)
+    const pointerVisible = richPointerVisiblePosition(view)
+    const domVisible = richDomVisiblePositionAtSelection(view)
+    const { visibleIndex, visibleAffinity } = pointerVisible || domVisible || richVisiblePositionAtPos(doc, head)
     const heads = []
     doc.descendants((node, pos) => {
       if (node.type.name === 'heading') { heads.push({ pos, text: node.textContent }); return false }
@@ -600,11 +674,11 @@ export function restoreSourceCaret(textarea, anchor, follow = false) {
     const md = textarea.value || ''
     const hint = anchor.ratio != null ? anchor.ratio * md.length : -1
     let target
-    if (Number.isFinite(anchor.rawOffset)) {
-      target = Math.max(0, Math.min(anchor.rawOffset, md.length))
-    }
-    if (target == null && Number.isFinite(anchor.visibleIndex)) {
+    if (Number.isFinite(anchor.visibleIndex)) {
       target = sourceRawFromVisibleIndex(md, anchor.visibleIndex, anchor.visibleAffinity)
+    }
+    if (target == null && Number.isFinite(anchor.rawOffset)) {
+      target = Math.max(0, Math.min(anchor.rawOffset, md.length))
     }
     if (target == null && anchor.context) {
       const idx = nearestIndexOf(md, anchor.context, hint)
