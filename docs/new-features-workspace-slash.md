@@ -2,6 +2,11 @@
 
 > 2026-07-10 调研 + 设计。确认后用 ralph loop 实施。铁律：不影响现有功能、跨平台、单文件 <800 行。
 
+> ✅ **已实施完成（2026-07-11）** —— 两个功能都已落地、CDP 验收全绿、architect APPROVED。
+> 飞书式斜杠菜单：`src/renderer/src/components/editor-slash-menu.js`（自建，绕过 Crepe label-only 过滤）。
+> 多工作区：`workspaces:[{id,name,folderRoots,createdAt}]+activeWorkspaceId`，多根文件树 + 切换/新建/重命名/删除 + 旧 session 迁移。
+> 关键决策记录在 `CLAUDE.md` 的「Slash (`/`) menu」与「Multi-workspace」两条 convention，及 `.omc` 的 progress.txt。版本号未改（用户最后统一改）。
+
 ---
 
 ## 功能 1：多工作区（Workspace）

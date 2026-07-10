@@ -48,7 +48,8 @@ src/renderer/src/
   components/SettingsView.jsx  full-tab Settings page (typography + live preview · spell-check · theme · language · image host · about)
   components/ui/{Toggle,AdjustGroup}.jsx  shared switch + segmented/slider adjuster (reused by SettingsView + LayoutControl)
   components/{Welcome,WindowControls,UpdateToast,RenameModal,ImageHostButton}.jsx  leaf views split out of App
-  components/editor-crepe-setup.js     Crepe featureConfigs + Milkdown ctx + remark/prose plugins + HTML/frontmatter node views + Mermaid/LaTeX/code-block/review/highlight/table-break wiring
+  components/editor-crepe-setup.js     Crepe featureConfigs + Milkdown ctx + remark/prose plugins + HTML/frontmatter node views + Mermaid/LaTeX/code-block/review/highlight/table-break wiring; neutralizes Crepe's built-in slash + wires the self-built one
+  components/editor-slash-menu.js      Feishu-style slash menu: raw ProseMirror plugin (prosePluginsCtx) + SlashProvider; keyword filtering + keyboard nav (see "Slash menu" convention)
   components/editor-dom-bindings.js    ProseMirror DOM behavior: shortcuts, context menu, selection sync, rich-copy, image paste/drop + relative-path resolve, lightbox trigger, caption focus, code-block copy feedback, selection-toolbar scan, slash-menu bounds
   components/editor-api.js             onReady API surface: export markdown/html, review apply, replaceMarkdown, restoreMarkdownOffset, markdownOffsetFromSelection
   components/editor-source-map.js      markdown raw-offset ↔ ProseMirror block-level mapping (the mode-switch caret anchor)
@@ -85,6 +86,21 @@ docs/                  architecture / features / implementation-notes / developm
   - launch args: `extractArgs()` in `main/index.js` splits argv into markdown
     **files** (→ `open-paths`, tabs) and **folders** (→ `open-folder`, workspace
     — from the Explorer "Open with HorseMD" folder entry). Keep both handled.
+- **Multi-workspace** (`useFileOps.js` + `paths.js` + `Sidebar.jsx`): a workspace
+  is a named bag of folder roots (`workspaces:[{id,name,folderRoots:[abs],createdAt}]`
+  + `activeWorkspaceId`, persisted in session). The sidebar head shows「工作区」 +
+  the active workspace name + a switcher popover (list/new/switch/rename/delete);
+  the file tree is **multi-root** (each `folderRoot` a synthetic top-level folder
+  node reusing `renderNode`). "Open Folder…" (dialog, `Cmd/Ctrl+Shift+O`, or the
+  Explorer folder launch) **adds** a folder to the active workspace (creates one
+  if none) — it does NOT replace it. `loadWorkspacesFromSession` migrates the
+  legacy single-`{workspace:{rootPath,rootName}}` session losslessly. The watcher
+  starts one `watch:start` per root (main's `watchers` Map is per-dir, so it
+  reuses the crash-proof guards). `addFolderToWorkspace`/`deleteWorkspace` use
+  functional setState; `folderRoots.join('\n')` is the stable effect dep so the
+  watcher/files effects don't re-run every render. A workspace may have zero
+  roots (freshly created) → sidebar shows an "add folder" empty state, not "no
+  folder open".
 - **Markdown vs plain text.** Supported extensions are centralized:
   `MD_EXTS`/`MD_RE` in `main/index.js` (open dialog + folder scan), and
   `MD_DOC_RE` in `App.jsx`. `.md/.markdown/.mdx` open in the Crepe rich editor;
@@ -284,8 +300,30 @@ docs/                  architecture / features / implementation-notes / developm
   the active tab is dirty. `usePopover` (hooks/) is the shared close-on-outside
   hook for all popovers — don't hand-roll a per-component copy (a previous one
   missed the outside-click close).
-- **Slash (`/`) menu** is localized through the **BlockEdit** feature config
-  (`slashCommandConfig`), not a `SlashCommand` key (there is no such enum member).
+- **Slash (`/`) menu** (`editor-slash-menu.js`) is **self-built**, NOT Crepe's
+  built-in BlockEdit slash. Crepe's filters items by `label.includes(filter)`
+  ONLY (no keyword field), so typing past `/` (e.g. `h1`, `#`, `ol`) against the
+  Chinese labels matched nothing and the menu appeared to "vanish". We keep
+  `Feature.BlockEdit` ENABLED (the block drag/add handle `.milkdown-block-handle`
+  is a separate slice we must preserve) but **neutralize its slash** by overriding
+  the slice named `"CREPE_MENU_SLASH_SPEC"` (a `$ctx` slot whose `$prose` reads a
+  PluginSpec from it) with a no-op view — `disableCrepeSlash(ctx)` in
+  `editor-slash-menu.js`, called from `editor-crepe-setup.js`. Reach it by **string
+  name** (`ctx.update('CREPE_MENU_SLASH_SPEC', …)`): Milkdown slice ids are
+  per-call **Symbols**, so re-running `slashFactory('CREPE_MENU')` here would mint
+  a different id and MISS Crepe's registered slice (→ config callback throws →
+  `crepe.create()` silently rejects → editor never mounts). Our menu is a raw
+  ProseMirror plugin in `prosePluginsCtx` (the channel for raw plugins; do NOT use
+  `crepe.editor.use` for it) owning a `SlashProvider` for positioning; filter =
+  label OR i18n keywords (`slash.kw.*`, zh+en+abbrev+symbol) ranked exact > prefix
+  > substring (so `/-` → bullet's exact `-`, not divider's `---` substring); with
+  a query it renders a flat ranked list, without one the grouped full menu. Insert
+  semantics are byte-identical to Crepe's block-edit (`clearTextInCurrentBlockCommand`
+  then `setBlockType`/`wrapInBlockType`/`addBlockType` with `view.state.schema.nodes`
+  node types). The menu DOM mirrors Crepe's structure (`.milkdown-slash-menu` >
+  `.menu-groups` > `.menu-group` > `h6` + `li[svg,span]`, `.hover`/`.active`) so it
+  inherits Crepe's `block-edit.css` theme + the bounds-fixer in
+  `editor-dom-bindings.js` (which keys off those classes).
 - **Math**: enable `CrepeFeature.Latex` (off by default). Block math needs `$$` on
   their own lines. Long display math scrolls (`.katex-display { overflow-x:auto }`).
   Inline math `$x^2$` converts only on the closing `$` (Milkdown input rule
@@ -346,7 +384,8 @@ docs/                  architecture / features / implementation-notes / developm
   watches **absolute** paths and refuses restricted roots (`isRestrictedRoot`:
   `/`, `.`, `..`, relative, `/dev`, `/System/Volumes`, …), ignores system trees,
   sets `followSymlinks:false`, and every watcher has an `'error'` handler; the
-  renderer drops a non-absolute restored workspace (`sanitizeWorkspace`); and a
+  renderer drops non-absolute/restricted folder roots (`sanitizeWorkspaces` +
+  `isRestrictedPath` in `paths.js`, mirroring main's `isRestrictedRoot`); and a
   process-level `unhandledRejection`/`uncaughtException` guard in `main/index.js`
   is the final safety net. Don't remove these. Also: main-process network calls
   use Electron's `net.fetch` (Chromium stack), not Node's global `fetch` (its
