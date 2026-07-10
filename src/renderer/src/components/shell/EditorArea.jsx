@@ -127,6 +127,21 @@ export default function EditorArea({
                 e.currentTarget.__horsemdSourceViewportMoved = false
                 e.currentTarget.__horsemdSourceSelectionAt = performance.now()
               }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return
+                const textarea = e.currentTarget
+                const beforeScrollTop = textarea.scrollTop
+                let attempts = 0
+                const restoreUnexpectedEnterScroll = () => {
+                  if (!textarea.isConnected) return
+                  if (Math.abs(textarea.scrollTop - beforeScrollTop) > 50) {
+                    textarea.scrollTop = beforeScrollTop
+                  }
+                  attempts += 1
+                  if (attempts < 3) requestAnimationFrame(restoreUnexpectedEnterScroll)
+                }
+                requestAnimationFrame(restoreUnexpectedEnterScroll)
+              }}
               onKeyUp={(e) => {
                 if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
                   e.currentTarget.__horsemdSourceSelectionUser = true
