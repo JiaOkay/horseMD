@@ -14,6 +14,7 @@ import remarkFrontmatter from 'remark-frontmatter'
 import { tabAtCursorKeymap } from './editor-codeblock-tab.js'
 import { renderHtmlNodeView, remarkMergeInlineHtml } from './editor-html.js'
 import { remarkUnwrapNonAsciiAutolinks } from './editor-autolink.js'
+import { remarkNormalizeCodeOnlyLinkLabels } from './editor-link-labels.js'
 import { createMermaidPreviewRenderer, createMermaidSplitPlugin } from './editor-mermaid.js'
 import { tableBreakKeymap, tableCellBreakHandler, brToBreakRemarkPlugin } from './editor-tablebreak.js'
 import { mathPreviewPlugin } from './editor-math-preview.js'
@@ -187,6 +188,7 @@ export function createConfiguredCrepe({
 
     ctx.update(remarkPluginsCtx, (plugins) => [
       ...plugins,
+      { plugin: remarkNormalizeCodeOnlyLinkLabels, options: undefined },
       { plugin: remarkUnwrapNonAsciiAutolinks, options: undefined },
       { plugin: remarkFrontmatter, options: undefined },
       { plugin: remarkFrontmatterAnywhere, options: undefined },

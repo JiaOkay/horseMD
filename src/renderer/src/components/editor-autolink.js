@@ -16,6 +16,7 @@
 // Parse-side remark plugin, appended to remarkPluginsCtx so it runs AFTER
 // preset-gfm.
 const NONASCII = /[^\x00-\x7F]/
+const AUTOLINKISH = /^(https?:\/\/|www\.)/i
 
 // nodes to splice in place of a bad link
 function replacementForBadLink(node) {
@@ -46,7 +47,7 @@ function trimNonAsciiLinks(node) {
   if (!node || !Array.isArray(node.children)) return
   const next = []
   for (const child of node.children) {
-    if (child.type === 'link' && NONASCII.test(child.url || '')) {
+    if (child.type === 'link' && AUTOLINKISH.test(child.url || '') && NONASCII.test(child.url || '')) {
       for (const repl of replacementForBadLink(child)) { trimNonAsciiLinks(repl); next.push(repl) }
     } else {
       trimNonAsciiLinks(child)
