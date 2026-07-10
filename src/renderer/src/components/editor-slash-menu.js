@@ -167,18 +167,32 @@ const LANGUAGES = [
   ['dockerfile', ['dockerfile']],
   ['graphql', ['graphql']]
 ]
-const LANG_BY_ALIAS = new Map()
-for (const [name, aliases] of LANGUAGES) {
-  LANG_BY_ALIAS.set(name, name)
-  for (const a of aliases) LANG_BY_ALIAS.set(a, name)
-}
-function matchLanguage(query) {
+// Language code-block items whose canonical name OR any alias starts with the
+// query (prefix match) — so "/j" → java/javascript/json, "/m" → mermaid/markdown,
+// "/c" → c/cpp/csharp/css, while a full "/java" still resolves exactly. Only
+// generated when there's a query: the full "/" menu stays the clean 14 items.
+// The generic "code" item is always present too; when the query is a language
+// prefix it just doesn't match and is filtered out by scoring. Scoring ranks an
+// exact-keyword hit ("/java") above a prefix hit ("/j"→javascript), so the most
+// precise match wins.
+function languageItemsFor(t, query) {
   const q = (query || '').trim().toLowerCase()
-  return q ? LANG_BY_ALIAS.get(q) || null : null
-}
-function languageKeywords(lang) {
-  const entry = LANGUAGES.find(([n]) => n === lang)
-  return entry ? [...new Set([lang, ...entry[1]])] : [lang]
+  if (!q) return []
+  const out = []
+  for (const [name, aliases] of LANGUAGES) {
+    const all = [name, ...aliases]
+    if (all.some((a) => a.startsWith(q))) {
+      out.push({
+        id: 'code:' + name,
+        group: 'advanced',
+        label: t('slash.code') + ' · ' + name,
+        icon: ICON.code,
+        keywords: [...new Set(all)],
+        run: RUN.codeLang(name)
+      })
+    }
+  }
+  return out
 }
 
 function buildItems(t, query) {
@@ -187,19 +201,6 @@ function buildItems(t, query) {
       .split(',')
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean)
-  // When the query names a language, offer a language-specific code block
-  // INSTEAD of the generic one (so /java inserts a java block, not plain code).
-  const lang = matchLanguage(query)
-  const codeItem = lang
-    ? {
-        id: 'code:' + lang,
-        group: 'advanced',
-        label: t('slash.code') + ' · ' + lang,
-        icon: ICON.code,
-        keywords: languageKeywords(lang),
-        run: RUN.codeLang(lang)
-      }
-    : { id: 'code', group: 'advanced', label: t('slash.code'), icon: ICON.code, keywords: kw('code'), run: RUN.code }
   return [
     { id: 'text', group: 'text', label: t('slash.text'), icon: ICON.text, keywords: kw('text'), run: RUN.text },
     { id: 'h1', group: 'text', label: t('block.h1'), icon: textSvg('H1'), keywords: kw('h1'), run: RUN.heading(1) },
@@ -214,22 +215,26 @@ function buildItems(t, query) {
     { id: 'ordered', group: 'list', label: t('slash.ordered'), icon: ICON.ordered, keywords: kw('ordered'), run: RUN.ordered },
     { id: 'task', group: 'list', label: t('slash.task'), icon: ICON.task, keywords: kw('task'), run: RUN.task },
     { id: 'image', group: 'advanced', label: t('slash.image'), icon: ICON.image, keywords: kw('image'), run: RUN.image },
-    codeItem,
+    { id: 'code', group: 'advanced', label: t('slash.code'), icon: ICON.code, keywords: kw('code'), run: RUN.code },
     { id: 'table', group: 'advanced', label: t('slash.table'), icon: ICON.table, keywords: kw('table'), run: RUN.table },
-    { id: 'math', group: 'advanced', label: t('slash.math'), icon: ICON.math, keywords: kw('math'), run: RUN.math }
+    { id: 'math', group: 'advanced', label: t('slash.math'), icon: ICON.math, keywords: kw('math'), run: RUN.math },
+    ...languageItemsFor(t, query)
   ]
 }
 
 // Relevance score for a query against an item. Higher = better. -1 = no match.
 // Exact keyword beats prefix beats substring — this resolves symbol overlap
 // (e.g. "/-" hits bullet's exact "-" keyword, not divider's "---" substring).
+// Substring is gated to queries of length >= 3: for 1-2 char queries it's far
+// too noisy (every keyword CONTAINING the letter matches — "title" has "i",
+// "code" has "o"), so short queries use exact + prefix only.
 function scoreItem(item, q) {
   if (!q) return 1
   const label = item.label.toLowerCase()
   const kws = item.keywords
   if (kws.includes(q) || label === q) return 90
   if (label.startsWith(q) || kws.some((k) => k.startsWith(q))) return 50
-  if (label.includes(q) || kws.some((k) => k.includes(q))) return 10
+  if (q.length >= 3 && (label.includes(q) || kws.some((k) => k.includes(q)))) return 10
   return -1
 }
 
