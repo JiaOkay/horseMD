@@ -1,10 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from './icons.jsx'
 import { useI18n } from '../i18n.jsx'
+import { usePopover } from '../hooks/usePopover.js'
 import { baseName, dirName as parentDir, joinPath as join, isMarkdownName, isValidName, isExistsError } from '../paths.js'
 import { copyToClipboard } from '../ui.js'
 
-export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight, onExportPdf, refreshNonce }) {
+export default function Sidebar({
+  workspaces,
+  activeWorkspace,
+  activeWorkspaceId,
+  folderRoots,
+  onSwitchWorkspace,
+  onCreateWorkspace,
+  onAddFolder,
+  onRemoveFolder,
+  onRenameWorkspace,
+  onDeleteWorkspace,
+  activePath,
+  onOpenFile,
+  onOpenRight,
+  onExportPdf,
+  refreshNonce
+}) {
   const { t } = useI18n()
   const copyText = (text) => copyToClipboard(text, t('code.copied'))
   const [childrenMap, setChildrenMap] = useState({}) // path -> nodes[]
@@ -29,6 +46,20 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
   // Last path we scrolled to — so we reveal a file once when it's opened, not on
   // every later manual expand/collapse of unrelated folders.
   const lastScrolledRef = useRef(null)
+  // Workspace name inline-rename (Electron has no window.prompt).
+  const [renamingWs, setRenamingWs] = useState(false)
+  const [renamingWsValue, setRenamingWsValue] = useState('')
+  const wsPopover = usePopover()
+
+  // folderRoots is a fresh array each render; join for a stable effect dep.
+  const folderRootsKey = folderRoots.join('\n')
+  const defaultRoot = folderRoots[0] || null
+  const norm = (p) => (p || '').replace(/\\/g, '/')
+  const rootSet = new Set(folderRoots.map(norm))
+  const displayName =
+    activeWorkspace?.name ||
+    (folderRoots[0] ? baseName(folderRoots[0]) : '') ||
+    t('workspace.title')
 
   const loadDir = useCallback(async (dir) => {
     const nodes = await window.api.readDir(dir)
@@ -36,18 +67,20 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
     return nodes
   }, [])
 
-  // Initial / workspace change
+  // Workspace / roots change: reset the tree and load every root.
   useEffect(() => {
-    if (!workspace) return
-    setExpanded(new Set([workspace.rootPath]))
     setChildrenMap({})
     setCreating(null)
-    loadDir(workspace.rootPath)
-  }, [workspace, loadDir])
+    setRenamingWs(false)
+    const roots = folderRootsKey ? folderRootsKey.split('\n') : []
+    setExpanded(new Set(roots))
+    roots.forEach((r) => loadDir(r))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderRootsKey, loadDir])
 
   // Refresh all currently-loaded dirs when the watcher fires
   useEffect(() => {
-    if (!workspace || refreshNonce === 0) return
+    if (refreshNonce === 0) return
     Object.keys(childrenMap).forEach((dir) => loadDir(dir))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshNonce])
@@ -56,12 +89,12 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
   // tree, search, recents, internal links… all of which update activePath),
   // auto-expand its ancestor folders so it's revealed in the tree. Only touches
   // the ancestor chain (additive — never collapses what the user expanded), and
-  // only for files inside this workspace.
+  // only for files inside THIS workspace (under one of its roots).
   useEffect(() => {
-    if (!workspace || !activePath) return
-    const norm = (p) => p.replace(/\\/g, '/')
-    const root = norm(workspace.rootPath)
-    if (!norm(activePath).startsWith(root + '/')) return // not in this workspace
+    if (!activePath || !folderRoots.length) return
+    const ap = norm(activePath)
+    const root = folderRoots.map(norm).find((r) => ap.startsWith(r + '/'))
+    if (!root) return // not in this workspace
     let cancelled = false
     ;(async () => {
       const ancestors = []
@@ -74,7 +107,6 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
         if (!up || up === d) break
         d = up
       }
-      // Load each ancestor (so its children render) — skip ones already loaded.
       for (const dir of ancestors) {
         if (cancelled) return
         if (!childrenRef.current[dir]) await loadDir(dir)
@@ -89,7 +121,8 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
     return () => {
       cancelled = true
     }
-  }, [activePath, workspace, loadDir])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePath, folderRootsKey, loadDir])
 
   // Scroll the active file's row into view once it (and its ancestors) are
   // rendered. Guarded by lastScrolledRef so we only reveal on open, not on every
@@ -131,7 +164,8 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
 
   // Start inline creation for a file
   const startNewFile = (dirNode) => {
-    const dir = dirNode ? dirNode.path : workspace.rootPath
+    const dir = dirNode ? dirNode.path : defaultRoot
+    if (!dir) return
     setCreating({ dir, type: 'file', value: 'untitled.md' })
     // Make sure the directory is expanded
     if (dirNode) {
@@ -142,7 +176,8 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
 
   // Start inline creation for a folder
   const startNewFolder = (dirNode) => {
-    const dir = dirNode ? dirNode.path : workspace.rootPath
+    const dir = dirNode ? dirNode.path : defaultRoot
+    if (!dir) return
     setCreating({ dir, type: 'folder', value: t('prompt.newFolderDefault') })
     if (dirNode) {
       setExpanded((s) => new Set(s).add(dir))
@@ -214,8 +249,8 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
   // visited-guarded so a symlink cycle or a pathologically deep tree can't spin
   // into unbounded IPC recursion.
   const expandAll = async () => {
-    if (!workspace) return
-    const dirs = new Set([workspace.rootPath])
+    if (!folderRoots.length) return
+    const dirs = new Set(folderRoots)
     const seen = new Set()
     const walk = async (dir, depth) => {
       if (depth > 30 || seen.has(dir)) return
@@ -229,7 +264,7 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
         }
       }
     }
-    await walk(workspace.rootPath, 0)
+    for (const root of folderRoots) await walk(root, 0)
     setExpanded(dirs)
   }
 
@@ -294,19 +329,40 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
     }
   }
 
-  if (!workspace) {
+  const commitWsRename = () => {
+    const v = renamingWsValue.trim()
+    setRenamingWs(false)
+    if (activeWorkspace && v && v !== displayName) onRenameWorkspace(activeWorkspace.id, v)
+  }
+
+  const startWsRename = () => {
+    wsPopover.setOpen(false)
+    setRenamingWsValue(displayName)
+    setRenamingWs(true)
+  }
+
+  const startDeleteWs = () => {
+    wsPopover.setOpen(false)
+    if (activeWorkspace && window.confirm(t('workspace.confirmDelete', { name: displayName }))) {
+      onDeleteWorkspace(activeWorkspace.id)
+    }
+  }
+
+  // Empty state: no workspace, or the active workspace has no folder roots yet.
+  if (!folderRoots.length) {
     return (
       <div className="sidebar-empty">
         <Icon name="folder" size={26} />
-        <p>{t('side.noFolder')}</p>
-        <button className="btn-primary" onClick={() => window.dispatchEvent(new Event('mm:openFolder'))}>
-          {t('side.openFolder')}
+        <p>{activeWorkspace ? t('workspace.emptyRoots') : t('side.noFolder')}</p>
+        <button className="btn-primary" onClick={() => onAddFolder()}>
+          {t('workspace.addFolder')}
+        </button>
+        <button className="btn-link" onClick={() => onCreateWorkspace()}>
+          {t('workspace.new')}
         </button>
       </div>
     )
   }
-
-  const rootNodes = childrenMap[workspace.rootPath] || []
 
   // Inline confirm (✓) / cancel (✗) buttons shown while creating or renaming.
   // onMouseDown preventDefault keeps the input focused so clicking a button
@@ -372,6 +428,7 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
     const isActive = node.path === activePath
     const renaming = rename && rename.path === node.path
     const isDropTarget = isDir && dragOver === node.path
+    const isRoot = rootSet.has(norm(node.path))
     return (
       <div key={node.path}>
         <div
@@ -393,7 +450,7 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
           onContextMenu={(e) => {
             e.preventDefault()
             e.stopPropagation()
-            setMenu({ x: e.clientX, y: e.clientY, node })
+            setMenu({ x: e.clientX, y: e.clientY, node, isRoot })
           }}
           title={node.path}
         >
@@ -447,9 +504,72 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
   return (
     <div className="sidebar">
       <div className="sidebar-head">
-        <span className="sidebar-title" title={workspace.rootPath}>
-          {workspace.rootName}
-        </span>
+        <div className="ws-switcher" ref={wsPopover.ref}>
+          {renamingWs ? (
+            <input
+              className="ws-rename-input"
+              autoFocus
+              value={renamingWsValue}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setRenamingWsValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitWsRename() }
+                if (e.key === 'Escape') setRenamingWs(false)
+              }}
+              onBlur={commitWsRename}
+            />
+          ) : (
+            <button
+              type="button"
+              className="ws-switcher-btn"
+              title={activeWorkspace ? t('workspace.switch') : t('workspace.title')}
+              onClick={() => wsPopover.setOpen((o) => !o)}
+            >
+              <span className="ws-eyebrow">{t('workspace.title')}</span>
+              <span className="ws-name">{displayName}</span>
+              <Icon name="chevron-right" size={12} className="ws-chev" />
+            </button>
+          )}
+          {wsPopover.open && (
+            <div className="ws-popover" onClick={(e) => e.stopPropagation()}>
+              <div className="ws-list">
+                {workspaces.map((w) => {
+                  const wname = w.name || (w.folderRoots[0] ? baseName(w.folderRoots[0]) : '') || t('workspace.unnamed')
+                  return (
+                    <button
+                      key={w.id}
+                      type="button"
+                      className={`ws-item${w.id === activeWorkspaceId ? ' active' : ''}`}
+                      onClick={() => { onSwitchWorkspace(w.id); wsPopover.setOpen(false) }}
+                      title={w.folderRoots.join('\n')}
+                    >
+                      <span className="ws-item-name">{wname}</span>
+                      <span className="ws-item-count">{w.folderRoots.length}</span>
+                    </button>
+                  )
+                })}
+                {!workspaces.length && <div className="ws-empty">{t('workspace.none')}</div>}
+              </div>
+              <div className="menu-sep" />
+              <button type="button" className="ws-action" onClick={() => { onCreateWorkspace(); wsPopover.setOpen(false) }}>
+                <Icon name="file-plus" size={14} /> {t('workspace.new')}
+              </button>
+              <button type="button" className="ws-action" onClick={() => { onAddFolder(); wsPopover.setOpen(false) }}>
+                <Icon name="folder-plus" size={14} /> {t('workspace.addFolder')}
+              </button>
+              {activeWorkspace && (
+                <button type="button" className="ws-action" onClick={startWsRename}>
+                  <Icon name="edit" size={14} /> {t('workspace.rename')}
+                </button>
+              )}
+              {activeWorkspace && workspaces.length > 1 && (
+                <button type="button" className="ws-action danger" onClick={startDeleteWs}>
+                  <Icon name="close" size={14} /> {t('workspace.delete')}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <div className="sidebar-head-actions">
           <button title={t('side.newFile')} onClick={() => startNewFile(null)}>
             <Icon name="file-plus" size={15} />
@@ -458,13 +578,13 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
             <Icon name="folder-plus" size={15} />
           </button>
           {(() => {
-            // Toggle: when everything's collapsed (only root open), expand all;
-            // otherwise collapse back to just the root. Icon reflects the action.
-            const collapsed = expanded.size <= 1
+            // Toggle: when everything's collapsed (only roots open), expand all;
+            // otherwise collapse back to just the roots. Icon reflects the action.
+            const collapsed = expanded.size <= folderRoots.length
             return (
               <button
                 title={collapsed ? t('side.expandAll') : t('side.collapseAll')}
-                onClick={collapsed ? expandAll : () => setExpanded(new Set([workspace.rootPath]))}
+                onClick={collapsed ? expandAll : () => setExpanded(new Set(folderRoots))}
               >
                 <Icon name={collapsed ? 'expand' : 'collapse'} size={15} />
               </button>
@@ -473,16 +593,19 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
         </div>
       </div>
       <div
-        className={`tree${dragOver === workspace.rootPath ? ' drag-over-root' : ''}`}
-        {...dropProps(workspace.rootPath)}
-        onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, node: null }) }}
+        className={`tree${dragOver === defaultRoot ? ' drag-over-root' : ''}`}
+        {...(defaultRoot ? dropProps(defaultRoot) : {})}
+        onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, node: null, isRoot: false }) }}
       >
-        {/* Inline creation at root level */}
-        {creating && creating.dir === workspace.rootPath && renderCreatingInput(0)}
-        {rootNodes.length === 0 && !creating ? (
+        {/* Inline creation at the default-root level */}
+        {creating && defaultRoot && creating.dir === defaultRoot && renderCreatingInput(0)}
+        {/* Multi-root: each folderRoot is a synthetic top-level folder node. */}
+        {!folderRoots.length ? (
           <div className="tree-empty">{t('side.empty')}</div>
         ) : (
-          rootNodes.map((n) => renderNode(n, 0))
+          folderRoots.map((root) =>
+            renderNode({ name: baseName(root), path: root, type: 'dir' }, 0)
+          )
         )}
       </div>
 
@@ -499,6 +622,14 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
               <button onClick={() => { onOpenRight(menu.node.path); setMenu(null) }}>{t('tab.openRight')}</button>
             </>
           )}
+          {menu.isRoot && (
+            <>
+              <div className="menu-sep" />
+              <button className="danger" onClick={() => { onRemoveFolder?.(menu.node.path); setMenu(null) }}>
+                {t('workspace.removeFolder')}
+              </button>
+            </>
+          )}
           {menu.node && <div className="menu-sep" />}
           {menu.node && <button onClick={() => { copyText(menu.node.path); setMenu(null) }}>{t('tab.copyPath')}</button>}
           {menu.node && <button onClick={() => { copyText(menu.node.name); setMenu(null) }}>{t('tab.copyName')}</button>}
@@ -509,8 +640,8 @@ export default function Sidebar({ workspace, activePath, onOpenFile, onOpenRight
           {menu.node?.type === 'file' && isMarkdownName(menu.node.name) && window.api.capabilities?.pdfExport !== false && (
             <button onClick={() => { onExportPdf?.(menu.node.path); setMenu(null) }}>{t('side.exportPdf')}</button>
           )}
-          {menu.node && <div className="menu-sep" />}
-          {menu.node && <button className="danger" onClick={() => { doDelete(menu.node); setMenu(null) }}>{t('side.delete')}</button>}
+          {menu.node && !menu.isRoot && <div className="menu-sep" />}
+          {menu.node && !menu.isRoot && <button className="danger" onClick={() => { doDelete(menu.node); setMenu(null) }}>{t('side.delete')}</button>}
         </div>
       )}
     </div>

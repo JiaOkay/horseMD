@@ -16,8 +16,8 @@
 //   setRenameState/setSaveNameState — rename / mobile-save modal triggers
 //   setSidebarOpen — openFolder affordance (refreshNonce is owned internally)
 //   sessionWorkspace — initial workspace (sanitizeWorkspace applied here)
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { baseName, dirName, joinPath, genId, isHeavyDoc, sanitizeWorkspace } from '../paths.js'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { baseName, dirName, joinPath, genId, isHeavyDoc, isAbsolutePath, isRestrictedPath, sanitizeWorkspaces } from '../paths.js'
 import { fireToast } from '../ui.js'
 
 export function useFileOps({
@@ -38,9 +38,24 @@ export function useFileOps({
   setRenameState,
   setSaveNameState,
   setSidebarOpen,
-  sessionWorkspace
+  initialWorkspaces,
+  initialActiveWorkspaceId
 }) {
-  const [workspace, setWorkspace] = useState(sanitizeWorkspace(sessionWorkspace))
+  // Multi-workspace: each workspace is a named bag of folder roots (multi-root
+  // file tree). `activeWorkspace` is the one shown in the sidebar; switching it
+  // swaps the whole tree. See paths.js (loadWorkspacesFromSession) for the
+  // session shape + legacy-single-workspace migration.
+  const [workspaces, setWorkspaces] = useState(() => sanitizeWorkspaces(initialWorkspaces))
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(initialActiveWorkspaceId || null)
+  const activeWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === activeWorkspaceId) || null,
+    [workspaces, activeWorkspaceId]
+  )
+  // folderRoots of the active workspace. Joined into a stable string key so the
+  // watcher/files effects don't re-run every render (the array identity changes).
+  const folderRoots = activeWorkspace?.folderRoots || []
+  const folderRootsKey = folderRoots.join('\n')
+
   const [files, setFiles] = useState([])
   const [refreshNonce, setRefreshNonceLocal] = useState(0)
   // refreshNonce is exposed to the Sidebar; the file ops + watcher bump it via
@@ -420,32 +435,129 @@ export function useFileOps({
     [openPaths, tabsRef, editorApis, tRef]
   )
 
-  // --------------------------- workspace ---------------------------
+  // --------------------------- workspace (multi-root) ---------------------------
+  // Add a folder (absolute path) to the active workspace; if there is no active
+  // workspace, create one rooted at this folder. Dedupes roots; rejects
+  // relative/restricted paths (would crash the recursive chokidar watcher).
+  const addFolderToWorkspace = useCallback(
+    (dir) => {
+      if (!dir || !isAbsolutePath(dir) || isRestrictedPath(dir)) return
+      const k = (p) => p.replace(/\\/g, '/')
+      if (activeWorkspace) {
+        if (activeWorkspace.folderRoots.some((r) => k(r) === k(dir))) {
+          setSidebarOpen(true)
+          return
+        }
+        setWorkspaces((prev) =>
+          prev.map((w) =>
+            w.id === activeWorkspace.id ? { ...w, folderRoots: [...w.folderRoots, dir] } : w
+          )
+        )
+      } else {
+        const ws = { id: genId(), name: baseName(dir), folderRoots: [dir], createdAt: Date.now() }
+        setWorkspaces((prev) => [...prev, ws])
+        setActiveWorkspaceId(ws.id)
+      }
+      setSidebarOpen(true)
+    },
+    [activeWorkspace, setSidebarOpen]
+  )
+
+  // Create an empty workspace and make it active (folders are added after).
+  const createWorkspace = useCallback(
+    (name) => {
+      const ws = { id: genId(), name: name || null, folderRoots: [], createdAt: Date.now() }
+      setWorkspaces((prev) => [...prev, ws])
+      setActiveWorkspaceId(ws.id)
+      setSidebarOpen(true)
+      return ws
+    },
+    [setSidebarOpen]
+  )
+
+  const switchWorkspace = useCallback(
+    (id) => {
+      if (!workspaces.some((w) => w.id === id)) return
+      setActiveWorkspaceId(id)
+      setSidebarOpen(true)
+    },
+    [workspaces, setSidebarOpen]
+  )
+
+  const renameWorkspace = useCallback((id, name) => {
+    setWorkspaces((prev) => prev.map((w) => (w.id === id ? { ...w, name: name || w.name } : w)))
+  }, [])
+
+  const removeFolderFromWorkspace = useCallback(
+    (rootPath) => {
+      if (!activeWorkspace) return
+      const k = (p) => p.replace(/\\/g, '/')
+      setWorkspaces((prev) =>
+        prev.map((w) =>
+          w.id === activeWorkspace.id
+            ? { ...w, folderRoots: w.folderRoots.filter((r) => k(r) !== k(rootPath)) }
+            : w
+        )
+      )
+    },
+    [activeWorkspace]
+  )
+
+  const deleteWorkspace = useCallback(
+    (id) => {
+      setWorkspaces((prev) => prev.filter((w) => w.id !== id))
+      // Fall back to the first remaining workspace (snapshot read is fine here).
+      setActiveWorkspaceId((cur) => {
+        if (cur !== id) return cur
+        const remaining = workspaces.filter((w) => w.id !== id)
+        return remaining[0]?.id || null
+      })
+    },
+    [workspaces]
+  )
+
+  // "Open Folder…" (dialog) = add a folder to the current workspace (create one
+  // if none). This replaces the old "replace the whole workspace" semantics.
   const openFolder = useCallback(async () => {
     const dir = await window.api.openFolder()
     if (!dir) return
-    const rootName = baseName(dir)
-    setWorkspace({ rootPath: dir, rootName })
-    setSidebarOpen(true)
-  }, [setWorkspace, setSidebarOpen])
+    addFolderToWorkspace(dir)
+  }, [addFolderToWorkspace])
 
-  useEffect(() => {
-    if (!workspace) {
+  // Re-list files across ALL roots of the active workspace (command-palette
+  // search). Captured via the stable folderRootsKey so the callback stays fresh.
+  const listAllRoots = useCallback(() => {
+    const roots = folderRootsKey ? folderRootsKey.split('\n') : []
+    if (!roots.length) {
       setFiles([])
-      return
+      return Promise.resolve()
     }
-    window.api.watchStart(workspace.rootPath)
-    window.api.listFiles(workspace.rootPath).then(setFiles)
-    return () => window.api.watchStop(workspace.rootPath)
-  }, [workspace])
+    return Promise.all(roots.map((r) => window.api.listFiles(r).catch(() => []))).then((lists) =>
+      setFiles(lists.flat())
+    )
+  }, [folderRootsKey])
+
+  // Watch every root of the active workspace. chokidar is per-dir in main (the
+  // `watchers` Map), so one watch:start per root reuses the existing crash-proof
+  // guards (absolute path, isRestrictedRoot, followSymlinks:false, error handler).
+  useEffect(() => {
+    const roots = folderRootsKey ? folderRootsKey.split('\n') : []
+    for (const root of roots) window.api.watchStart(root)
+    listAllRoots()
+    return () => {
+      for (const root of roots) window.api.watchStop(root)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderRootsKey])
 
   useEffect(() => {
     const off = window.api.onWatchChanged(() => {
       bumpRefresh()
-      if (workspace) window.api.listFiles(workspace.rootPath).then(setFiles)
+      listAllRoots()
     })
     return off
-  }, [workspace, bumpRefresh])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderRootsKey, bumpRefresh])
 
   // --------- auto-reload open files edited by external programs ----------
   const watchedRef = useRef(new Set())
@@ -518,8 +630,16 @@ export function useFileOps({
     commitMobileSave,
     exportPathToPdf,
     openFolder,
-    workspace,
-    setWorkspace,
+    workspaces,
+    activeWorkspace,
+    activeWorkspaceId,
+    folderRoots,
+    createWorkspace,
+    switchWorkspace,
+    renameWorkspace,
+    addFolderToWorkspace,
+    removeFolderFromWorkspace,
+    deleteWorkspace,
     files,
     refreshNonce,
     bumpRefresh,

@@ -31,7 +31,8 @@ export function useAppLifecycle({
   session,
   tabs,
   activePath,
-  workspace,
+  workspaces,
+  activeWorkspaceId,
   theme,
   customTheme,
   lang,
@@ -122,7 +123,8 @@ export function useAppLifecycle({
   // --------------------------- persistence -------------------------
   useEffect(() => {
     const data = {
-      workspace,
+      workspaces,
+      activeWorkspaceId,
       theme,
       customTheme,
       lang,
@@ -148,7 +150,7 @@ export function useAppLifecycle({
     // for a brief pause, then write once. The close path flushes the last edit.
     const id = setTimeout(flushSession, 400)
     return () => clearTimeout(id)
-  }, [workspace, theme, customTheme, lang, recents, sidebarOpen, sidebarMode, paneWidth, tabs, activePath, flushSession])
+  }, [workspaces, activeWorkspaceId, theme, customTheme, lang, recents, sidebarOpen, sidebarMode, paneWidth, tabs, activePath, flushSession])
 
   // Flush the pending session snapshot immediately when the window is closing,
   // so the debounce above never drops the user's last few keystrokes.

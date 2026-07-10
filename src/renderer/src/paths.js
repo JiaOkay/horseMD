@@ -24,6 +24,83 @@ export const isAbsolutePath = (p) =>
   typeof p === 'string' && (/^\//.test(p) || /^[a-zA-Z]:[\\/]/.test(p) || /^\\\\/.test(p))
 export const sanitizeWorkspace = (ws) => (ws && isAbsolutePath(ws.rootPath) ? ws : null)
 
+// Renderer-side mirror of main's isRestrictedRoot: paths we must never treat as
+// a workspace folder root. Watching or listing one (/, /dev, /System/Volumes…)
+// floods the tree with permission-protected files and crashes the recursive
+// chokidar watcher. Kept in sync with src/main/index.js isRestrictedRoot.
+export const isRestrictedPath = (p) => {
+  const norm = (p || '').replace(/[\\/]+$/, '')
+  if (norm === '' || norm === '/' || norm === '.' || norm === '..') return true
+  if (!isAbsolutePath(norm)) return true
+  return /^\/(dev|proc|System\/Volumes|private\/var\/(db|folders)|\.vol)(\/|$)/.test(norm)
+}
+
+// ---- Multi-workspace data model ----
+// A workspace = a named bag of folder roots (multi-root file tree). Sessions
+// persist `workspaces: [{id,name,folderRoots:[abs],createdAt}]` + activeWorkspaceId.
+// `name: null` means "show the first folder's name" (resolved at render).
+
+// Normalize + validate one workspace: strip relative/restricted/duplicate roots,
+// ensure id/createdAt. Returns null if the input isn't a workspace object.
+function cleanWorkspace(ws) {
+  if (!ws || typeof ws !== 'object') return null
+  const id = typeof ws.id === 'string' && ws.id ? ws.id : genId()
+  const rawRoots = Array.isArray(ws.folderRoots) ? ws.folderRoots : []
+  const seen = new Set()
+  const folderRoots = rawRoots.filter((p) => {
+    if (typeof p !== 'string' || !isAbsolutePath(p) || isRestrictedPath(p)) return false
+    const k = p.replace(/\\/g, '/')
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+  return {
+    id,
+    name: typeof ws.name === 'string' && ws.name ? ws.name : null,
+    folderRoots,
+    createdAt: typeof ws.createdAt === 'number' ? ws.createdAt : Date.now()
+  }
+}
+
+export function sanitizeWorkspaces(list) {
+  if (!Array.isArray(list)) return []
+  return list.map(cleanWorkspace).filter(Boolean)
+}
+
+// The display name for a workspace: its explicit name, else the first folder's
+// basename, else a localized fallback (passed in so paths.js stays i18n-free).
+export function workspaceDisplayName(ws, fallback) {
+  if (!ws) return fallback || ''
+  if (ws.name) return ws.name
+  if (ws.folderRoots && ws.folderRoots.length) return baseName(ws.folderRoots[0])
+  return fallback || ''
+}
+
+// Migrate + sanitize the session's workspace state into {workspaces, activeWorkspaceId}.
+// Old session shape: { workspace: {rootPath, rootName} } (single folder).
+// New shape: { workspaces, activeWorkspaceId }.
+export function loadWorkspacesFromSession(session) {
+  if (!session) return { workspaces: [], activeWorkspaceId: null }
+  if (Array.isArray(session.workspaces)) {
+    const workspaces = sanitizeWorkspaces(session.workspaces)
+    let activeId = session.activeWorkspaceId
+    if (!activeId || !workspaces.some((w) => w.id === activeId)) activeId = workspaces[0]?.id || null
+    return { workspaces, activeWorkspaceId: activeId }
+  }
+  // Legacy single-workspace session → migrate into one workspace (no data loss).
+  const legacy = session.workspace
+  if (legacy && isAbsolutePath(legacy.rootPath) && !isRestrictedPath(legacy.rootPath)) {
+    const ws = cleanWorkspace({
+      id: genId(),
+      name: legacy.rootName || baseName(legacy.rootPath),
+      folderRoots: [legacy.rootPath],
+      createdAt: Date.now()
+    })
+    return { workspaces: [ws], activeWorkspaceId: ws.id }
+  }
+  return { workspaces: [], activeWorkspaceId: null }
+}
+
 export const baseName = (p) => (p ? p.split(/[\\/]/).pop() : 'Untitled')
 export const dirName = (p) => (p ? p.replace(/[\\/][^\\/]*$/, '') : '')
 export const joinPath = (dir, name) => `${dir.replace(/[\\/]+$/, '')}/${name}`

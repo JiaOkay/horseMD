@@ -40,7 +40,7 @@ import {
 import { useFileOps } from './hooks/useFileOps.js'
 import { createMenuHandlers, useGlobalKeys, useCommands } from './lib/menuHandlers.js'
 import {
-  baseName, isAbsolutePath, isHeavyDoc, loadSession
+  baseName, isAbsolutePath, isHeavyDoc, loadSession, loadWorkspacesFromSession
 } from './paths.js'
 import { createReviewActions } from './lib/reviewActions.js'
 
@@ -60,6 +60,9 @@ const attachmentLinkMarkdown = (name, path) =>
 
 export default function App() {
   const session = useRef(loadSession()).current
+  // Migrate + sanitize the session's workspace state once (stable session).
+  // Old single-workspace sessions are migrated into the multi-workspace model.
+  const initialWs = useRef(loadWorkspacesFromSession(session)).current
   // Mobile (Capacitor) builds run the same renderer; a few affordances differ
   // (drawer sidebar, no split/image-host buttons). Desktop is unaffected.
   const isMobile = window.api.platform === 'ios' || window.api.platform === 'android'
@@ -556,8 +559,16 @@ export default function App() {
     commitMobileSave,
     exportPathToPdf,
     openFolder,
-    workspace,
-    setWorkspace,
+    workspaces,
+    activeWorkspace,
+    activeWorkspaceId,
+    folderRoots,
+    createWorkspace,
+    switchWorkspace,
+    renameWorkspace,
+    addFolderToWorkspace,
+    removeFolderFromWorkspace,
+    deleteWorkspace,
     files,
     refreshNonce,
     bumpRefresh,
@@ -580,15 +591,16 @@ export default function App() {
     setRenameState,
     setSaveNameState,
     setSidebarOpen,
-    sessionWorkspace: session.workspace
+    initialWorkspaces: initialWs.workspaces,
+    initialActiveWorkspaceId: initialWs.activeWorkspaceId
   })
 
   // Sync the show-hidden-files setting to main (readTree filter) + refresh the
   // file tree when it changes (#29).
   useEffect(() => {
     window.api.setShowHidden?.(settings.showHiddenFiles)
-    if (workspace) bumpRefresh()
-  }, [settings.showHiddenFiles, bumpRefresh, workspace])
+    if (activeWorkspace) bumpRefresh()
+  }, [settings.showHiddenFiles, bumpRefresh, activeWorkspace])
 
   // Show a tab in the right (split) pane. If it's currently the active tab, move
   // the left pane to a different tab so the two panes differ.
@@ -796,7 +808,8 @@ export default function App() {
     session,
     tabs,
     activePath,
-    workspace,
+    workspaces,
+    activeWorkspaceId,
     theme,
     customTheme,
     lang,
@@ -822,7 +835,7 @@ export default function App() {
     openPaths,
     openFolder,
     isAbsolutePath,
-    setWorkspace,
+    addFolderByPath: addFolderToWorkspace,
     setSidebarMode,
     setSidebarOpen,
     commitAllLive,
@@ -934,7 +947,16 @@ export default function App() {
           {sidebarOpen && (
             sidebarMode === 'files' ? (
               <Sidebar
-                workspace={workspace}
+                workspaces={workspaces}
+                activeWorkspace={activeWorkspace}
+                activeWorkspaceId={activeWorkspaceId}
+                folderRoots={folderRoots}
+                onSwitchWorkspace={switchWorkspace}
+                onCreateWorkspace={createWorkspace}
+                onAddFolder={openFolder}
+                onRemoveFolder={removeFolderFromWorkspace}
+                onRenameWorkspace={renameWorkspace}
+                onDeleteWorkspace={deleteWorkspace}
                 activePath={activePath}
                 onOpenFile={(p) => { openPaths([p]); if (isMobile) setSidebarOpen(false) }}
                 onOpenRight={openFileRight}
