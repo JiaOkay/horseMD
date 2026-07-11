@@ -495,6 +495,11 @@ export default function Sidebar({
         className={`tree${dragOver === defaultRoot ? ' drag-over-root' : ''}`}
         {...(defaultRoot ? dropProps(defaultRoot) : {})}
         onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, node: null, isRoot: false }) }}
+        onDoubleClick={(e) => {
+          // Only the empty area (the .tree itself, not a row) surfaces the menu —
+          // double-clicking a file/folder keeps its normal open/toggle behavior.
+          if (e.target === e.currentTarget) setMenu({ x: e.clientX, y: e.clientY, node: null, isRoot: false })
+        }}
       >
         {/* Inline creation at the default-root level */}
         {creating && defaultRoot && creating.dir === defaultRoot && renderCreatingInput(0)}
@@ -515,6 +520,12 @@ export default function Sidebar({
         }} onClick={(e) => e.stopPropagation()}>
           <button onClick={() => { startNewFile(menu.node?.type === 'dir' ? menu.node : null); setMenu(null) }}>{t('side.ctxNewFile')}</button>
           <button onClick={() => { startNewFolder(menu.node?.type === 'dir' ? menu.node : null); setMenu(null) }}>{t('side.ctxNewFolder')}</button>
+          {!menu.node && (
+            <>
+              <div className="menu-sep" />
+              <button onClick={() => { onAddFolder(); setMenu(null) }}>{t('workspace.addFolder')}</button>
+            </>
+          )}
           {menu.node?.type === 'file' && onOpenRight && (
             <>
               <div className="menu-sep" />
