@@ -191,6 +191,18 @@ npm run build
 - 不把大文档虚拟化和本次结构重构混在一起。
 - 不为了复用强行抽象跨 feature 的通用层。
 
+## Source Mode Hook Contract
+
+`useSourceModeSwitch.js` owns per-tab source view state, rich/source synchronization,
+caret-versus-reading intent, round-trip raw offsets, and delayed layout restoration.
+It does not render textareas or depend on Find/Outline implementations.
+
+Inputs are stable tab/editor refs plus `commitAllLive`, `findStateRef`, and
+`richLoadingRef`. Outputs are limited to `sourceMode`, `sourceRef`,
+`sourceTextareas`, `sourceEditedIds`, and `toggleSource`. `EditorArea` remains the
+owner of uncontrolled textarea events; App remains the owner of tabs and editor API
+registration.
+
 ## 接手开发策略
 
 后续新需求按以下顺序处理：

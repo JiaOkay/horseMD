@@ -255,7 +255,15 @@ const scrollRichAndClick = async (send, ev, ratio) => {
   })()`)
   if (!point) throw new Error('No visible rich text found')
   await click(send, point)
-  await sleep(250)
+  await sleep(150)
+  // After a long source-origin chain ProseMirror can consume the first click to
+  // restore editor focus while leaving the previous selection untouched. Retry
+  // the same real mouse click only when no visible rich caret was established.
+  const context = await richContext(ev)
+  if (!context?.visible) {
+    await click(send, point)
+    await sleep(150)
+  }
 }
 
 const sameCaret = (left, right) => !!left && !!right &&

@@ -73,6 +73,7 @@ node scripts/test-strike-guard.mjs
 - `scripts/etv.mjs` —— 端到端验证：命中测试每个按钮、读计算样式、检测 `-webkit-app-region`、驱动块切换器/右键菜单/选区等
 - `scripts/inspect.mjs` —— 简易状态检查器
 - `scripts/test-mode-switch-chains.mjs` —— 双向连续切换、表格和 CodeMirror 光标语义匹配
+  - 普通富文本点击会确认可见选区；首次点击仅恢复编辑器焦点时自动重试一次
 - `scripts/test-mode-switch-10x.mjs` —— 5 个编辑态光标 + 5 个阅读态视口，附带大纲/dirty 稳定性检查
 - `scripts/test-source-find.mjs` —— 源码查找 selection、居中滚动、高亮和连续上下一个
   - 对普通 Markdown 追加 `--mode-switch`，验证保持查找栏时源码→富文本→源码缓存重建
