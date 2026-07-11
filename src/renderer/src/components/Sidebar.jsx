@@ -5,12 +5,13 @@ import {
   baseName,
   dirName as parentDir,
   joinPath as join,
-  isMarkdownName,
   isValidName,
   isExistsError,
   normalizePathKey
 } from '../paths.js'
 import { copyToClipboard } from '../ui.js'
+import { useSidebarTree } from '../hooks/useSidebarTree.js'
+import SidebarContextMenu from './SidebarContextMenu.jsx'
 
 export default function Sidebar({
   folderRoots,
@@ -24,8 +25,6 @@ export default function Sidebar({
 }) {
   const { t } = useI18n()
   const copyText = (text) => copyToClipboard(text, t('code.copied'))
-  const [childrenMap, setChildrenMap] = useState({}) // path -> nodes[]
-  const [expanded, setExpanded] = useState(() => new Set())
   const [menu, setMenu] = useState(null) // { x, y, node }
   const [rename, setRename] = useState(null) // { path, value }
   // Inline creation: { dir, type: 'file'|'folder', value }
@@ -37,108 +36,16 @@ export default function Sidebar({
   // drop target (for highlighting).
   const dragPathRef = useRef(null)
   const [dragOver, setDragOver] = useState(null)
-  // Live mirror of childrenMap so the "follow active file" effect can check what's
-  // already loaded without re-running every time the map changes.
-  const childrenRef = useRef(childrenMap)
-  childrenRef.current = childrenMap
-  // The DOM row of the currently-open file, used to scroll it into view.
-  const activeRowRef = useRef(null)
-  // Last path we scrolled to — so we reveal a file once when it's opened, not on
-  // every later manual expand/collapse of unrelated folders.
-  const lastScrolledRef = useRef(null)
-
-  // folderRoots is a fresh array each render; join for a stable effect dep.
+  const { childrenMap, expanded, setExpanded, loadDir, toggle, activeRowRef } =
+    useSidebarTree({ folderRoots, activePath, refreshNonce })
   const folderRootsKey = folderRoots.join('\n')
   const defaultRoot = folderRoots[0] || null
   const rootSet = new Set(folderRoots.map(normalizePathKey))
   const isRootPath = (p) => rootSet.has(normalizePathKey(p))
 
-  const loadDir = useCallback(async (dir) => {
-    const nodes = await window.api.readDir(dir)
-    setChildrenMap((m) => ({ ...m, [dir]: nodes }))
-    return nodes
-  }, [])
-
-  // Workspace / roots change: reset the tree and load every root.
   useEffect(() => {
-    setChildrenMap({})
     setCreating(null)
-    const roots = folderRootsKey ? folderRootsKey.split('\n') : []
-    setExpanded(new Set(roots))
-    roots.forEach((r) => loadDir(r))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [folderRootsKey, loadDir])
-
-  // Refresh all currently-loaded dirs when the watcher fires
-  useEffect(() => {
-    if (refreshNonce === 0) return
-    Object.keys(childrenMap).forEach((dir) => loadDir(dir))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshNonce])
-
-  // Issue #11: follow the active file — when a file is opened/switched (via the
-  // tree, search, recents, internal links… all of which update activePath),
-  // auto-expand its ancestor folders so it's revealed in the tree. Only touches
-  // the ancestor chain (additive — never collapses what the user expanded), and
-  // only for files inside THIS workspace (under one of its roots).
-  useEffect(() => {
-    if (!activePath || !folderRoots.length) return
-    const ap = normalizePathKey(activePath)
-    const root = folderRoots
-      .map(normalizePathKey)
-      .sort((a, b) => b.length - a.length)
-      .find((r) => ap === r || ap.startsWith(r + '/'))
-    if (!root) return // not in this workspace
-    let cancelled = false
-    ;(async () => {
-      const ancestors = []
-      let d = parentDir(activePath)
-      let guard = 0
-      while (d && guard++ < 50) {
-        ancestors.unshift(d)
-        if (normalizePathKey(d) === root) break
-        const up = parentDir(d)
-        if (!up || up === d) break
-        d = up
-      }
-      for (const dir of ancestors) {
-        if (cancelled) return
-        if (!childrenRef.current[dir]) await loadDir(dir)
-      }
-      if (cancelled) return
-      setExpanded((s) => {
-        const n = new Set(s)
-        ancestors.forEach((a) => n.add(a))
-        return n
-      })
-    })()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePath, folderRootsKey, loadDir])
-
-  // Scroll the active file's row into view once it (and its ancestors) are
-  // rendered. Guarded by lastScrolledRef so we only reveal on open, not on every
-  // unrelated expand/collapse.
-  useEffect(() => {
-    if (!activePath) return
-    if (activeRowRef.current && lastScrolledRef.current !== activePath) {
-      activeRowRef.current.scrollIntoView({ block: 'nearest' })
-      lastScrolledRef.current = activePath
-    }
-  }, [activePath, expanded, childrenMap])
-
-  const toggle = async (node) => {
-    const next = new Set(expanded)
-    if (next.has(node.path)) {
-      next.delete(node.path)
-    } else {
-      next.add(node.path)
-      if (!childrenMap[node.path]) await loadDir(node.path)
-    }
-    setExpanded(next)
-  }
+  }, [folderRootsKey])
 
   const closeMenu = useCallback(() => setMenu(null), [])
   useEffect(() => {
@@ -538,47 +445,21 @@ export default function Sidebar({
         )}
       </div>
 
-      {menu && (
-        <div className="context-menu" style={{
-          left: Math.min(menu.x, window.innerWidth - 210),
-          top: Math.min(menu.y, window.innerHeight - 340)
-        }} onClick={(e) => e.stopPropagation()}>
-          <button onClick={() => { startNewFile(menu.node?.type === 'dir' ? menu.node : null); setMenu(null) }}>{t('side.ctxNewFile')}</button>
-          <button onClick={() => { startNewFolder(menu.node?.type === 'dir' ? menu.node : null); setMenu(null) }}>{t('side.ctxNewFolder')}</button>
-          {!menu.node && (
-            <>
-              <div className="menu-sep" />
-              <button onClick={() => { onAddFolder(); setMenu(null) }}>{t('workspace.addFolder')}</button>
-            </>
-          )}
-          {menu.node?.type === 'file' && onOpenRight && (
-            <>
-              <div className="menu-sep" />
-              <button onClick={() => { onOpenRight(menu.node.path); setMenu(null) }}>{t('tab.openRight')}</button>
-            </>
-          )}
-          {menu.isRoot && (
-            <>
-              <div className="menu-sep" />
-              <button className="danger" onClick={() => { onRemoveFolder?.(menu.node.path); setMenu(null) }}>
-                {t('workspace.removeFolder')}
-              </button>
-            </>
-          )}
-          {menu.node && <div className="menu-sep" />}
-          {menu.node && <button onClick={() => { copyText(menu.node.path); setMenu(null) }}>{t('tab.copyPath')}</button>}
-          {menu.node && <button onClick={() => { copyText(menu.node.name); setMenu(null) }}>{t('tab.copyName')}</button>}
-          {menu.node && window.api.capabilities?.revealInFolder !== false && <button onClick={() => { window.api.showInFolder(menu.node.path); setMenu(null) }}>{t('side.reveal')}</button>}
-          {menu.node && !menu.isRoot && <div className="menu-sep" />}
-          {menu.node && !menu.isRoot && <button onClick={() => { setRename({ path: menu.node.path, value: menu.node.name }); setMenu(null) }}>{t('side.rename')}</button>}
-          {menu.node?.type === 'file' && <button onClick={() => { doDuplicate(menu.node); setMenu(null) }}>{t('side.duplicate')}</button>}
-          {menu.node?.type === 'file' && isMarkdownName(menu.node.name) && window.api.capabilities?.pdfExport !== false && (
-            <button onClick={() => { onExportPdf?.(menu.node.path); setMenu(null) }}>{t('side.exportPdf')}</button>
-          )}
-          {menu.node && !menu.isRoot && <div className="menu-sep" />}
-          {menu.node && !menu.isRoot && <button className="danger" onClick={() => { doDelete(menu.node); setMenu(null) }}>{t('side.delete')}</button>}
-        </div>
-      )}
+      <SidebarContextMenu
+        menu={menu}
+        t={t}
+        onClose={closeMenu}
+        onNewFile={startNewFile}
+        onNewFolder={startNewFolder}
+        onAddFolder={onAddFolder}
+        onOpenRight={onOpenRight}
+        onRemoveFolder={onRemoveFolder}
+        onCopyText={copyText}
+        onRename={(node) => setRename({ path: node.path, value: node.name })}
+        onDuplicate={doDuplicate}
+        onExportPdf={onExportPdf}
+        onDelete={doDelete}
+      />
     </div>
   )
 }

@@ -314,3 +314,16 @@ PluginKey；`editor-review.js` 的原有公开导出保持不变。
 - `editor-review-card.js`：371 行，集中管理卡片 DOM 与 annotation transaction。
 - CDP 验证：第二张批注卡片定位为 `2 / 2`，进入编辑态字段正确，取消后恢复读态，
   点击完成后只剩一个高亮和一个批注按钮；addition/deletion/substitution 同时正常。
+
+## 第六轮重构拆分记录
+
+2026-07-11 将 Sidebar 的目录加载/展开/跟随当前文件状态提取到 `useSidebarTree.js`，
+并将右键菜单提取为无状态 `SidebarContextMenu.jsx`。创建、重命名和拖放仍留在
+`Sidebar.jsx`，继续共享同一个提交锁与父目录刷新流程。
+
+- `Sidebar.jsx`：584 → 465 行。
+- `useSidebarTree.js`：99 行。
+- `SidebarContextMenu.jsx`：72 行。
+- 真实 UI 验证：双根目录加载；根节点折叠/展开；当前文件打开后自动高亮；根目录菜单
+  不提供重命名/删除；Markdown 文件菜单保留分屏、复制、重命名、副本、PDF 和删除；
+  移除根目录后侧栏与会话同步。
