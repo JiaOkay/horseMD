@@ -1,7 +1,6 @@
-// File operations + workspace/watcher. Extracted verbatim in behavior from
-// App.jsx (phase-2 refactor, US-5). This is the deepest-coupling extraction: it
-// touches the tab store, recents, the uncontrolled-textarea bookkeeping, the
-// editor API registry, and the workspace file-tree/watcher.
+// Document file operations extracted from App.jsx. Renderer-side multi-root
+// workspace state and directory watchers live in useWorkspace.js; this hook
+// keeps open-document operations and their per-file external-change watchers.
 //
 // Split-view ops (openRight/toggleSplit/startSplitDrag/openFileRight) and split
 // state stay in App — they're consumed heavily by the editor-area JSX and are
@@ -14,22 +13,17 @@
 //   editorApis — ref map of tab id → rich editor API (exportPathToPdf getDocHTML)
 //   isMobile/t/tRef — i18n + mobile save-dialog branch
 //   setRenameState/setSaveNameState — rename / mobile-save modal triggers
-//   setSidebarOpen — openFolder affordance (refreshNonce is owned internally)
-//   initialFolderRoots — migrated + sanitized workspace folder roots from the
-//     session (loadFolderRootsFromSession in paths.js)
-import { useCallback, useEffect, useRef, useState } from 'react'
+//   setSidebarOpen/initialFolderRoots — forwarded to useWorkspace
+import { useCallback, useEffect, useRef } from 'react'
 import {
   baseName,
   dirName,
   joinPath,
   genId,
-  isHeavyDoc,
-  isAbsolutePath,
-  isRestrictedPath,
-  sanitizeFolderRoots,
-  normalizePathKey
+  isHeavyDoc
 } from '../paths.js'
 import { fireToast } from '../ui.js'
+import { useWorkspace } from './useWorkspace.js'
 
 export function useFileOps({
   tabs,
@@ -51,20 +45,8 @@ export function useFileOps({
   setSidebarOpen,
   initialFolderRoots
 }) {
-  // Single (unnamed) workspace = a bag of folder roots (multi-root file tree).
-  // Users add/remove folders within it; there's no name and no workspace
-  // switching. See paths.js (loadFolderRootsFromSession) for the session shape +
-  // legacy migration.
-  const [folderRoots, setFolderRoots] = useState(() => sanitizeFolderRoots(initialFolderRoots))
-  // Joined into a stable string key so the watcher/files effects don't re-run
-  // every render (the array identity changes).
-  const folderRootsKey = folderRoots.join('\n')
-
-  const [files, setFiles] = useState([])
-  const [refreshNonce, setRefreshNonceLocal] = useState(0)
-  // refreshNonce is exposed to the Sidebar; the file ops + watcher bump it via
-  // this stable callback so the tree refreshes after rename/dup/delete/write.
-  const bumpRefresh = useCallback(() => setRefreshNonceLocal((n) => n + 1), [])
+  const workspace = useWorkspace({ initialFolderRoots, setSidebarOpen })
+  const { bumpRefresh } = workspace
 
   // --------------------------- open files --------------------------
   const openPaths = useCallback(async (paths, silent = false) => {
@@ -439,67 +421,6 @@ export function useFileOps({
     [openPaths, tabsRef, editorApis, tRef]
   )
 
-  // --------------------------- workspace (multi-root) ---------------------------
-  // The workspace is a single bag of folder roots. Add/remove folders; there's
-  // no name and no multiple workspaces. Rejects relative/restricted paths (they
-  // would crash the recursive chokidar watcher) and dedupes.
-  const addFolder = useCallback(
-    (dir) => {
-      if (!dir || !isAbsolutePath(dir) || isRestrictedPath(dir)) return
-      setFolderRoots((prev) => sanitizeFolderRoots([...prev, dir]))
-      setSidebarOpen(true)
-    },
-    [setSidebarOpen]
-  )
-
-  const removeFolder = useCallback((rootPath) => {
-    const target = normalizePathKey(rootPath)
-    setFolderRoots((prev) => prev.filter((r) => normalizePathKey(r) !== target))
-  }, [])
-
-  // "Open Folder…" (dialog) = add a folder to the workspace. This replaces the
-  // old "replace the whole workspace" semantics.
-  const openFolder = useCallback(async () => {
-    const dir = await window.api.openFolder()
-    if (!dir) return
-    addFolder(dir)
-  }, [addFolder])
-
-  // Re-list files across ALL roots of the active workspace (command-palette
-  // search). Captured via the stable folderRootsKey so the callback stays fresh.
-  const listAllRoots = useCallback(() => {
-    const roots = folderRootsKey ? folderRootsKey.split('\n') : []
-    if (!roots.length) {
-      setFiles([])
-      return Promise.resolve()
-    }
-    return Promise.all(roots.map((r) => window.api.listFiles(r).catch(() => []))).then((lists) =>
-      setFiles(lists.flat())
-    )
-  }, [folderRootsKey])
-
-  // Watch every root of the active workspace. chokidar is per-dir in main (the
-  // `watchers` Map), so one watch:start per root reuses the existing crash-proof
-  // guards (absolute path, isRestrictedRoot, followSymlinks:false, error handler).
-  useEffect(() => {
-    const roots = folderRootsKey ? folderRootsKey.split('\n') : []
-    for (const root of roots) window.api.watchStart(root)
-    listAllRoots()
-    return () => {
-      for (const root of roots) window.api.watchStop(root)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [folderRootsKey])
-
-  useEffect(() => {
-    const off = window.api.onWatchChanged(() => {
-      bumpRefresh()
-      listAllRoots()
-    })
-    return off
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [folderRootsKey, bumpRefresh])
-
   // --------- auto-reload open files edited by external programs ----------
   const watchedRef = useRef(new Set())
 
@@ -570,13 +491,7 @@ export function useFileOps({
     saveTab,
     commitMobileSave,
     exportPathToPdf,
-    openFolder,
-    folderRoots,
-    addFolder,
-    removeFolder,
-    files,
-    refreshNonce,
-    bumpRefresh,
+    ...workspace,
     reloadTabFromDisk
   }
 }

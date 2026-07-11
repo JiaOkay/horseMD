@@ -291,3 +291,15 @@ CDP 验证：
 真实 UI 回归在搬迁过程中发现并拦截了一次遗漏 import：构建可以通过，但点击批注时
 transaction 会抛出运行时错误。恢复依赖后，两个同段批注的堆叠、第二张卡片内容、
 addition/deletion/substitution 渲染均通过 CDP 验证。
+
+## 第四轮重构拆分记录
+
+2026-07-11 将多根目录工作区状态、命令面板文件列表和目录 Watcher 从
+`useFileOps.js` 搬到 `useWorkspace.js`。`useFileOps` 继续原样返回工作区字段，
+所以 `App.jsx`、`Sidebar.jsx` 和菜单调用合同不变；已打开文档的逐文件 Watcher
+仍留在 `useFileOps`，继续受 dirty 内容保护。
+
+- `useFileOps.js`：582 → 500 行。
+- `useWorkspace.js`：77 行。
+- 真实 Electron 验证：连续加入两个绝对路径根目录，两个根节点及文件树同时显示；
+  右键移除其中一个后，侧栏和 `minimd.session.v1.folderRoots` 同步更新。
