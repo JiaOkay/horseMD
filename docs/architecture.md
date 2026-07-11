@@ -42,6 +42,7 @@
 src/
   main/index.js            主进程：窗口、文件系统 IPC、监听、菜单
   main/documents.js        打开/保存对话框与 PDF 导出 IPC
+  main/filesystem.js       文件读写、目录树与复制 IPC
   main/pdf-document.js     PDF 文档外壳与打印样式（纯函数）
   main/security.js         权限与外部 URL 安全策略（纯函数）
   preload/index.js         contextBridge：window.api 桥接

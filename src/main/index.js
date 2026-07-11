@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import chokidar from 'chokidar'
 import { canGrantLocalFonts, createLocalFontGrant, getAllowedExternalUrl } from './security.js'
 import { registerDocumentIpc } from './documents.js'
+import { registerFileSystemIpc } from './filesystem.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -271,113 +272,7 @@ registerDocumentIpc(ipcMain, {
   markdownExtensions: MD_EXTS
 })
 
-ipcMain.handle('fs:readFile', async (_e, path) => {
-  const content = await fs.readFile(path, 'utf8')
-  const stat = await fs.stat(path)
-  return { content, mtimeMs: stat.mtimeMs }
-})
-
-ipcMain.handle('fs:writeFile', async (_e, path, content) => {
-  await fs.writeFile(path, content, 'utf8')
-  const stat = await fs.stat(path)
-  return { mtimeMs: stat.mtimeMs }
-})
-
-ipcMain.handle('fs:rename', async (_e, oldPath, newPath) => {
-  // Don't clobber an existing different file/folder (fs.rename overwrites
-  // silently → data loss). Still allow a case-only rename on case-insensitive
-  // filesystems (e.g. Foo.md → foo.md), where target and source are "the same".
-  if (existsSync(newPath) && newPath.toLowerCase() !== oldPath.toLowerCase()) {
-    throw new Error('A file or folder with that name already exists.')
-  }
-  await fs.rename(oldPath, newPath)
-  return true
-})
-
-ipcMain.handle('fs:delete', async (_e, path) => {
-  await shell.trashItem(path)
-  return true
-})
-
-ipcMain.handle('fs:createFile', async (_e, path, content = '') => {
-  await fs.writeFile(path, content, { flag: 'wx' })
-  return true
-})
-
-ipcMain.handle('fs:createDir', async (_e, path) => {
-  await fs.mkdir(path, { recursive: true })
-  return true
-})
-
-const IGNORED_DIRS = new Set(['.git', 'node_modules', '.DS_Store', '.obsidian', 'out', 'dist'])
-// Whether to show dotfiles/dotdirs (.claude, .cursor, etc.) in the file tree.
-// Set from the renderer via the 'settings:setShowHidden' IPC (#29). Default off.
-let showHidden = false
-
-ipcMain.handle('settings:setShowHidden', (_e, val) => {
-  showHidden = !!val
-  return true
-})
-
-async function readTree(dir, depth = 0) {
-  let entries
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-  const nodes = []
-  for (const e of entries) {
-    // Skip dotfiles unless showHidden is on (always allow .gitignore). .git etc.
-    // are always skipped via IGNORED_DIRS regardless of this setting.
-    if (e.name.startsWith('.') && !showHidden && e.name !== '.gitignore') continue
-    if (e.isDirectory() && IGNORED_DIRS.has(e.name)) continue
-    const full = join(dir, e.name)
-    if (e.isDirectory()) {
-      nodes.push({ name: e.name, path: full, type: 'dir', children: null })
-    } else if (MD_RE.test(e.name)) {
-      nodes.push({ name: e.name, path: full, type: 'file' })
-    }
-  }
-  nodes.sort((a, b) => {
-    if (a.type !== b.type) return a.type === 'dir' ? -1 : 1
-    return a.name.localeCompare(b.name)
-  })
-  return nodes
-}
-
-ipcMain.handle('fs:readDir', async (_e, dir) => readTree(dir))
-
-async function listFilesFlat(root, dir, acc, depth) {
-  if (depth > 12 || acc.length > 5000) return
-  let entries
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true })
-  } catch {
-    return
-  }
-  for (const e of entries) {
-    if (e.name.startsWith('.') && !showHidden) continue
-    const full = join(dir, e.name)
-    if (e.isDirectory()) {
-      if (IGNORED_DIRS.has(e.name)) continue
-      await listFilesFlat(root, full, acc, depth + 1)
-    } else if (MD_RE.test(e.name)) {
-      acc.push({ name: e.name, path: full, rel: full.slice(root.length + 1).replace(/\\/g, '/') })
-    }
-  }
-}
-
-ipcMain.handle('fs:listFiles', async (_e, root) => {
-  const acc = []
-  await listFilesFlat(root, root, acc, 0)
-  return acc
-})
-
-ipcMain.handle('fs:openFolderTree', async (_e, dir) => ({
-  root: { name: basename(dir), path: dir, type: 'dir' },
-  children: await readTree(dir)
-}))
+registerFileSystemIpc(ipcMain, { shell, markdownPattern: MD_RE })
 
 // Paths we must never descend into: system/device trees that throw EACCES/EPERM
 // when watched, plus the usual noise dirs. Watching e.g. "/" would otherwise hit
@@ -872,20 +767,6 @@ ipcMain.handle('image:inlineForSave', async (_e, content, targetPath) => {
   } catch {
     return { content, changed: false }
   }
-})
-
-// Copy a file next to itself as "<name> copy<ext>", picking a free name.
-ipcMain.handle('fs:duplicate', async (_e, path) => {
-  const dir = dirname(path)
-  const ext = extname(path)
-  const stem = basename(path, ext)
-  let target = join(dir, `${stem} copy${ext}`)
-  let i = 2
-  while (existsSync(target)) target = join(dir, `${stem} copy ${i++}${ext}`)
-  // COPYFILE_EXCL: fail rather than overwrite if the target appeared between the
-  // existsSync check and the copy (TOCTOU).
-  await fs.copyFile(path, target, fsConstants.COPYFILE_EXCL)
-  return target
 })
 
 // ----------------------------- window controls -----------------------------
