@@ -109,6 +109,45 @@ async function main() {
     number: document.querySelector('.hm-review-card-number')?.textContent || ''
   }))()`)
 
+  await evaluate(`(() => {
+    const edit = document.querySelector('.hm-review-card-actions .hm-review-card-action')
+    if (!edit) throw new Error('Review edit action missing')
+    edit.click()
+    return true
+  })()`)
+  await sleep(150)
+  const editing = await evaluate(`(() => ({
+    text: document.querySelector('.hm-review-card-input')?.value || '',
+    comment: document.querySelector('.hm-review-card-textarea')?.value || '',
+    actions: document.querySelectorAll('.hm-review-card-actions .hm-review-card-action').length
+  }))()`)
+  await evaluate(`(() => {
+    const actions = document.querySelectorAll('.hm-review-card-actions .hm-review-card-action')
+    if (actions.length !== 2) throw new Error('Review edit actions missing')
+    actions[1].click()
+    return true
+  })()`)
+  await sleep(150)
+  const cancelled = await evaluate(`(() => ({
+    text: document.querySelector('.hm-review-card-text')?.textContent || '',
+    comment: document.querySelector('.hm-review-card-comment')?.textContent || ''
+  }))()`)
+  await evaluate(`(() => {
+    const actions = document.querySelectorAll('.hm-review-card-actions .hm-review-card-action')
+    if (actions.length < 2) throw new Error('Review done action missing')
+    actions[1].click()
+    return true
+  })()`)
+  await sleep(350)
+  const completed = await evaluate(`(() => {
+    const editor = [...document.querySelectorAll('.ProseMirror')].find((node) => node.offsetParent)
+    return {
+      highlights: editor?.querySelectorAll('.hm-review-highlight').length || 0,
+      noteButtons: editor?.querySelectorAll('.hm-review-note-button').length || 0,
+      remainingText: editor?.textContent || ''
+    }
+  })()`)
+
   const passed =
     rendered.proseMirror === 1 &&
     rendered.highlights >= 2 &&
@@ -121,9 +160,17 @@ async function main() {
     opened.cards === 1 &&
     opened.text === 'second' &&
     opened.comment === 'second comment' &&
-    opened.number === '2 / 2'
+    opened.number === '2 / 2' &&
+    editing.text === 'second' &&
+    editing.comment === 'second comment' &&
+    editing.actions === 2 &&
+    cancelled.text === 'second' &&
+    cancelled.comment === 'second comment' &&
+    completed.highlights === 1 &&
+    completed.noteButtons === 1 &&
+    completed.remainingText.includes('second')
 
-  console.log(JSON.stringify({ passed, rendered, opened }, null, 2))
+  console.log(JSON.stringify({ passed, rendered, opened, editing, cancelled, completed }, null, 2))
   ws.close()
   process.exit(passed ? 0 : 2)
 }

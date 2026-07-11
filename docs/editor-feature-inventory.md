@@ -303,3 +303,14 @@ addition/deletion/substitution 渲染均通过 CDP 验证。
 - `useWorkspace.js`：77 行。
 - 真实 Electron 验证：连续加入两个绝对路径根目录，两个根节点及文件树同时显示；
   右键移除其中一个后，侧栏和 `minimd.session.v1.folderRoots` 同步更新。
+
+## 第五轮重构拆分记录
+
+2026-07-11 将 Review 卡片的读态、编辑态、复制/完成/删除动作和跨批注导航提取到
+`editor-review-card.js`。`REVIEW_PLUGIN_KEY` 由插件模块显式传入，避免循环依赖和重复
+PluginKey；`editor-review.js` 的原有公开导出保持不变。
+
+- `editor-review.js`：744 → 359 行，只保留 widget 容器、插件状态机和命令入口。
+- `editor-review-card.js`：371 行，集中管理卡片 DOM 与 annotation transaction。
+- CDP 验证：第二张批注卡片定位为 `2 / 2`，进入编辑态字段正确，取消后恢复读态，
+  点击完成后只剩一个高亮和一个批注按钮；addition/deletion/substitution 同时正常。

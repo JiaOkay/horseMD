@@ -76,7 +76,7 @@ node scripts/test-strike-guard.mjs
 - `scripts/test-mode-switch-10x.mjs` —— 5 个编辑态光标 + 5 个阅读态视口，附带大纲/dirty 稳定性检查
 - `scripts/test-source-find.mjs` —— 源码查找 selection、居中滚动、高亮和连续上下一个
   - 对普通 Markdown 追加 `--mode-switch`，验证保持查找栏时源码→富文本→源码缓存重建
-- `scripts/test-review-ui.mjs` —— 真实源码同步后的 Review 高亮、同段批注堆叠、卡片和 substitution DOM
+- `scripts/test-review-ui.mjs` —— 真实源码同步后的 Review 高亮、同段批注堆叠、卡片编辑/取消/完成和 substitution DOM
 
 ### 用法
 
