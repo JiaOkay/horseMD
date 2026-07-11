@@ -275,3 +275,19 @@ CDP 验证：
 
 - 临时综合文档：相对图片解析为 `file://`、代码块复制按钮存在、Mermaid/LaTeX/HTML/review 渲染、源码/富文本往返、切换不 dirty、图片 lightbox 打开和 Esc 关闭。
 - 真实大文档：阅读位置 35%、65%、88% 往返，滚动比例稳定；多候选真实点击光标覆盖前段和后段，源码/富文本往返后光标可见、上下文一致、已保存状态不变。
+
+## 第三轮重构拆分记录
+
+2026-07-11 将 Review 的文档扫描与 Decoration 数据构建从
+`editor-review.js` 搬到 `editor-review-decorations.js`。外部继续只通过
+`createReviewDecorationPlugin`、`applyReviewMarkupInView` 等原有 API 使用 Review；
+卡片 DOM、事件处理和 ProseMirror plugin 状态机没有改动。
+
+- `editor-review.js`：1090 → 744 行，保留插件状态、widget/card 交互和命令入口。
+- `editor-review-decorations.js`：328 行，负责 raw/parsed CriticMarkup 扫描、inline
+  decorations 和 comment widget 描述。
+- 新增 `npm run test:review-ui`，不依赖 DEV 私有 Hook，可直接验证开发构建或安装包。
+
+真实 UI 回归在搬迁过程中发现并拦截了一次遗漏 import：构建可以通过，但点击批注时
+transaction 会抛出运行时错误。恢复依赖后，两个同段批注的堆叠、第二张卡片内容、
+addition/deletion/substitution 渲染均通过 CDP 验证。

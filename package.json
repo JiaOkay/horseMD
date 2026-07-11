@@ -25,6 +25,7 @@
     "test:source-map": "node scripts/test-editor-source-map.mjs",
     "test:source-find": "node scripts/test-source-find.mjs",
     "test:review": "node scripts/review-markup.test.mjs",
+    "test:review-ui": "node scripts/test-review-ui.mjs",
     "test:security": "node scripts/test-main-security.mjs && node scripts/test-pdf-document.mjs",
     "test:filesystem": "node scripts/test-main-filesystem.mjs",
     "test:watchers": "node scripts/test-main-watchers.mjs",
