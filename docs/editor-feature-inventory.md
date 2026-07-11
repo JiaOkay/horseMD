@@ -198,10 +198,11 @@ npm run build:mobile
 
 涉及模式切换时追加真实大文档 CDP 验证。
 
-## 已知测试脚本问题
+## 自动化测试入口
 
-`node scripts/review-markup.test.mjs` 当前在 Node 22 下会因为直接导入 `.jsx`
-报 `ERR_UNKNOWN_FILE_EXTENSION`。这不是功能失败，而是脚本加载方式需要后续修正。
+`npm run test:core` 会运行主进程安全边界、源码映射、Review 标记和
+CriticMarkup 回归。Review 的纯状态逻辑位于 `editor-review-model.js`，测试不再
+间接加载 JSX/DOM 依赖，因此 Node 20/22 均可直接执行。
 
 ## 本轮重构拆分记录
 

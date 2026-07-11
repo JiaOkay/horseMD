@@ -16,6 +16,7 @@ npm run dev
 
 ```bash
 npm run build       # 构建到 out/（main + preload + renderer）
+npm run test:core   # 运行可在 CI 中执行的确定性核心回归
 npm start           # 运行构建产物（electron-vite preview）
 npm run dist        # 构建 + electron-builder 打**当前系统**的安装包 → dist/
 npm run dist:dir    # 构建 + 打免安装目录版（dist/<platform>-unpacked/）
