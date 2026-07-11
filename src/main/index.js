@@ -5,10 +5,10 @@ import fs from 'node:fs/promises'
 import { existsSync, statSync, realpathSync, constants as fsConstants } from 'node:fs'
 import { exec } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import chokidar from 'chokidar'
 import { canGrantLocalFonts, createLocalFontGrant, getAllowedExternalUrl } from './security.js'
 import { registerDocumentIpc } from './documents.js'
 import { registerFileSystemIpc } from './filesystem.js'
+import { registerWatcherIpc } from './watchers.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -25,8 +25,6 @@ let allowClose = false
 // handler tell "quit the app" apart from "just close the window" (macOS keeps the
 // app running on window close, but Cmd+Q must fully quit).
 let isQuitting = false
-const watchers = new Map() // folder path -> watcher
-const fileWatchers = new Map() // file path -> { watcher, timer }
 let localFontGrant = null
 
 // ---- Safety net: never let a stray async error abort the whole app ----
@@ -274,111 +272,7 @@ registerDocumentIpc(ipcMain, {
 
 registerFileSystemIpc(ipcMain, { shell, markdownPattern: MD_RE })
 
-// Paths we must never descend into: system/device trees that throw EACCES/EPERM
-// when watched, plus the usual noise dirs. Watching e.g. "/" would otherwise hit
-// /dev/* device files and crash the watcher.
-const WATCH_IGNORE_RE =
-  /(^|[\\/])(\.(git|obsidian)|node_modules)([\\/]|$)/
-// An absolute path: POSIX "/…", Windows "C:\…"/"C:/…", or a UNC "\\…".
-const isAbsolutePath = (p) => /^\//.test(p) || /^[a-zA-Z]:[\\/]/.test(p) || /^\\\\/.test(p)
-const isRestrictedRoot = (p) => {
-  const norm = (p || '').replace(/[\\/]+$/, '')
-  if (norm === '' || norm === '/' || norm === '.' || norm === '..') return true
-  // A relative path (e.g. ".") resolves against the process CWD — which is "/"
-  // when the app is launched by Finder/launchd, so watching it would recurse the
-  // whole filesystem (/dev, /System…) and crash. Only ever watch absolute paths.
-  if (!isAbsolutePath(norm)) return true
-  // macOS system/device trees that are unreadable and would crash a recursive watch.
-  return /^\/(dev|proc|System\/Volumes|private\/var\/(db|folders)|\.vol)(\/|$)/.test(norm)
-}
-
-// Watch a folder; notify renderer on changes (debounced lightly by chokidar)
-ipcMain.handle('watch:start', async (_e, dir) => {
-  if (watchers.has(dir)) return true
-  // Don't recursively watch the filesystem root or restricted system trees —
-  // they contain device/permission-protected files that make the watch throw.
-  if (isRestrictedRoot(dir)) return false
-  const w = chokidar.watch(dir, {
-    ignored: (p) => WATCH_IGNORE_RE.test(p) || isRestrictedRoot(p),
-    ignoreInitial: true,
-    depth: 12,
-    // Don't follow symlinks (they can point into restricted trees) and don't let
-    // permission errors bubble up as fatal.
-    followSymlinks: false,
-    awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 }
-  })
-  // Swallow watcher errors (EACCES/EPERM on protected paths) so they never become
-  // an unhandled rejection that crashes the process.
-  w.on('error', (err) => console.error('watch:start error (ignored):', err?.message || err))
-  let timer = null
-  const ping = () => {
-    clearTimeout(timer)
-    timer = setTimeout(() => sendToRenderer('watch:changed', dir), 120)
-  }
-  w.on('add', ping).on('unlink', ping).on('addDir', ping).on('unlinkDir', ping)
-  watchers.set(dir, w)
-  return true
-})
-
-ipcMain.handle('watch:stop', async (_e, dir) => {
-  const w = watchers.get(dir)
-  if (w) {
-    await w.close()
-    watchers.delete(dir)
-  }
-  return true
-})
-
-// Watch a single open file for external content changes (e.g. an agent edits
-// the file on disk). Emits `file:changed` with the new mtime so the renderer
-// can reload the tab.
-ipcMain.handle('watch:file', async (_e, path) => {
-  if (fileWatchers.has(path)) return true
-  const w = chokidar.watch(path, {
-    ignoreInitial: true,
-    // Poll the file (instead of native fs events). Many editors/tools save via
-    // "atomic replace" (write temp + rename over), which swaps the file's inode
-    // and makes a native single-file watch go deaf after the first such save.
-    // Polling re-stats the path, so it keeps catching changes regardless.
-    // Interval is 1s (not chokidar's 400ms default): with N open tabs that is N
-    // libuv stats every second indefinitely, and on Windows each stat is hooked
-    // by Defender real-time scanning — the threadpool contention worsened the
-    // background load (and thus large-doc responsiveness). An external edit is
-    // still detected within ~1s. (The renderer already ignores same/older-mtime
-    // echoes on file:changed, so a slower poll costs nothing but detection lag.)
-    usePolling: true,
-    interval: 1000,
-    binaryInterval: 1200,
-    awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 }
-  })
-  const entry = { watcher: w, timer: null }
-  const notify = async () => {
-    clearTimeout(entry.timer)
-    entry.timer = setTimeout(async () => {
-      let mtimeMs = 0
-      try {
-        mtimeMs = (await fs.stat(path)).mtimeMs
-      } catch {
-        /* file may have been removed */
-      }
-      sendToRenderer('file:changed', { path, mtimeMs })
-    }, 80)
-  }
-  w.on('change', notify).on('add', notify)
-  w.on('error', (err) => console.error('watch:file error (ignored):', err?.message || err))
-  fileWatchers.set(path, entry)
-  return true
-})
-
-ipcMain.handle('watch:unfile', async (_e, path) => {
-  const entry = fileWatchers.get(path)
-  if (entry) {
-    clearTimeout(entry.timer)
-    await entry.watcher.close()
-    fileWatchers.delete(path)
-  }
-  return true
-})
+registerWatcherIpc(ipcMain, { sendToRenderer })
 
 ipcMain.handle('shell:openExternal', async (event, url) => {
   if (!mainWindow || event.sender.id !== mainWindow.webContents.id) {
