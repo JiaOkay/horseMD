@@ -9,9 +9,9 @@ const I18N = {
     'hero.kicker': '免费 · 开源 · 不要账号',
     'hero.l1': '一个窗口，', 'hero.l2': '装下所有 .md 文件',
     'hero.sub': '一个免费的 Typora 平替，但不止于此。',
-    'cta.win': '下载 Windows 版', 'cta.mac': 'macOS 下载 & 安装', 'cta.android': '下载安卓 APK',
+    'cta.win': '下载 Windows 版', 'cta.mac': 'macOS 下载 & 安装', 'cta.android': '下载安卓 APK', 'cta.linux': '下载 Linux .deb',
     'cta.mirror': '国内加速 ↓', 'cta.mirrorAlt': '海外 GitHub ↓',
-    'hero.note': '构建未签名 — Windows：更多信息 → 仍要运行 · macOS（Apple 芯片 / Intel 均可）：右键 → 打开 · 安卓：安装 APK 时允许"未知来源"',
+    'hero.note': '构建未签名 — Windows：更多信息 → 仍要运行 · macOS（Apple 芯片 / Intel 均可）：右键 → 打开 · Linux：下载 .deb 后 sudo dpkg -i 安装 · 安卓：安装 APK 时允许"未知来源"',
     'hero.caption': 'HORSEMD · 文件树 / 标签页 / 所见即所得',
     'strip.tabs': '标签页', 'strip.tree': '文件树', 'strip.i18n': 'EN / 中文', 'strip.themes': '6 套主题',
     'features.title': '它能做什么',
@@ -23,16 +23,16 @@ const I18N = {
     'themes.light': '明亮', 'themes.dark': '暗夜', 'themes.mist': '雾',
     'themes.sage': '鼠尾草', 'themes.rose': '玫瑰', 'themes.dusk': '暮色',
     '_title': 'HorseMD — 一个窗口，装下所有 .md 文件',
-    '_desc': 'HorseMD：免费开源的 Typora 平替。标签页 + 文件树 + 所见即所得，Windows、macOS 与 Android。',
+    '_desc': 'HorseMD：免费开源的 Typora 平替。标签页 + 文件树 + 所见即所得，Windows、macOS、Linux 与 Android。',
   },
   en: {
     'nav.features': 'FEATURES', 'nav.themes': 'THEMES', 'nav.guide': 'GUIDE',
     'hero.kicker': 'FREE · OPEN SOURCE · NO ACCOUNT',
     'hero.l1': 'One window.', 'hero.l2': 'Every .md file.',
     'hero.sub': 'A free Typora alternative, and then some.',
-    'cta.win': 'Download for Windows', 'cta.mac': 'macOS — download & install', 'cta.android': 'Download Android APK',
+    'cta.win': 'Download for Windows', 'cta.mac': 'macOS — download & install', 'cta.android': 'Download Android APK', 'cta.linux': 'Download Linux .deb',
     'cta.mirror': 'CN mirror ↓', 'cta.mirrorAlt': 'GitHub ↓',
-    'hero.note': 'Unsigned builds — Windows: More info → Run anyway · macOS (Apple Silicon / Intel): right-click → Open · Android: allow "unknown sources" when installing the APK',
+    'hero.note': 'Unsigned builds — Windows: More info → Run anyway · macOS (Apple Silicon / Intel): right-click → Open · Linux: install the .deb with sudo dpkg -i · Android: allow "unknown sources" when installing the APK',
     'hero.caption': 'HORSEMD · FILE TREE / TABS / WYSIWYG',
     'strip.tabs': 'Tabs', 'strip.tree': 'File tree', 'strip.i18n': 'EN / 中文', 'strip.themes': '6 themes',
     'features.title': 'What it does',
@@ -44,7 +44,7 @@ const I18N = {
     'themes.light': 'Light', 'themes.dark': 'Dark', 'themes.mist': 'Mist',
     'themes.sage': 'Sage', 'themes.rose': 'Rose', 'themes.dusk': 'Dusk',
     '_title': 'HorseMD — One window. Every .md file.',
-    '_desc': 'HorseMD: a free Typora alternative with tabs and a file-tree workspace. Open source, for Windows, macOS and Android.',
+    '_desc': 'HorseMD: a free Typora alternative with tabs and a file-tree workspace. Open source, for Windows, macOS, Linux and Android.',
   },
 }
 
@@ -115,7 +115,8 @@ const ua = navigator.userAgent
 let primaryOs = 'windows'
 if (/Macintosh|Mac OS X/i.test(ua)) primaryOs = 'macos'
 else if (/Android/i.test(ua)) primaryOs = 'android'
-const OS_OF = { dlWin: 'windows', dlMac: 'macos', dlAndroid: 'android' }
+else if (/Linux/i.test(ua)) primaryOs = 'linux'
+const OS_OF = { dlWin: 'windows', dlMac: 'macos', dlAndroid: 'android', dlLinux: 'linux' }
 for (const [id, os] of Object.entries(OS_OF)) {
   document.getElementById(id).classList.add(os === primaryOs ? 'dl-primary' : 'dl-secondary')
 }
@@ -142,6 +143,12 @@ fetch('https://api.github.com/repos/BND-1/horseMD/releases/latest')
     if (win) {
       document.getElementById('dlWin').href = win.browser_download_url
       document.getElementById('dlWinCn').href = CN + win.browser_download_url
+    }
+    // Linux: .deb 直链 + 国内加速
+    const deb = assets.find(a => /\.deb$/i.test(a.name))
+    if (deb) {
+      document.getElementById('dlLinux').href = deb.browser_download_url
+      document.getElementById('dlLinuxCn').href = CN + deb.browser_download_url
     }
     // macOS: 主按钮 + 国内加速都指向安装指南页（未签名构建需说明）
     const macGuide = 'https://github.com/BND-1/horseMD#%E5%AE%89%E8%A3%85'

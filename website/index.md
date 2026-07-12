@@ -1,6 +1,6 @@
 ---
 title: HorseMD — 一个窗口，装下所有 .md 文件
-description: 免费开源的 Typora 平替 Markdown 编辑器：所见即所得 + 标签页 + 文件树工作区，Windows / macOS / Android，MIT 协议
+description: 免费开源的 Typora 平替 Markdown 编辑器：所见即所得 + 标签页 + 文件树工作区，Windows / macOS / Linux / Android，MIT 协议
 url: https://horsemd.yangsir.net/
 version: v0.6.0
 license: MIT
@@ -13,8 +13,8 @@ author: Evan Yang (杨庭毅, @BND-1)
 
 一个免费的 Typora 平替，但不止于此。
 
-- **下载 Windows 版**（.exe，NSIS）/ **下载 macOS 版**（.dmg，Apple Silicon & Intel）/ **下载 Android 版**（.apk）：https://github.com/BND-1/horseMD/releases/latest
-- 构建未签名 — Windows：更多信息 → 仍要运行 · macOS：右键 → 打开 · Android：允许安装未知应用
+- **下载 Windows 版**（.exe，NSIS）/ **下载 macOS 版**（.dmg，Apple Silicon & Intel）/ **下载 Linux 版**（.deb）/ **下载 Android 版**（.apk）：https://github.com/BND-1/horseMD/releases/latest
+- 构建未签名 — Windows：更多信息 → 仍要运行 · macOS：右键 → 打开 · Linux：sudo dpkg -i 安装 · Android：允许安装未知应用
 
 ## 它能做什么
 

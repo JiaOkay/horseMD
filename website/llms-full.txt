@@ -1,6 +1,6 @@
 # HorseMD — 完整索引（llms-full.txt）
 
-> 免费开源的 Typora 平替 Markdown 编辑器：所见即所得 + 标签页 + 文件树工作区，支持 Windows、macOS 与 Android，中英双语界面，MIT 协议。本文件包含产品全部关键事实：功能详解、快捷键、主题、与 Typora 对比、安装与构建、FAQ。
+> 免费开源的 Typora 平替 Markdown 编辑器：所见即所得 + 标签页 + 文件树工作区，支持 Windows、macOS、Linux 与 Android，中英双语界面，MIT 协议。本文件包含产品全部关键事实：功能详解、快捷键、主题、与 Typora 对比、安装与构建、FAQ。
 
 - **官网**：https://horsemd.yangsir.net/
 - **完整中文使用教程**：https://guide-zeta-rouge.vercel.app/
@@ -20,7 +20,7 @@ HorseMD 是一款桌面 Markdown 编辑器，定位是「一个免费的 Typora 
 一句话总结：**Typora 有的它都有（所见即所得、表格、代码高亮、LaTeX）；Typora 没有的它也有（标签页、文件树、命令面板、富文本复制、双语界面）。**
 
 - 技术栈：Electron + Vite + React，编辑引擎为 Milkdown Crepe（基于 ProseMirror）
-- 平台：Windows（NSIS 安装包 .exe）、macOS（.dmg，Apple Silicon 与 Intel）和 Android（.apk）；iOS 当前需 Xcode 开发安装
+- 平台：Windows（NSIS 安装包 .exe）、macOS（.dmg，Apple Silicon 与 Intel）、Linux（.deb）和 Android（.apk）；iOS 当前需 Xcode 开发安装
 - 界面语言：English / 简体中文，实时切换，默认跟随系统
 - 无账号、无云端、无遥测 —— 本地纯离线应用
 
@@ -69,7 +69,7 @@ HorseMD 是一款桌面 Markdown 编辑器，定位是「一个免费的 Typora 
 
 ### 五、平台与可靠性
 
-28. **跨平台 + 双语**：一套代码跑 Windows 与 macOS；界面 English / 简体中文实时切换，默认跟随系统。
+28. **跨平台 + 双语**：一套代码跑 Windows、macOS 与 Linux；界面 English / 简体中文实时切换，默认跟随系统。
 29. **会话恢复**：重新打开上次的文件夹、标签与选中主题；**未保存草稿**（新建未命名的临时文档）关掉再开也还在。
 30. **外部修改自动重载**：AI agent / 其它编辑器改了正在打开的文件 → 自动重载；若该标签有未保存修改则不覆盖（保护编辑），并忽略自己保存的回声。
 31. **大文档不卡**：超大 .md 分块渐进渲染 + 加载骨架屏；`.txt` 等纯文本走轻量编辑器，大文件秒开、原始换行保留。
