@@ -17,7 +17,9 @@ export default defineConfig({
     ['meta', { name: 'theme-color', content: '#f7f8f6' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'HorseMD 使用教程' }],
-    ['meta', { property: 'og:image', content: 'https://horsemd.yangsir.net/assets/og.jpg' }]
+    ['meta', { property: 'og:image', content: 'https://horsemd.yangsir.net/assets/og.jpg' }],
+    // 访问统计
+    ['script', { defer: '', src: 'https://u.yangsir.net/script.js', 'data-website-id': 'cac15ec9-b89f-47bb-955f-4d8b032b115d' }]
   ],
   themeConfig: {
     logo: '/icon.png',
@@ -112,6 +114,13 @@ export default defineConfig({
           { text: '文件与保存', link: '/troubleshooting/files-and-save' },
           { text: '大文档与性能', link: '/troubleshooting/performance' },
           { text: '常见问题', link: '/troubleshooting/faq' }
+        ]
+      },
+      {
+        text: '加入社区',
+        collapsed: true,
+        items: [
+          { text: '微信群与联系方式', link: '/community' }
         ]
       }
     ],
