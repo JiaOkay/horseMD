@@ -20,6 +20,8 @@ npm run build          # build main + preload + renderer → out/
 npm start              # run the built app
 npm run dist           # build + electron-builder package for the HOST platform
 npm run dist:dir       # unpacked build (no installer)
+npm run guide:dev      # user tutorial site
+npm run guide:check    # tutorial content checks + static build
 ```
 
 `npm run dist` packages for whatever OS you run it on — **Windows NSIS** on
@@ -34,7 +36,13 @@ macOS Gatekeeper blocks first launch (right-click → Open, or
 ## Layout
 
 ```
-src/main/index.js      main process: window, IPC (fs/dialog/watch), menu, file watching
+src/main/index.js      main entry: window, menu, single-instance, launch args (extractArgs);
+                       registers the IPC modules below + shell/themes/image/window/update/permissions IPC
+src/main/documents.js  document/dialog IPC (openFiles/openFolder/saveAs/openAttachments) + export:pdf
+src/main/filesystem.js fs IPC (read/write/rename/delete/create/readDir/listFiles/duplicate) + showHidden
+src/main/watchers.js   chokidar watchers (watch:start/stop/file/unfile) — crash-proof guards (isRestrictedRoot)
+src/main/security.js   external-URL protocol allowlist (https/http/mailto) + local-fonts permission gating
+src/main/pdf-document.js print-to-PDF pipeline + PDF stylesheet (PDF_CSS)
 src/preload/index.js   contextBridge → window.api (whitelisted IPC)
 src/renderer/src/
   App.jsx              shell: tabs, state, session, split, theme, lang, editor routing
@@ -70,6 +78,7 @@ src/renderer/src/
 build/                 icon.ico (Windows) + icon.icns (macOS) + installer.nsh (NSIS uninstall: keep user files)
 scripts/               CDP-based e2e helpers (etv.mjs, inspect.mjs)
 docs/                  architecture / features / implementation-notes / development
+guide/                 VitePress user tutorial + versioned current-app screenshots
 ```
 
 ## Conventions & rules

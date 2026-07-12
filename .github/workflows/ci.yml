@@ -27,5 +27,14 @@ jobs:
       - name: Core regression tests
         run: npm run test:core
 
+      - name: Install guide dependencies
+        run: npm ci --prefix guide
+
+      - name: Audit guide dependencies
+        run: npm audit --prefix guide --audit-level=high
+
+      - name: Guide content and build
+        run: npm run guide:check
+
       - name: Build (main + preload + renderer)
         run: npm run build

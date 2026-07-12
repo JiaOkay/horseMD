@@ -34,7 +34,12 @@
     "cap:sync": "npm run build:mobile && cap sync",
     "cap:ios": "npm run build:mobile && cap sync ios && cap open ios",
     "cap:android": "npm run build:mobile && cap sync android && cap open android",
-    "dist:android": "npm run build:mobile && cap sync android && cd android && ./gradlew assembleRelease"
+    "dist:android": "npm run build:mobile && cap sync android && cd android && ./gradlew assembleRelease",
+    "guide:dev": "npm --prefix guide run dev",
+    "guide:build": "npm --prefix guide run build",
+    "guide:check": "npm --prefix guide run check",
+    "guide:test:visual": "npm --prefix guide run test:visual",
+    "guide:capture": "node scripts/capture-guide-screenshots.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.0",

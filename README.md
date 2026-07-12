@@ -162,11 +162,13 @@ Electron + Vite + React 外壳，编辑器引擎用 **Milkdown Crepe**（基于 
 
 ## 文档
 
+- [HorseMD 使用教程](https://guide-zeta-rouge.vercel.app/) —— 安装、功能介绍、详细操作与常见问题
 - [ROADMAP.md](./ROADMAP.md) —— 已完成 / 近期计划 / 远期(含安卓、iOS 移动端)
 - [docs/architecture.md](./docs/architecture.md) —— 技术栈、进程模型、目录结构、数据流
 - [docs/features.md](./docs/features.md) —— 每个功能的用法与实现（对应到文件）
 - [docs/implementation-notes.md](./docs/implementation-notes.md) —— 关键 bug 的根因与修法、设计决策
 - [docs/development.md](./docs/development.md) —— 开发、构建、Windows/macOS 打包、CDP 自动化测试
+- [docs/user-guide-maintenance.md](./docs/user-guide-maintenance.md) —— 教程站内容、截图和版本维护规范
 
 ## 贡献
 

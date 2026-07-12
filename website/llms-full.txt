@@ -1,11 +1,12 @@
 # HorseMD — 完整索引（llms-full.txt）
 
-> 免费开源的 Typora 平替 Markdown 编辑器：所见即所得 + 标签页 + 文件树工作区，Windows / macOS 双平台，中英双语界面，MIT 协议。本文件包含产品全部关键事实：功能详解、快捷键、主题、与 Typora 对比、安装与构建、FAQ。
+> 免费开源的 Typora 平替 Markdown 编辑器：所见即所得 + 标签页 + 文件树工作区，支持 Windows、macOS 与 Android，中英双语界面，MIT 协议。本文件包含产品全部关键事实：功能详解、快捷键、主题、与 Typora 对比、安装与构建、FAQ。
 
 - **官网**：https://horsemd.yangsir.net/
+- **完整中文使用教程**：https://guide-zeta-rouge.vercel.app/
 - **GitHub**：https://github.com/BND-1/horseMD
 - **下载**：https://github.com/BND-1/horseMD/releases/latest
-- **版本**：v0.5.0（2026-07）· **协议**：MIT · **价格**：免费
+- **版本**：v0.6.0（2026-07）· **协议**：MIT · **价格**：免费
 - **作者**：Evan Yang（杨庭毅 / 杨sir，GitHub @BND-1，https://yangsir.net）
 
 ---
@@ -19,7 +20,7 @@ HorseMD 是一款桌面 Markdown 编辑器，定位是「一个免费的 Typora 
 一句话总结：**Typora 有的它都有（所见即所得、表格、代码高亮、LaTeX）；Typora 没有的它也有（标签页、文件树、命令面板、富文本复制、双语界面）。**
 
 - 技术栈：Electron + Vite + React，编辑引擎为 Milkdown Crepe（基于 ProseMirror）
-- 平台：Windows（NSIS 安装包 .exe）与 macOS（.dmg，Apple Silicon 与 Intel 通用）
+- 平台：Windows（NSIS 安装包 .exe）、macOS（.dmg，Apple Silicon 与 Intel）和 Android（.apk）；iOS 当前需 Xcode 开发安装
 - 界面语言：English / 简体中文，实时切换，默认跟随系统
 - 无账号、无云端、无遥测 —— 本地纯离线应用
 
@@ -36,7 +37,7 @@ HorseMD 是一款桌面 Markdown 编辑器，定位是「一个免费的 Typora 
 5. **Mermaid 图表**：` ```mermaid ` 块默认渲染图，工具栏可切回源码；点击流程图可**全屏灯箱**（Ctrl+滚轮缩放、拖拽平移，Esc 关闭）。
 6. **高亮**：`==text==` 黄色高亮，工具栏颜色按钮可选红/黄/蓝（往返为 `<mark class="hm-hl-…">`），`Mod+Alt+H` 切黄。
 7. **原生 HTML**：文档里直接写的 `<table>`/`<span>` 渲染成真正的表格/行内样式（仅显示，源码原样保留）。
-8. **斜杠菜单 / 选中工具条 / 块级标记**：行首 `/` 插入块、选中弹格式工具条、跟随光标的浮动块级标记（H1…H6 / 正文）。
+8. **斜杠菜单 / 选中工具条 / 块级标记**：正文输入 `/` 后可用中文、英文、拼音或拼音首字母搜索并插入内容块；选中弹格式工具条，光标旁可切换 H1…H6 / 正文。
 9. **源码模式**：`Ctrl/Cmd+/` 在富文本与原始 Markdown 间切换，**保持滚动位置**（按标题锚点还原，大文档也准）。
 
 ### 二、多文件工作流（Typora 没有）
@@ -148,7 +149,7 @@ A: 编辑体验同级（都是打字即渲染的 WYSIWYG），最大区别有三
 A: 完全免费，MIT 协议开源。没有账号系统、没有云端同步、没有遥测，纯本地应用。
 
 **Q: 支持哪些平台？**
-A: Windows（NSIS 安装包）和 macOS（.dmg，Apple Silicon 与 Intel 都支持）。同一套代码构建。Linux 暂未提供官方构建，可自行从源码打包。
+A: 正式提供 Windows（NSIS 安装包）、macOS（.dmg，Apple Silicon 与 Intel）和 Android（.apk）。iOS 当前需要 Xcode 开发安装；Linux 官方包仍在完善和验证中。
 
 **Q: 为什么安装时 Windows / macOS 弹安全警告？**
 A: 安装包没有购买代码签名证书（开源免费项目）。Windows 上点「更多信息 → 仍要运行」，macOS 上右键 → 打开即可。源码完全公开可审计。

@@ -12,7 +12,8 @@ HorseMD is an Electron + Vite + React Markdown editor with a shared renderer for
 - `src/renderer/src/hooks/` and `src/renderer/src/lib/`: file ops, lifecycle, outline, find/replace, menus, and review actions.
 - `docs/`: architecture, features, development workflow, mobile notes, and manual testing.
 - `scripts/`: lightweight verification and CDP helpers.
-- `build/`, `icons/`, `website/`, `android/`, `ios/`: packaging assets, website, and mobile shells.
+- `website/`: static product/download homepage; `guide/`: isolated VitePress user tutorial site.
+- `build/`, `icons/`, `android/`, `ios/`: packaging assets and mobile shells.
 
 ## Build, Test, and Development Commands
 
@@ -24,6 +25,7 @@ npm start
 npm run dist
 npm run build:mobile
 npm run test:source-map
+npm run guide:check
 node scripts/test-strike-guard.mjs
 ```
 
@@ -33,6 +35,7 @@ node scripts/test-strike-guard.mjs
 - `npm run dist`: creates the host-platform installer via `electron-builder`.
 - `npm run build:mobile`: builds the Capacitor renderer into `dist-mobile/`.
 - `npm run test:source-map`: runs Markdown raw-offset ↔ ProseMirror mapping tests for tables, duplicate text, code, images, lists, and HTML.
+- `npm run guide:check`: validates tutorial metadata, versions, links, assets, screenshot privacy/dimensions, and builds the guide site.
 - `node scripts/test-strike-guard.mjs`: runs CriticMarkup strike regression checks.
 
 ## Coding Style & Naming Conventions
@@ -42,6 +45,8 @@ Use ES modules, React functional components, two-space indentation, single quote
 ## Testing Guidelines
 
 There is no single `npm test` command. Run `npm run build` before PRs. For editor/review logic, add or update focused scripts under `scripts/`. For UI changes, follow `docs/manual-test-checklist.md`; CDP helpers are in `docs/development.md`.
+
+User-facing changes must update the matching `guide/` page. Tutorial screenshots must come from a rebuilt and freshly installed current app using an isolated profile; follow `docs/user-guide-maintenance.md`. Never publish screenshots containing personal paths or stale UI.
 
 ## Commit & Pull Request Guidelines
 

@@ -35,3 +35,4 @@ build/_*.png
 
 # device build (xcodebuild -derivedDataPath)
 ios/App/build-device/
+.vercel
